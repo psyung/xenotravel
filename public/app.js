@@ -1673,6 +1673,9 @@ function renderHero() {
 
 function renderNotice() {
   const list = ui.readonly ? [] : M.tripNotices(trip);
+  const total = trip.budget?.total;
+  const plan = total ? C.planned(trip).total : 0;
+  if (!ui.readonly && total && plan > total) list.push(`체크리스트 예상(${B.won(plan)})이 예산(${B.won(total)})보다 ${B.won(plan - total)} 많아요`);
   const el = $('#notice');
   el.hidden = !list.length;
   el.innerHTML = list.length ? `<b>확인</b><ul>${list.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
@@ -1781,6 +1784,22 @@ function barRows(map, defs, max) {
     .join('')}</div>`;
 }
 
+/** 분류별 계획 대비: 쓴 돈 막대 위에 예상 금액 눈금 */
+function planRows(spent, planned) {
+  const keys = Object.keys(B.EXPENSE_CATS).filter((k) => spent[k] || planned[k]);
+  const max = Math.max(1, ...keys.map((k) => Math.max(spent[k] ?? 0, planned[k] ?? 0)));
+  return `<div class="bars">${keys
+    .map((k) => {
+      const sp = spent[k] ?? 0;
+      const pl = planned[k] ?? 0;
+      const over = pl && sp > pl;
+      return `<div class="bar-row plan-row"><span class="lbl">${B.EXPENSE_CATS[k].label}</span>
+        <span class="bar${over ? ' over' : ''}"><i style="width:${(sp / max) * 100}%"></i>${pl ? `<em style="left:${(pl / max) * 100}%"></em>` : ''}</span>
+        <span class="v">${B.won(sp)}<small>${pl ? ` / ${B.won(pl)}` : ''}</small></span></div>`;
+    })
+    .join('')}</div><p class="fine">막대는 쓴 돈, 세로 눈금은 체크리스트 예상이에요.</p>`;
+}
+
 function renderBudget() {
   const el = $('#page-budget');
   const b = B.ensureBudget(trip);
@@ -1789,6 +1808,7 @@ function renderBudget() {
   const local = b.currency !== 'KRW';
   const useLocal = local && f.cur === 'local';
   const s = B.summarize(trip);
+  const plan = C.planned(trip);
   const dayKeys = [-1, ...trip.days.map((_, i) => i)];
   const dayMax = Math.max(1, ...dayKeys.map((k) => s.byDay[k] ?? 0));
   const recs = [...trip.expenses].reverse();
@@ -1796,8 +1816,12 @@ function renderBudget() {
   el.innerHTML = `<div class="wrap">
     <h1 class="page-h">예산 · 가계부</h1>
     <p class="page-sub">금액만 넣고 기록하면 돼요. 현지 돈으로 적으면 그때 환율로 원화도 같이 저장돼요.</p>
-    <div class="grid3 kpis">
+    <div class="grid3 kpis kpis4">
       <label class="kpi"><span>1인 예산 (원)</span><input id="bTotal" inputmode="numeric" value="${b.total ? b.total.toLocaleString('ko-KR') : ''}" placeholder="예: 800,000"></label>
+      <button class="kpi plan${b.total && plan.total > b.total ? ' hot' : ''}" data-b="to-check" title="체크리스트에서 가격을 넣으면 여기에 잡혀요">
+        <span>예상 (체크리스트)</span><b>${plan.priced ? B.won(plan.total) : '—'}</b>
+        <small>${plan.priced ? (b.total && plan.total > b.total ? `예산보다 ${B.won(plan.total - b.total)} 많아요` : `${plan.priced}개 품목 · 가격 고치기 →`) : '체크리스트에 가격 넣기 →'}</small>
+      </button>
       <div class="kpi"><span>쓴 돈</span><b>${B.won(s.spent)}</b><small>${trip.expenses.length}건</small></div>
       <div class="kpi ${s.left < 0 ? 'hot' : 'ok'}"><span>${s.left < 0 ? '예산 초과' : '남은 예산'}</span><b>${b.total ? B.won(Math.abs(s.left)) : '—'}</b><small>${b.total ? `${Math.min(999, Math.round((s.spent / b.total) * 100))}% 사용` : '예산을 넣으면 계산해요'}</small></div>
     </div>
@@ -1838,7 +1862,7 @@ function renderBudget() {
     </div>
 
     <div class="grid2" style="margin-top:14px">
-      <div class="box"><h3>분류별</h3>${barRows(s.byCat, B.EXPENSE_CATS, Math.max(1, ...Object.values(s.byCat)))}</div>
+      <div class="box"><h3>${plan.priced ? '계획 대비' : '분류별'}</h3>${plan.priced ? planRows(s.byCat, plan.byCat) : barRows(s.byCat, B.EXPENSE_CATS, Math.max(1, ...Object.values(s.byCat)))}</div>
       <div class="box">
         <h3>날짜별</h3>
         <div class="daybars">${dayKeys
@@ -1930,9 +1954,13 @@ $('#page-budget').addEventListener('click', (e) => {
     updateKrwPreview();
   } else if (act === 'add') addExpenseFromForm();
   else if (act === 'rate') fetchRate();
+  else if (act === 'to-check') go('check');
   else if (act === 'del') {
-    if (confirm('이 기록을 지울까요?')) {
+    const e = trip.expenses.find((x) => x.id === btn.dataset.id);
+    const linked = e?.checkId && trip.checks?.find((c) => c.id === e.checkId);
+    if (confirm(linked ? `이 기록을 지울까요? 체크리스트의 "${linked.text}" 체크도 풀려요.` : '이 기록을 지울까요?')) {
       B.removeExpense(trip, btn.dataset.id);
+      if (linked) linked.done = false; // 체크리스트와 맞춘다
       commit();
     }
   } else if (act === 'csv') {
@@ -1991,6 +2019,38 @@ function picksHtml() {
     .join('');
 }
 
+ui.editPrice = null; // 가격을 고치는 중인 체크 항목 id
+ui.priceCur = 'local';
+
+/** 체크 항목 가격 표시: "¥1,000" (원화로 적었으면 "₩25,000") */
+function priceLabel(c) {
+  if (!(c.price > 0)) return '';
+  const budget = B.ensureBudget(trip);
+  return c.cur === 'KRW' || budget.currency === 'KRW' ? B.won(c.price) : B.money(c.price, budget.currency);
+}
+
+function checkRowHtml(c) {
+  const budget = B.ensureBudget(trip);
+  const local = budget.currency !== 'KRW';
+  let price;
+  if (ui.editPrice === c.id) {
+    const cur = local ? ui.priceCur : 'KRW';
+    const sym = cur === 'KRW' ? '₩' : B.CURRENCIES[budget.currency].symbol.trim();
+    price = `<form class="price-form" data-id="${c.id}">
+        ${local ? `<button type="button" class="cur-mini" data-c="pcur" title="원화/현지 돈 바꾸기">${sym}</button>` : '<span class="cur-mini">₩</span>'}
+        <input name="amt" inputmode="decimal" autocomplete="off" placeholder="예상 가격" value="${c.price > 0 ? c.price : ''}">
+        <button class="ok">확인</button>
+      </form>`;
+  } else {
+    price = `<button class="price-chip${c.price > 0 ? ' set' : ''}" data-c="price" data-id="${c.id}" title="예상 가격 (가계부 예상에 잡혀요)">${c.price > 0 ? esc(priceLabel(c)) : '+ 가격'}</button>`;
+  }
+  return `<li class="${c.done ? 'done' : ''}${ui.editPrice === c.id ? ' editing' : ''}">
+      <label><input type="checkbox" data-c="toggle" data-id="${c.id}"${c.done ? ' checked' : ''}><span>${esc(c.text)}</span></label>
+      ${price}
+      <button class="icon" data-c="del" data-id="${c.id}" title="지우기">✕</button>
+    </li>`;
+}
+
 function renderChecks() {
   const before = JSON.stringify([trip.checksV, trip.checks?.length]);
   C.ensureChecks(trip);
@@ -1999,35 +2059,56 @@ function renderChecks() {
     store.trips[trip.id] = trip;
     persist();
   }
+  const plan = C.planned(trip);
   $('#page-check').innerHTML = `<div class="wrap">
     <h1 class="page-h">체크리스트</h1>
-    <p class="page-sub">누르면 바로 저장돼요. 남은 "출발 전 할 일" 수는 체크 탭에 숫자로 보여요.</p>
+    <p class="page-sub">항목에 예상 가격을 넣으면 가계부 "예상"에 잡히고, 체크하면 가계부에 실제로 쓴 돈으로 기록돼요. 체크를 풀면 그 기록도 지워져요.</p>
+    ${
+      plan.priced
+        ? `<div class="plan-bar"><span>체크리스트 예상 <b>${B.won(plan.total)}</b>${plan.noRate ? ` <small>(환율이 없어 ${plan.noRate}개 빠짐)</small>` : ''}</span><button class="linkbtn" data-c="to-budget">가계부에서 보기 →</button></div>`
+        : ''
+    }
     <div class="grid3">${Object.entries(C.CHECK_GROUPS)
       .map(([g, def]) => {
         const p = C.progress(trip, g);
         const list = trip.checks.filter((c) => c.group === g);
+        const sum = plan.byGroup[g] ?? 0;
         return `<section class="box">
           <h3 class="check-head">${def.label}<span class="count">${p.done}/${p.total}</span></h3>
           <div class="cprog"><i style="width:${p.total ? (p.done / p.total) * 100 : 0}%"></i></div>
-          <ul class="checks">${list
-            .map(
-              (c) => `<li class="${c.done ? 'done' : ''}">
-                <label><input type="checkbox" data-c="toggle" data-id="${c.id}"${c.done ? ' checked' : ''}><span>${esc(c.text)}</span></label>
-                <button class="icon" data-c="del" data-id="${c.id}" title="지우기">✕</button></li>`,
-            )
-            .join('')}</ul>
+          <ul class="checks">${list.map(checkRowHtml).join('')}</ul>
+          ${sum ? `<p class="check-sum">예상 합계 <b>${B.won(sum)}</b></p>` : ''}
           ${g === 'shop' ? picksHtml() : ''}
           <form class="addrow" data-group="${g}"><input name="text" placeholder="${def.placeholder}" maxlength="80" autocomplete="off"><button>추가</button></form>
+          ${
+            list.length
+              ? `<div class="bulk">${p.done ? `<button data-c="del-done" data-group="${g}">체크한 것 삭제 (${p.done})</button>` : ''}<button data-c="clear" data-group="${g}">전체 삭제</button></div>`
+              : ''
+          }
         </section>`;
       })
       .join('')}</div>
   </div>`;
+  if (ui.editPrice) {
+    const input = $(`#page-check .price-form[data-id="${ui.editPrice}"] input`);
+    input?.focus();
+    input?.select();
+  }
+}
+
+function savePrice(form) {
+  const c = C.setPrice(trip, form.dataset.id, form.amt.value, ui.priceCur);
+  ui.editPrice = null;
+  commit();
+  if (c?.price && B.toKrw(c.price, c.cur, trip.budget) == null) toast('가계부에서 환율을 정하면 원화 예상에 잡혀요', 3200);
 }
 
 $('#page-check').addEventListener('change', (e) => {
   if (e.target.dataset.c !== 'toggle') return;
-  C.toggleCheck(trip, e.target.dataset.id);
+  const r = C.toggleCheck(trip, e.target.dataset.id, TODAY);
   commit();
+  if (r.expense) toast(`가계부에 ${B.won(r.expense.krw)} 기록했어요`);
+  else if (r.removed) toast('체크를 풀어서 가계부 기록도 지웠어요');
 });
 $('#page-check').addEventListener('click', (e) => {
   const pick = e.target.closest('[data-c="picks"]');
@@ -2038,18 +2119,55 @@ $('#page-check').addEventListener('click', (e) => {
     toast(`${set.title} ${n}개를 쇼핑 리스트에 담았어요`);
     return;
   }
-  const btn = e.target.closest('[data-c="del"]');
+  const btn = e.target.closest('[data-c]');
   if (!btn) return;
-  C.removeCheck(trip, btn.dataset.id);
-  commit();
+  const act = btn.dataset.c;
+  const g = btn.dataset.group;
+  const label = C.CHECK_GROUPS[g]?.label;
+  if (act === 'del') {
+    C.removeCheck(trip, btn.dataset.id);
+    commit();
+  } else if (act === 'price') {
+    const c = trip.checks.find((x) => x.id === btn.dataset.id);
+    ui.editPrice = btn.dataset.id;
+    ui.priceCur = c?.cur ?? (B.ensureBudget(trip).currency === 'KRW' ? 'KRW' : 'local');
+    renderChecks();
+  } else if (act === 'pcur') {
+    ui.priceCur = ui.priceCur === 'KRW' ? 'local' : 'KRW';
+    btn.textContent = ui.priceCur === 'KRW' ? '₩' : B.CURRENCIES[trip.budget.currency].symbol.trim();
+    btn.nextElementSibling?.focus();
+  } else if (act === 'del-done') {
+    if (!confirm(`${label}에서 체크한 항목을 지울까요? 가계부에 기록된 금액은 그대로 남아요.`)) return;
+    toast(`${C.removeDone(trip, g)}개를 지웠어요`);
+    commit();
+  } else if (act === 'clear') {
+    if (!confirm(`${label}을(를) 전부 지울까요? 되돌릴 수 없어요. 가계부에 기록된 금액은 그대로 남아요.`)) return;
+    toast(`${C.clearGroup(trip, g)}개를 지웠어요`);
+    commit();
+  } else if (act === 'to-budget') go('budget');
 });
 $('#page-check').addEventListener('submit', (e) => {
   e.preventDefault();
   const form = e.target.closest('form');
+  if (form.classList.contains('price-form')) return savePrice(form);
   if (!C.addCheck(trip, form.dataset.group, form.text.value)) return;
   const g = form.dataset.group;
   commit();
   $(`#page-check form[data-group="${g}"] input`)?.focus();
+});
+$('#page-check').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && ui.editPrice) {
+    ui.editPrice = null;
+    renderChecks();
+  }
+});
+// 가격 칸 밖을 누르면 입력한 값으로 저장
+$('#page-check').addEventListener('focusout', (e) => {
+  const form = e.target.closest('.price-form');
+  if (!form || form.contains(e.relatedTarget)) return;
+  setTimeout(() => {
+    if (ui.editPrice === form.dataset.id && document.contains(form)) savePrice(form);
+  }, 0);
 });
 
 /* ───────── 공유 링크 ─────────

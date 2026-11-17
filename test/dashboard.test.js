@@ -136,3 +136,60 @@ test('예전 버전이 자동으로 채운 쇼핑 리스트는 빼고, 손댄 �
   C.ensureChecks(added);
   assert.equal(added.checks.length, auto.length + 2);
 });
+
+test('체크리스트 가격 → 가계부 예상, 체크하면 기록, 해제하면 삭제', () => {
+  const t = trip(); // 오사카 → 엔
+  const b = B.ensureBudget(t);
+  b.krwPerUnit = 9; // 100엔 = 900원
+  t.checks = [];
+  const a = C.addCheck(t, 'shop', '곤약젤리');
+  const s2 = C.addCheck(t, 'shop', '휴족시간');
+  const ins = C.addCheck(t, 'todo', '여행자 보험');
+  C.setPrice(t, a.id, '1,000');
+  C.setPrice(t, s2.id, 600);
+  C.setPrice(t, ins.id, 25000, 'KRW');
+  let p = C.planned(t);
+  assert.equal(p.total, 9000 + 5400 + 25000);
+  assert.equal(p.byCat.shop, 14400);
+  assert.equal(p.byCat.etc, 25000);
+  assert.equal(p.priced, 3);
+
+  // 체크 → 가계부 기록 (여행 전이면 "출발 전")
+  const r = C.toggleCheck(t, a.id, '2026-11-20');
+  assert.equal(r.expense.krw, 9000);
+  assert.equal(r.expense.cat, 'shop');
+  assert.equal(r.expense.day, -1);
+  assert.equal(r.expense.memo, '곤약젤리');
+  // 여행 중이면 그날로
+  assert.equal(C.toggleCheck(t, s2.id, '2026-12-02').expense.day, 1);
+  assert.equal(B.summarize(t).spent, 9000 + 5400);
+  // 해제 → 기록 삭제
+  assert.equal(C.toggleCheck(t, a.id).removed, 1);
+  assert.equal(B.summarize(t).spent, 5400);
+  // 가격 없는 항목은 체크만
+  const plain = C.addCheck(t, 'pack', '여권');
+  assert.equal(C.toggleCheck(t, plain.id).expense, null);
+  // 가격 지우기
+  C.setPrice(t, ins.id, '');
+  assert.equal(C.planned(t).byCat.etc ?? 0, 0);
+  // 환율이 없으면 원화로 못 바꾼 개수를 알려준다
+  b.krwPerUnit = 0;
+  assert.equal(C.planned(t).noRate, 2);
+});
+
+test('체크리스트 일괄 삭제: 체크한 것만 / 전체, 기록된 지출은 남긴다', () => {
+  const t = trip();
+  B.ensureBudget(t).krwPerUnit = 9;
+  t.checks = [];
+  const a = C.addCheck(t, 'shop', 'A');
+  C.addCheck(t, 'shop', 'B');
+  C.addCheck(t, 'pack', 'C');
+  C.setPrice(t, a.id, 1000);
+  C.toggleCheck(t, a.id);
+  assert.equal(C.removeDone(t, 'shop'), 1);
+  assert.deepEqual(t.checks.map((c) => c.text), ['B', 'C']);
+  assert.equal(t.expenses.length, 1); // 산 기록은 그대로
+  assert.equal(t.expenses[0].checkId, undefined); // 연결만 끊김
+  assert.equal(C.clearGroup(t, 'shop'), 1);
+  assert.deepEqual(t.checks.map((c) => c.text), ['C']);
+});

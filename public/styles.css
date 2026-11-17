@@ -856,3 +856,42 @@ body[data-page="home"] .pnav, body[data-page="home"] .pagebar { display: none !i
 }
 
 body.readonly .tripsw { display: none !important; }
+
+/* ───────── 체크리스트 가격 · 일괄 삭제 · 계획 대비 ───────── */
+.checks li { gap: 6px; }
+.price-chip {
+  flex: none; height: 26px; padding: 0 8px; border: 1px dashed var(--line); border-radius: 7px; background: none;
+  font-size: 12px; font-weight: 600; color: var(--mute); white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.price-chip:hover { border-color: var(--accent); color: var(--accent); }
+.price-chip.set { border-style: solid; border-color: transparent; background: var(--soft); color: var(--ink); }
+.checks li.done .price-chip.set { color: var(--ok); background: var(--ok-soft); }
+.price-form { flex: none; display: flex; align-items: center; gap: 4px; }
+.price-form input { width: 92px; height: 30px; border: 1px solid var(--accent); border-radius: 8px; padding: 0 8px; background: var(--paper); font-weight: 600; }
+.price-form input:focus { outline: none; }
+.cur-mini { min-width: 30px; height: 30px; border: 0; border-radius: 8px; background: var(--soft); font-weight: 700; display: grid; place-items: center; }
+.price-form .ok { height: 30px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--ink); color: var(--paper); font-weight: 600; font-size: 12px; }
+.check-sum { margin: -4px 0 10px; text-align: right; font-size: 13px; color: var(--sub); }
+.check-sum b { color: var(--ink); }
+.bulk { display: flex; justify-content: flex-end; gap: 4px; margin-top: 8px; }
+.bulk button { height: 28px; padding: 0 10px; border: 0; border-radius: 7px; background: none; color: var(--mute); font-size: 12px; font-weight: 600; }
+.bulk button:hover { background: var(--hot-soft); color: var(--hot); }
+.plan-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: -4px 0 14px; padding: 10px 14px; border-radius: 12px; background: var(--accent-soft); font-size: 13.5px; }
+.plan-bar b { color: var(--accent); font-size: 15px; }
+.plan-bar small { color: var(--sub); }
+.kpis4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+button.kpi { text-align: left; cursor: pointer; font: inherit; color: inherit; }
+button.kpi:hover { border-color: var(--accent); }
+.kpi.plan b { color: var(--accent); }
+.kpi.plan.hot b, .kpi.plan.hot small { color: var(--hot); }
+.plan-row .bar { position: relative; overflow: visible; }
+.plan-row .bar i { border-radius: 999px; }
+.plan-row .bar em { position: absolute; top: -4px; width: 2px; height: 14px; margin-left: -1px; border-radius: 2px; background: var(--ink); opacity: .55; }
+.plan-row .bar.over i { background: var(--hot); }
+.plan-row .v small { color: var(--mute); font-weight: 500; }
+@media (max-width: 900px) {
+  .grid3.kpis.kpis4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .price-form input { width: 84px; }
+  .checks li.editing label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .plan-bar { flex-wrap: wrap; }
+}

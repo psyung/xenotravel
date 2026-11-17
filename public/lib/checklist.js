@@ -1,7 +1,9 @@
 // 체크리스트: 할 일 · 짐 · 쇼핑. 순수 함수만 둔다.
-// trip.checks = [{ id, group: 'todo'|'pack'|'shop', text, done }]
-import { uid } from './model.js';
-import { guessCurrency } from './budget.js';
+// trip.checks = [{ id, group: 'todo'|'pack'|'shop', text, done, price?, cur? }]
+//   price: 예상 가격 (선택), cur: 'local'(현지 통화) | 'KRW'
+//   가격이 있는 항목은 가계부 "예상"에 잡히고, 체크하면 가계부에 실제 지출로 기록된다 (expense.checkId로 연결).
+import { uid, indexOfDate } from './model.js';
+import { guessCurrency, ensureBudget, toKrw, addExpense } from './budget.js';
 
 export const CHECK_GROUPS = {
   todo: { label: '출발 전 할 일', placeholder: '할 일 추가' },
@@ -123,16 +125,95 @@ export function addCheck(trip, group, text) {
   return c;
 }
 
-export function toggleCheck(trip, id) {
+/** 체크 그룹 → 가계부 분류 */
+export const GROUP_CAT = { shop: 'shop', todo: 'etc', pack: 'etc' };
+
+/**
+ * 체크/해제. 가격이 있는 항목을 체크하면 가계부에 기록하고, 해제하면 그 기록을 지운다.
+ * today: 'YYYY-MM-DD' (여행 중이면 그날, 아니면 "출발 전"으로 기록)
+ * → { check, expense: 새로 적은 기록 | null, removed: 지운 기록 수 }
+ */
+export function toggleCheck(trip, id, today = '') {
   const c = ensureChecks(trip).find((x) => x.id === id);
-  if (c) c.done = !c.done;
-  return c ?? null;
+  if (!c) return { check: null, expense: null, removed: 0 };
+  c.done = !c.done;
+  const budget = ensureBudget(trip);
+  if (!c.done) {
+    const before = trip.expenses.length;
+    trip.expenses = trip.expenses.filter((e) => e.checkId !== c.id);
+    return { check: c, expense: null, removed: before - trip.expenses.length };
+  }
+  if (!(c.price > 0) || toKrw(c.price, c.cur, budget) == null) return { check: c, expense: null, removed: 0 };
+  const i = indexOfDate(trip, today);
+  const day = i != null && i >= 0 && i < trip.days.length ? i : -1;
+  const e = addExpense(trip, { amount: c.price, cur: c.cur, cat: GROUP_CAT[c.group] ?? 'etc', pay: 'card', day, memo: c.text });
+  e.checkId = c.id;
+  return { check: c, expense: e, removed: 0 };
 }
 
+/** 예상 가격 정하기 (0이나 빈 값이면 지운다) */
+export function setPrice(trip, id, price, cur = 'local') {
+  const c = ensureChecks(trip).find((x) => x.id === id);
+  if (!c) return null;
+  const n = Number(String(price ?? '').replace(/,/g, ''));
+  if (n > 0) {
+    c.price = n;
+    c.cur = cur === 'KRW' ? 'KRW' : 'local';
+  } else {
+    delete c.price;
+    delete c.cur;
+  }
+  return c;
+}
+
+/** 가격을 원화로 (환율이 없으면 null) */
+export function priceKrw(trip, c) {
+  return c.price > 0 ? toKrw(c.price, c.cur, ensureBudget(trip)) : null;
+}
+
+/**
+ * 체크리스트로 잡은 예상 지출(원). 가계부 "예상"에 쓴다.
+ * → { total, byGroup: {shop, todo, pack}, byCat: {shop, etc}, priced: 가격 넣은 항목 수, noRate: 환율이 없어 못 바꾼 항목 수 }
+ */
+export function planned(trip) {
+  const out = { total: 0, byGroup: {}, byCat: {}, priced: 0, noRate: 0 };
+  for (const c of trip.checks ?? []) {
+    if (!(c.price > 0)) continue;
+    out.priced++;
+    const krw = priceKrw(trip, c);
+    if (krw == null) {
+      out.noRate++;
+      continue;
+    }
+    const cat = GROUP_CAT[c.group] ?? 'etc';
+    out.total += krw;
+    out.byGroup[c.group] = (out.byGroup[c.group] ?? 0) + krw;
+    out.byCat[cat] = (out.byCat[cat] ?? 0) + krw;
+  }
+  return out;
+}
+
+/** 하나 지우기. 이미 가계부에 기록된 지출은 남긴다 (실제로 쓴 돈이므로) — 연결만 끊는다. */
 export function removeCheck(trip, id) {
-  const before = ensureChecks(trip).length;
-  trip.checks = trip.checks.filter((x) => x.id !== id);
-  return trip.checks.length !== before;
+  return removeChecks(trip, (x) => x.id === id) > 0;
+}
+
+/** 조건에 맞는 항목을 지운다. 지운 개수를 돌려준다. */
+function removeChecks(trip, pick) {
+  const gone = new Set(ensureChecks(trip).filter(pick).map((x) => x.id));
+  trip.checks = trip.checks.filter((x) => !gone.has(x.id));
+  for (const e of trip.expenses ?? []) if (gone.has(e.checkId)) delete e.checkId;
+  return gone.size;
+}
+
+/** 그룹에서 체크한 것만 지우기 */
+export function removeDone(trip, group) {
+  return removeChecks(trip, (x) => x.group === group && x.done);
+}
+
+/** 그룹 전체 지우기 */
+export function clearGroup(trip, group) {
+  return removeChecks(trip, (x) => x.group === group);
 }
 
 /** 그룹별 {done, total} */
