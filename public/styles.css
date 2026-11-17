@@ -594,3 +594,26 @@ body.readonly .title-input { pointer-events: none; }
 .share-buttons .btn:disabled { opacity: .5; cursor: default; }
 .share-notes { margin: 12px 0 0; padding-left: 18px; color: var(--muted); font-size: 12px; display: grid; gap: 3px; }
 .inbox-dock[hidden] { display: none; }
+
+/* ───────── 장소 종류 ───────── */
+.cat-ic { margin-right: 4px; font-size: 13px; }
+.cat-pick { display: flex; flex-wrap: wrap; gap: 4px; }
+.cat-pick button {
+  border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 3px 10px;
+  font-size: 12px; cursor: pointer;
+}
+.cat-pick button:hover { border-color: var(--c); }
+.cat-pick button.on { background: var(--c); border-color: var(--c); color: #fff; font-weight: 600; }
+.pin-legend {
+  position: absolute; z-index: 900; top: 12px; right: 12px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+}
+.pin-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.pin-seg button { border: 0; background: none; border-radius: 7px; padding: 4px 10px; font-size: 12px; cursor: pointer; color: var(--muted); }
+.pin-seg button.active { background: var(--accent); color: #fff; font-weight: 600; }
+.legend {
+  display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 10px; max-width: 240px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; font-size: 12px; box-shadow: var(--shadow);
+}
+.legend span { display: inline-flex; align-items: center; gap: 4px; }
+.legend i { width: 10px; height: 10px; border-radius: 50%; background: var(--c); }
+body.printing .pin-legend { display: none; }

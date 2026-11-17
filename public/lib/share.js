@@ -132,6 +132,7 @@ export async function decodeShare(code) {
     time: str(it.time),
     memo: str(it.memo),
     url: str(it.url),
+    category: str(it.category),
   });
   const now = new Date().toISOString();
   return {
@@ -146,7 +147,7 @@ export async function decodeShare(code) {
     days: t.days.map((d) => ({ id: uid(), date: str(d.date), items: d.items.map(item) })),
     inbox: t.inbox.map(item),
     stays: t.stays.map((s) => {
-      const { id, time, ...rest } = item(s);
+      const { id, time, category, ...rest } = item(s);
       return { ...rest, id, startIndex: s.startIndex, nights: s.nights };
     }),
     flights: t.flights.map((f) => ({

@@ -1,6 +1,6 @@
 // 여행 데이터 모델. 브라우저와 Node 테스트에서 같이 쓰는 순수 함수만 둔다.
 // trip = { id, title, destination, startDate, endDate, center, days: [{id, date, items}], inbox: [items] }
-// item = { id, name, address, lat, lng, time, memo, url }
+// item = { id, name, address, lat, lng, time, memo, url, category }
 
 export const INBOX = 'inbox';
 const MAX_DAYS = 60;
@@ -87,6 +87,52 @@ export function findItem(trip, itemId) {
   return null;
 }
 
+/* ───────── 장소 종류 ─────────
+ * 지도 핀을 "종류" 색으로 볼 때와 카드 아이콘에 쓴다. '' = 정하지 않음.
+ */
+export const CATEGORIES = {
+  sight: { label: '관광', icon: '📸', color: '#8b5cf6' },
+  food: { label: '맛집', icon: '🍜', color: '#ef4444' },
+  cafe: { label: '카페', icon: '☕', color: '#b7791f' },
+  shop: { label: '쇼핑', icon: '🛍️', color: '#0ea5e9' },
+  etc: { label: '기타', icon: '📍', color: '#64748b' },
+};
+export const STAY_COLOR = '#14b8a6'; // 종류 보기에서 숙소 색
+
+const FOOD = /^(restaurant|fast_food|food_court|bar|pub|biergarten|izakaya)$/;
+const CAFE = /^(cafe|bakery|ice_cream|confectionery|pastry|tea|coffee|dessert)$/;
+const SIGHT_KEYS = /^(tourism|historic|leisure|natural)$/;
+const SIGHT = /^(place_of_worship|theatre|arts_centre|planetarium|marketplace|townhall|fountain|clock|cinema|library)$/;
+const SKIP = /^(hotel|hostel|guest_house|motel|apartment|information|yes)$/;
+
+/** OSM 태그(key/value, 예: amenity/restaurant)로 종류 추측. 모르면 ''. */
+export function categoryFromTag(key, value) {
+  const k = String(key ?? '');
+  const v = String(value ?? '');
+  if (FOOD.test(v)) return 'food';
+  if (CAFE.test(v)) return 'cafe';
+  if (k === 'shop' || /^(mall|department_store|marketplace_shop)$/.test(v)) return 'shop';
+  if (SKIP.test(v)) return '';
+  if (SIGHT_KEYS.test(k) || SIGHT.test(v)) return 'sight';
+  return '';
+}
+
+/** "쇼핑·복합시설", "맛집거리" 같은 한국어 분류 문구로 종류 추측. */
+export function categoryFromText(text) {
+  const t = String(text ?? '');
+  if (!t) return '';
+  if (/카페|디저트|베이커리/.test(t)) return 'cafe';
+  if (/맛집|음식|식당|라멘|스시|이자카야/.test(t)) return 'food';
+  if (/쇼핑|백화점|아울렛|몰/.test(t)) return 'shop';
+  if (/숙소|호텔/.test(t)) return '';
+  return 'sight';
+}
+
+export function itemCategory(place) {
+  if (CATEGORIES[place.category]) return place.category;
+  return categoryFromTag(place.osmKey, place.kind);
+}
+
 export function createItem(place) {
   return {
     id: uid(),
@@ -97,6 +143,7 @@ export function createItem(place) {
     time: place.time ?? '',
     memo: place.memo ?? '',
     url: place.url ?? '',
+    category: itemCategory(place),
   };
 }
 
@@ -422,7 +469,7 @@ export function flightSummary(f) {
   return [f.flightNo, `${from} → ${to}`].filter(Boolean).join(' ');
 }
 
-export const EXPORT_HEADER = ['일차', '날짜', '순서', '시간', '장소', '주소', '메모', '링크', '구글맵', '위도', '경도'];
+export const EXPORT_HEADER = ['일차', '날짜', '순서', '시간', '종류', '장소', '주소', '메모', '링크', '구글맵', '위도', '경도'];
 
 /** 엑셀 내보내기용 행 (헤더 이름을 키로 갖는 객체). */
 export function tripToRows(trip) {
@@ -431,6 +478,7 @@ export function tripToRows(trip) {
     날짜: date,
     순서: order,
     시간: it.time ?? '',
+    종류: CATEGORIES[it.category]?.label ?? (it.stay ? '숙소' : ''),
     장소: it.name,
     주소: it.address,
     메모: it.memo,
@@ -455,9 +503,9 @@ export function tripToRows(trip) {
       });
     return [
       ...fl.filter((x) => x.flight.kind !== 'in').map(flightRow),
-      ...(start ? [row(label, d.date, '숙소(출발)', start)] : []),
+      ...(start ? [row(label, d.date, '숙소(출발)', { ...start, stay: true })] : []),
       ...d.items.map((it, j) => row(label, d.date, j + 1, it)),
-      ...(end ? [row(label, d.date, '숙소(귀가)', end)] : []),
+      ...(end ? [row(label, d.date, '숙소(귀가)', { ...end, stay: true })] : []),
       ...fl.filter((x) => x.flight.kind === 'in').map(flightRow),
     ];
   });

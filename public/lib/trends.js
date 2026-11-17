@@ -1,6 +1,6 @@
 // 트렌드(요즘 뜨는 곳) 데이터 처리. 순수 함수만 둔다.
 
-import { distanceKm } from './model.js';
+import { distanceKm, categoryFromText } from './model.js';
 
 export { distanceKm };
 
@@ -16,6 +16,13 @@ export function tripAnchor(trip) {
 }
 
 /** 기준 위치에서 maxKm 안의 가장 가까운 도시. 없으면 null. */
+/** 여행지 이름에 트렌드 도시 이름이 들어 있으면 그 도시 ("오사카", "오사카 먹방", "Osaka"). */
+export function cityByName(cities, destination) {
+  const d = String(destination ?? '').trim().toLowerCase();
+  if (!d) return null;
+  return cities.find((c) => d.includes(c.name.toLowerCase()) || d.includes(c.id.toLowerCase())) ?? null;
+}
+
 export function nearestCity(cities, point, maxKm = 150) {
   if (!point) return null;
   let best = null;
@@ -56,5 +63,6 @@ export function trendToPlace(p, cityName) {
     lng: p.lng,
     url: p.sources?.[0]?.url ?? '',
     memo: p.summary ?? '',
+    category: categoryFromText(p.category),
   };
 }

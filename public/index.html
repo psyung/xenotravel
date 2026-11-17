@@ -63,7 +63,7 @@
         <div class="search">
           <div class="search-row">
             <input id="search" type="search" autocomplete="off"
-                   placeholder="가고 싶은 곳 검색 또는 구글맵 링크 붙여넣기">
+                   placeholder="장소 검색 (한국어는 Enter) 또는 구글맵 링크 붙여넣기">
             <button id="pickBtn" class="btn" title="지도를 클릭해서 장소 추가">📍 <span class="hide-sm">지도에서 찍기</span></button>
           </div>
           <label class="target">추가할 곳 <select id="target"></select></label>
@@ -83,6 +83,7 @@
         <div id="map"></div>
         <div id="pickHint" class="pick-hint" hidden>추가할 위치를 지도에서 클릭하세요 · <button id="pickCancel">취소</button></div>
         <button id="showAll" class="btn map-all" hidden>전체 일정 보기</button>
+        <div id="pinLegend" class="pin-legend"></div>
       </section>
     </main>
 

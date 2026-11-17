@@ -1,6 +1,6 @@
 import * as M from './lib/model.js';
 import { parseLocationInput } from './lib/links.js';
-import { searchPlaces, reversePlace } from './lib/geo.js';
+import { searchPlaces, searchPlacesKo, HANGUL, reversePlace, geocodeDestination } from './lib/geo.js';
 import { loadStore, saveStore } from './lib/store.js';
 import { exportXlsx, downloadJson } from './lib/export.js';
 import * as T from './lib/trends.js';
@@ -16,9 +16,9 @@ const TODAY = new Date().toISOString().slice(0, 10);
 const PREF_KEY = 'xenotravel:prefs';
 const prefs = (() => {
   try {
-    return { view: 'list', trendsOpen: true, mapHidden: false, ...JSON.parse(localStorage.getItem(PREF_KEY) || '{}') };
+    return { view: 'list', trendsOpen: true, mapHidden: false, pinColor: 'day', ...JSON.parse(localStorage.getItem(PREF_KEY) || '{}') };
   } catch {
-    return { view: 'list', trendsOpen: true, mapHidden: false };
+    return { view: 'list', trendsOpen: true, mapHidden: false, pinColor: 'day' };
   }
 })();
 const savePrefs = () => {
@@ -82,6 +82,30 @@ function pinIcon(label, color, dim) {
   });
 }
 
+const UNSET_COLOR = '#94a3b8'; // 종류 보기에서 종류를 안 정한 장소
+const byCategory = () => prefs.pinColor === 'category';
+/** 핀 색: 일차별(동선 선과 같은 색) 또는 종류별(관광·맛집·카페·쇼핑) */
+const pinColorOf = (it, listColor) => (byCategory() ? M.CATEGORIES[it.category]?.color ?? UNSET_COLOR : listColor);
+const stayPinHtml = () => `<div class="stay-pin"${byCategory() ? ` style="background:${M.STAY_COLOR};border-color:${M.STAY_COLOR}"` : ''}>🏨</div>`;
+const catIcon = (it) => {
+  const c = M.CATEGORIES[it.category];
+  return c ? `<span class="cat-ic" title="${c.label}">${c.icon}</span>` : '';
+};
+
+function renderPinLegend() {
+  const el = $('#pinLegend');
+  el.innerHTML = `<div class="pin-seg" role="group" aria-label="핀 색 기준">
+      <button data-pin="day" class="${byCategory() ? '' : 'active'}">일차별</button>
+      <button data-pin="category" class="${byCategory() ? 'active' : ''}">종류별</button>
+    </div>${
+      byCategory()
+        ? `<div class="legend">${Object.values(M.CATEGORIES)
+            .map((c) => `<span><i style="--c:${c.color}"></i>${c.label}</span>`)
+            .join('')}<span><i style="--c:${M.STAY_COLOR}"></i>숙소</span></div>`
+        : ''
+    }`;
+}
+
 function allLists() {
   return [
     ...trip.days.map((d, i) => ({ id: d.id, items: d.items, color: dayColor(i), label: `Day ${i + 1}`, isDay: true })),
@@ -105,12 +129,12 @@ function renderMap({ fit = false } = {}) {
     }
     l.items.forEach((it, i) => {
       const m = L.marker([it.lat, it.lng], {
-        icon: pinIcon(l.isDay ? i + 1 : '•', l.color, dim),
+        icon: pinIcon(l.isDay ? i + 1 : '•', pinColorOf(it, l.color), dim),
         zIndexOffset: dim ? 0 : 1000,
       }).addTo(layer);
       m.bindPopup(
         `<div class="popup-name">${esc(it.name)}</div>` +
-          `<div class="popup-meta">${esc(l.label)}${l.isDay ? ` · ${i + 1}번째` : ''}${it.time ? ` · ${esc(it.time)}` : ''}</div>` +
+          `<div class="popup-meta">${M.CATEGORIES[it.category] ? `${M.CATEGORIES[it.category].icon} ${M.CATEGORIES[it.category].label} · ` : ''}${esc(l.label)}${l.isDay ? ` · ${i + 1}번째` : ''}${it.time ? ` · ${esc(it.time)}` : ''}</div>` +
           `<a href="${M.googleMapsUrl(it)}" target="_blank" rel="noopener">구글맵에서 열기</a>`,
       );
       m.on('click', () => openItem(it.id, { scroll: true }));
@@ -121,7 +145,7 @@ function renderMap({ fit = false } = {}) {
   for (const s of trip.stays) {
     const { checkIn, checkOut } = M.stayDates(trip, s);
     const m = L.marker([s.lat, s.lng], {
-      icon: L.divIcon({ className: '', html: '<div class="stay-pin">🏨</div>', iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -12] }),
+      icon: L.divIcon({ className: '', html: stayPinHtml(), iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -12] }),
       zIndexOffset: 1500,
     }).addTo(layer);
     m.bindPopup(
@@ -132,6 +156,7 @@ function renderMap({ fit = false } = {}) {
     markers.set(s.id, m);
   }
   renderTrendMarkers();
+  renderPinLegend();
   $('#showAll').hidden = ui.focusList == null;
   if (fit) fitTo(bounds);
 }
@@ -140,7 +165,7 @@ function renderMap({ fit = false } = {}) {
 function currentCity() {
   if (!trip || !trends.cities.length) return null;
   const chosen = trends.cities.find((c) => c.id === trip.trendCity);
-  return chosen ?? T.nearestCity(trends.cities, T.tripAnchor(trip));
+  return chosen ?? T.cityByName(trends.cities, trip.destination) ?? T.nearestCity(trends.cities, T.tripAnchor(trip));
 }
 
 function findTrend(id) {
@@ -311,6 +336,7 @@ function render({ fit = false } = {}) {
     return;
   }
   trip.stays ??= []; // 숙소 기능 이전에 만든 여행
+  repairCenter();
   document.title = `${trip.title} · XenoTravel`;
   const title = $('#tripTitle');
   if (document.activeElement !== title) title.value = trip.title;
@@ -321,6 +347,17 @@ function render({ fit = false } = {}) {
   renderTarget();
   renderDays();
   renderMap({ fit });
+}
+
+/** 여행지 이름이 트렌드 도시인데 좌표가 그 도시와 멀면(예전 검색이 서울의 "오사카○○" 식당을 찾은 경우) 도시 좌표로 고친다. */
+function repairCenter() {
+  const named = T.cityByName(trends.cities, trip.destination);
+  if (!named || (trip.center && T.distanceKm(trip.center, named.center) <= 150)) return;
+  trip.center = { ...named.center };
+  if (!ui.readonly) {
+    store.trips[trip.id] = trip;
+    persist();
+  }
 }
 
 const STAY_TARGET = '__stay';
@@ -468,7 +505,7 @@ function itemHtml(it, i, isDay, leg = null) {
       <span class="drag" title="끌어서 순서·날짜 바꾸기">⋮⋮</span>
       <span class="num">${isDay ? i + 1 : '•'}</span>
       <button class="item-main" data-action="toggle">
-        <span class="item-name">${esc(it.name)}</span>
+        <span class="item-name">${catIcon(it)}${esc(it.name)}</span>
         <span class="item-sub">${sub}</span>
       </button>
       <button class="icon" data-action="duplicate" title="복제">⧉</button>
@@ -480,6 +517,9 @@ function itemHtml(it, i, isDay, leg = null) {
         : open
         ? `<div class="editor">
       <label>이름<input data-field="name" value="${esc(it.name)}"></label>
+      <div class="cat-pick" role="group" aria-label="종류">${Object.entries(M.CATEGORIES)
+        .map(([k, c]) => `<button type="button" data-action="set-cat" data-cat="${k}" class="${it.category === k ? 'on' : ''}" style="--c:${c.color}">${c.icon} ${c.label}</button>`)
+        .join('')}</div>
       <label>시간<input type="time" data-field="time" value="${esc(it.time)}"></label>
       <label>메모<textarea data-field="memo" placeholder="영업시간, 예약번호, 꼭 먹을 것…">${esc(it.memo)}</textarea></label>
       <label>링크<input type="url" data-field="url" value="${esc(it.url)}" placeholder="예약 페이지, 블로그 등"></label>
@@ -651,7 +691,7 @@ function renderDock() {
         <div class="dock-top">
           <span class="drag" title="끌어서 원하는 날에 놓기">⋮⋮</span>
           <div class="dock-text">
-            <span class="item-name">${esc(it.name)}</span>
+            <span class="item-name">${catIcon(it)}${esc(it.name)}</span>
             <span class="item-sub">${esc(it.memo.split('\n')[0] || it.address)}</span>
           </div>
           <button class="icon" data-action="locate" title="지도에서 보기">◎</button>
@@ -820,6 +860,11 @@ $('#days').addEventListener('click', (e) => {
     commit();
     $(`.item[data-id="${CSS.escape(copy.id)}"]`)?.classList.add('flash');
     toast(`"${copy.name}"을(를) 복제했어요. 끌어서 다른 날로 옮길 수 있어요`);
+  } else if (action === 'set-cat') {
+    const found = M.findItem(trip, id);
+    if (!found) return;
+    found.item.category = found.item.category === btn.dataset.cat ? '' : btn.dataset.cat;
+    commit();
   } else if (action === 'flight-edit') {
     if (!ui.readonly) openFlights(btn.dataset.flight);
   } else if (action === 'stay-toggle') {
@@ -887,7 +932,7 @@ $('#days').addEventListener('input', (e) => {
   persist();
   const li = e.target.closest('.item');
   const it = found.item;
-  $('.item-name', li).textContent = it.name;
+  $('.item-name', li).innerHTML = catIcon(it) + esc(it.name);
   $('.item-sub', li).innerHTML = it.time
     ? `<b>${esc(it.time)}</b> ${esc(it.memo.split('\n')[0] || it.address)}`
     : esc(it.memo.split('\n')[0] || it.address);
@@ -900,6 +945,14 @@ $('#days').addEventListener('change', (e) => {
   commit();
   const city = currentCity();
   if (city && !T.tripAnchor(trip)) map.setView([city.center.lat, city.center.lng], 12);
+});
+
+$('#pinLegend').addEventListener('click', (e) => {
+  const mode = e.target.closest('[data-pin]')?.dataset.pin;
+  if (!mode || mode === prefs.pinColor) return;
+  prefs.pinColor = mode;
+  savePrefs();
+  renderMap();
 });
 
 $('#showAll').addEventListener('click', () => {
@@ -964,7 +1017,8 @@ function hideResults() {
   ui.results = [];
 }
 
-async function runSearch() {
+/** explicit: Enter로 검색 (한국어 검색은 Enter일 때만 한다) */
+async function runSearch({ explicit = false } = {}) {
   const q = searchEl.value.trim();
   ui.searchAbort?.abort();
   if (q.length < 2) return hideResults();
@@ -988,16 +1042,28 @@ async function runSearch() {
       if (!ctrl.signal.aborted) showResults([place]);
       return;
     }
-    showMessage('검색 중…');
+    const query = parsed?.query ?? q;
     const c = map.getCenter();
-    const places = await searchPlaces(parsed?.query ?? q, { lat: c.lat, lng: c.lng, zoom: map.getZoom() }, ctrl.signal);
+    const near = { lat: c.lat, lng: c.lng, zoom: map.getZoom() };
+    if (HANGUL.test(query)) {
+      if (!explicit) return showMessage(`Enter를 누르면 "${query}"을(를) 한국어로 찾아요`);
+      showMessage('한국어로 찾는 중…');
+      const places = await searchPlacesKo(query, near, ctrl.signal);
+      if (ctrl.signal.aborted) return;
+      if (!places.length) {
+        return showMessage('한국어 이름으로는 못 찾았어요. 영어·현지어로 검색하거나(예: Kuromon Market), 구글맵 링크를 붙여넣어 주세요.');
+      }
+      return showResults(places);
+    }
+    showMessage('검색 중…');
+    const places = await searchPlaces(query, near, ctrl.signal);
     if (!ctrl.signal.aborted) showResults(places);
   } catch (err) {
     if (err.name !== 'AbortError') showMessage(`검색하지 못했어요: ${err.message}`);
   }
 }
 
-searchEl.addEventListener('input', debounce(runSearch, 350));
+searchEl.addEventListener('input', debounce(() => runSearch(), 350));
 searchEl.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     searchEl.value = '';
@@ -1012,7 +1078,7 @@ searchEl.addEventListener('keydown', (e) => {
     e.preventDefault();
     const p = ui.results[ui.activeResult];
     if (p) addPlace(p);
-    else runSearch();
+    else runSearch({ explicit: true });
   }
 });
 resultsEl.addEventListener('click', (e) => {
@@ -1165,8 +1231,7 @@ $('#newTrip').addEventListener('submit', async (e) => {
   submit.textContent = '여행지 찾는 중…';
   let center = null;
   try {
-    const [first] = await searchPlaces(destination);
-    if (first) center = { lat: first.lat, lng: first.lng };
+    center = await geocodeDestination(destination);
   } catch {
     /* 여행지 좌표를 못 찾아도 여행은 만든다 */
   }
@@ -1242,7 +1307,7 @@ function openPrint() {
           const rows = flightRows('top') + stayRow(st.start, '출발') + l.items
             .map(
               (it, j) => `<tr><td class="n">${l.isDay ? j + 1 : '•'}</td><td class="t">${esc(it.time)}</td>
-                <td><strong>${esc(it.name)}</strong>${it.address ? `<div class="addr">${esc(it.address)}</div>` : ''}</td>
+                <td><strong>${M.CATEGORIES[it.category]?.icon ?? ''} ${esc(it.name)}</strong>${it.address ? `<div class="addr">${esc(it.address)}</div>` : ''}</td>
                 <td class="memo">${esc(it.memo)}${it.url ? `<div class="addr">${esc(it.url)}</div>` : ''}</td></tr>`,
             )
             .join('') + stayRow(st.end, '귀가') + flightRows('bottom');

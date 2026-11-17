@@ -64,3 +64,13 @@ test('trendToPlace → addItem: 메모·출처 링크가 일정에 들어간다'
   assert.equal(item.url, p.sources[0].url);
   assert.match(item.address, /오사카$/);
 });
+
+test('cityByName: 여행지 이름으로 트렌드 도시 찾기', () => {
+  const data = JSON.parse(readFileSync(new URL('../public/data/trends.json', import.meta.url), 'utf8'));
+  assert.equal(T.cityByName(data.cities, '오사카')?.id, 'osaka');
+  assert.equal(T.cityByName(data.cities, '오사카 먹방')?.id, 'osaka');
+  assert.equal(T.cityByName(data.cities, 'Osaka')?.id, 'osaka');
+  assert.equal(T.cityByName(data.cities, '교토')?.id, 'kyoto');
+  assert.equal(T.cityByName(data.cities, '다낭'), null);
+  assert.equal(T.cityByName(data.cities, ''), null);
+});
