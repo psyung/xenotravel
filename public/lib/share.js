@@ -33,7 +33,7 @@ export function shareSummary(trip) {
 /** 메신저에 붙여넣을 메시지 */
 export function shareMessage(trip, url) {
   const { title, line } = shareSummary(trip);
-  return `✈️ ${title}\n${line}\n\n👉 일정 보기 (설치 없이 바로 열려요)\n${url}`;
+  return `${title}\n${line}\n\n일정 보기 (설치 없이 바로 열려요)\n${url}`;
 }
 
 export const SHARE_PREFIX = '#s=';

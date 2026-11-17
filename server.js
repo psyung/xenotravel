@@ -108,7 +108,7 @@ async function sharePage(req, res, id) {
     `<base href="/">`, // /s/<id> 아래에서도 styles.css·app.js를 루트에서 찾게
     `<meta property="og:type" content="website">`,
     `<meta property="og:site_name" content="XenoTravel">`,
-    `<meta property="og:title" content="${esc(`✈️ ${title}`)}">`,
+    `<meta property="og:title" content="${esc(title)}">`,
     `<meta property="og:description" content="${esc(desc)}">`,
     `<meta property="og:url" content="${esc(`${proto}://${host}/s/${id}`)}">`,
     `<meta property="og:image" content="${esc(`${proto}://${host}/og.png`)}">`,

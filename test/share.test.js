@@ -80,6 +80,6 @@ test('shareSummary / shareMessage: 카톡에 붙일 요약', async () => {
   const one = M.createTrip({ title: '당일', startDate: '2026-12-01', endDate: '2026-12-01' });
   assert.equal(shareSummary(one).line, '12월 1일 · 당일치기');
   const msg = shareMessage(t, 'https://x.example/s/Ab3dE9xk');
-  assert.match(msg, /^✈️ 오사카 3박\n12월 1일 ~ 12월 4일/);
+  assert.match(msg, /^오사카 3박\n12월 1일 ~ 12월 4일/);
   assert.ok(msg.endsWith('https://x.example/s/Ab3dE9xk'));
 });

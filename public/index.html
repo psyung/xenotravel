@@ -2,94 +2,140 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>XenoTravel</title>
   <meta name="description" content="가볍게 짜는 해외여행 일정">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2a10 10 0 0 0-10 10c0 7.5 10 18 10 18s10-10.5 10-18A10 10 0 0 0 16 2z' fill='%232563eb'/%3E%3Ccircle cx='16' cy='12' r='4' fill='white'/%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%233182F6'/%3E%3Cpath d='M9 17.5l14-6.5-4.5 13-3-5z' fill='white'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body data-page="plan">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-plan" viewBox="0 0 24 24"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z M9 4v14 M15 6v14"/></symbol>
+    <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h12v4 M3 7v10a2 2 0 0 0 2 2h14V9H5a2 2 0 0 1-2-2Z M16 14h.01"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M4 5h16v14H4z M8 12l2.5 2.5L16 9"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 3v12 M7 8l5-5 5 5 M5 14v5h14v-5"/></symbol>
+    <symbol id="i-plane" viewBox="0 0 24 24"><path d="M3 12.5 21 5l-4 15-5-5.5-4 3v-4.5Z M12 14.5 17 9"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><path d="M5 12h.01 M12 12h.01 M19 12h.01"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21Z M12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/></symbol>
+  </svg>
   <div id="app">
     <header class="topbar">
-      <span class="brand" aria-hidden="true">✈️<b class="hide-sm">XenoTravel</b></span>
-      <button id="tripsBtn" class="btn ghost" title="내 여행 목록">☰ <span class="hide-sm">내 여행</span></button>
-      <input id="tripTitle" class="title-input" aria-label="여행 이름" maxlength="60">
-      <div class="dates">
-        <input type="date" id="startDate" aria-label="시작일">
-        <span>~</span>
-        <input type="date" id="endDate" aria-label="종료일">
-      </div>
-      <div class="seg" role="group" aria-label="보기 방식">
-        <button data-view="list" title="날짜별 목록으로 보기">
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3h12M2 8h12M2 13h12"/></svg>기본형
-        </button>
-        <button data-view="board" title="트렐로처럼 칸으로 보기">
-          <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2" width="3.5" height="12" rx="1"/><rect x="6.25" y="2" width="3.5" height="8" rx="1"/><rect x="11" y="2" width="3.5" height="10" rx="1"/></svg>보드형
-        </button>
-      </div>
-      <button id="mapToggle" class="btn ghost board-only">지도 숨기기</button>
+      <button id="tripsBtn" class="brand" title="내 여행 목록">
+        <span class="logo" aria-hidden="true"><svg><use href="#i-plane"/></svg></span>
+        <span class="brand-text"><b>XenoTravel</b><small>내 여행 ▾</small></span>
+      </button>
+      <nav class="pnav" aria-label="화면">
+        <button class="pg" data-page="plan">일정</button>
+        <button class="pg" data-page="budget">가계부</button>
+        <button class="pg" data-page="check">체크<b class="check-badge" hidden></b></button>
+      </nav>
       <div class="actions">
-        <button id="shareBtn" class="btn share-btn" title="앱 설치 없이 볼 수 있는 링크 만들기">🔗 공유</button>
-        <button id="flightsBtn" class="btn flights-btn">✈ 항공편</button>
-        <button id="exportXlsx" class="btn">엑셀</button>
-        <button id="exportPdf" class="btn">PDF</button>
+        <button id="shareBtn" class="pill" title="앱 설치 없이 볼 수 있는 링크 만들기"><svg class="ic"><use href="#i-share"/></svg><span class="hide-sm">공유</span></button>
+        <button id="flightsBtn" class="pill"><svg class="ic"><use href="#i-plane"/></svg><span class="hide-sm">항공편</span></button>
         <details class="menu">
-          <summary class="btn ghost" aria-label="더보기">⋯</summary>
+          <summary class="pill round" aria-label="더보기"><svg class="ic"><use href="#i-more"/></svg></summary>
           <div class="menu-pop">
+            <button id="exportXlsx">엑셀로 내보내기</button>
+            <button id="exportPdf">PDF (인쇄용)</button>
+            <hr>
             <button data-menu="backup">백업 파일 저장 (JSON)</button>
             <button data-menu="import" class="edit-only">백업 파일 불러오기</button>
             <button data-menu="delete" class="danger edit-only">이 여행 삭제</button>
           </div>
         </details>
+        <button id="themeBtn" class="pill round" title="화면 밝기" aria-label="화면 밝기"><svg class="ic"><use href="#i-moon"/></svg></button>
         <input type="file" id="importFile" accept=".json,application/json" hidden>
       </div>
     </header>
 
     <div id="sharedBanner" class="shared-banner" hidden>
-      <span>👀 <b id="sharedTitle"></b> · 공유받은 일정이에요 (보기 전용)</span>
+      <span><b id="sharedTitle"></b> · 공유받은 일정이에요 (보기 전용)</span>
       <span class="shared-actions">
         <button id="sharedSave" class="btn primary">내 여행으로 저장</button>
-        <button id="sharedLeave" class="btn ghost">닫기</button>
+        <button id="sharedLeave" class="btn">닫기</button>
       </span>
     </div>
 
-    <main class="layout" data-tab="plan" data-view="list">
-      <section class="plan">
-        <div class="search">
-          <div class="search-row">
-            <input id="search" type="search" autocomplete="off"
-                   placeholder="장소 검색 (한국어는 Enter) 또는 구글맵 링크 붙여넣기">
-            <button id="pickBtn" class="btn" title="지도를 클릭해서 장소 추가">📍 <span class="hide-sm">지도에서 찍기</span></button>
+    <!-- ───────── 일정 ───────── -->
+    <section id="page-plan" class="page">
+      <div class="summary">
+        <div class="hero">
+          <div class="hero-l">
+            <span id="heroTag" class="eyebrow"></span>
+            <input id="tripTitle" class="trip-title" aria-label="여행 이름" maxlength="60">
+            <div class="sum-dates">
+              <input type="date" id="startDate" aria-label="시작일">
+              <span>–</span>
+              <input type="date" id="endDate" aria-label="종료일">
+              <span id="heroMeta" class="sum-meta"></span>
+            </div>
+            <div id="heroFlight" class="routes"></div>
           </div>
-          <label class="target">추가할 곳 <select id="target"></select></label>
-          <div id="stayOpts" class="stay-opts" hidden>
-            <label>체크인 <input type="date" id="stayIn"></label>
-            <span class="arrow">→</span>
-            <label>체크아웃 <input type="date" id="stayOut"></label>
-            <span id="stayNightsLabel" class="nights-chip">2박</span>
-            <span class="hint">숙소 이름을 검색하거나, 지도에서 우클릭해서 골라요</span>
-          </div>
-          <ul id="results" class="results" hidden></ul>
+          <div id="heroStats" class="bento"></div>
         </div>
-        <div id="days" class="days"></div>
-        <div id="inboxDock" class="inbox-dock"></div>
-      </section>
-      <section class="mapwrap">
-        <div id="map"></div>
-        <div id="pickHint" class="pick-hint" hidden>추가할 위치를 지도에서 클릭하세요 · <button id="pickCancel">취소</button></div>
-        <button id="showAll" class="btn map-all" hidden>전체 일정 보기</button>
-        <div id="pinLegend" class="pin-legend"></div>
-      </section>
-    </main>
+        <div id="notice" class="notice" hidden></div>
+      </div>
 
-    <nav class="tabs">
-      <button data-tab="plan" class="active">일정</button>
-      <button data-tab="map">지도</button>
+      <div class="plan-toolbar">
+        <div class="seg" role="group" aria-label="보기 방식">
+          <button data-view="list" title="날짜별로 위아래로 보기">목록</button>
+          <button data-view="board" title="모든 날을 칸으로 펼쳐 보기">보드</button>
+        </div>
+        <div class="mtabs" role="group" aria-label="일정 · 지도">
+          <button data-tab="plan" class="active">일정</button>
+          <button data-tab="map">지도</button>
+        </div>
+        <button id="mapToggle" class="pill board-only">지도 숨기기</button>
+        <button id="heroRoute" class="pill hide-sm">전체 동선 보기</button>
+      </div>
+
+      <main class="layout" data-view="list" data-tab="plan">
+        <section class="plan">
+          <div class="search card">
+            <div class="search-row">
+              <input id="search" type="search" autocomplete="off"
+                     placeholder="장소 검색 (한국어는 Enter) 또는 구글맵 링크">
+              <button id="pickBtn" class="pill" title="지도를 클릭해서 장소 추가"><svg class="ic"><use href="#i-pin"/></svg><span class="hide-sm">지도에서 찍기</span></button>
+            </div>
+            <label class="target">추가할 곳 <select id="target"></select></label>
+            <div id="stayOpts" class="stay-opts" hidden>
+              <label>체크인 <input type="date" id="stayIn"></label>
+              <span class="arrow">→</span>
+              <label>체크아웃 <input type="date" id="stayOut"></label>
+              <span id="stayNightsLabel" class="nights-chip">2박</span>
+              <span class="hint">숙소 이름을 검색하거나, 지도에서 우클릭해서 골라요</span>
+            </div>
+            <ul id="results" class="results" hidden></ul>
+          </div>
+          <div id="dayTabs" class="daytabs" role="tablist" aria-label="날짜로 이동"></div>
+          <div id="days" class="days"></div>
+          <div id="inboxDock" class="inbox-dock"></div>
+        </section>
+        <aside class="side">
+          <section class="mapwrap">
+            <div id="map"></div>
+            <div class="map-ctl">
+              <button id="dayPrev" title="이전 날 (←)" aria-label="이전 날">‹</button>
+              <button id="dayNext" title="다음 날 (→)" aria-label="다음 날">›</button>
+              <button id="showAll">전체 동선</button>
+            </div>
+            <div id="pickHint" class="pick-hint" hidden>추가할 위치를 지도에서 클릭하세요 · <button id="pickCancel">취소</button></div>
+            <div id="pinLegend" class="pin-legend"></div>
+          </section>
+        </aside>
+      </main>
+    </section>
+
+    <section id="page-budget" class="page" hidden></section>
+    <section id="page-check" class="page" hidden></section>
+
+    <nav class="pagebar" aria-label="화면">
+      <button class="pg" data-page="plan"><svg class="ic"><use href="#i-plan"/></svg>일정</button>
+      <button class="pg" data-page="budget"><svg class="ic"><use href="#i-wallet"/></svg>가계부</button>
+      <button class="pg" data-page="check"><svg class="ic"><use href="#i-check"/></svg>체크<b class="check-badge" hidden></b></button>
     </nav>
   </div>
 
@@ -152,7 +198,7 @@
       <h2>일정 공유하기</h2>
       <p class="fine">받는 사람은 <b>앱 설치나 가입 없이</b> 링크만 누르면 바로 봐요.</p>
       <div class="share-card" aria-label="메신저에 보이는 모습">
-        <div class="share-card-top">✈️</div>
+        <div class="share-card-top"><svg class="ic"><use href="#i-plane"/></svg></div>
         <div class="share-card-body">
           <strong id="shareTitle"></strong>
           <span id="shareLine"></span>
@@ -161,8 +207,8 @@
       </div>
       <p id="shareLong" class="fine warn" hidden>짧은 링크 서버에 연결되지 않아 긴 링크로 만들었어요. 링크는 그대로 잘 열려요.</p>
       <div class="share-buttons">
-        <button type="button" id="shareCopy" class="btn primary share-main">📋 메시지 복사</button>
-        <button type="button" id="shareNative" class="btn" hidden>📤 다른 앱으로 보내기</button>
+        <button type="button" id="shareCopy" class="btn primary share-main">메시지 복사</button>
+        <button type="button" id="shareNative" class="btn" hidden>다른 앱으로 보내기</button>
         <button type="button" id="shareCopyLink" class="btn ghost">링크만 복사</button>
       </div>
       <ul class="share-notes">

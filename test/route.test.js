@@ -70,3 +70,15 @@ test('safeUrl: http(s)만 허용', () => {
   assert.equal(M.safeUrl(''), '');
   assert.equal(M.safeUrl(undefined), '');
 });
+
+test('걸음 수: 도보 구간만, 100걸음 단위', () => {
+  // 350m 직선 → 437m 실제 → 625걸음 → 600
+  assert.equal(M.walkSteps(0.35), 600);
+  assert.equal(M.routeLeg(NAMBA, DOTON).steps, 600);
+  assert.equal(M.routeLeg(NAMBA, UMEDA).steps, 0); // 4km는 대중교통으로 본다
+  const t = tripWith([NAMBA, DOTON, UMEDA]);
+  assert.equal(M.daySteps(t, 1), 600);
+  assert.equal(M.daySummary(t, 1).steps, 600);
+  assert.equal(M.tripStats(t, '2026-11-01').steps, 600);
+  assert.equal(M.formatSteps(12345), '12,345');
+});

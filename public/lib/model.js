@@ -217,6 +217,24 @@ export const WALK_MAX_KM = 1.2;
 const DETOUR = 1.25;
 const WALK_KMH = 4.5;
 
+// 보폭 0.7m (성인 평균). 실제 길은 직선보다 25% 길다고 본다.
+const STRIDE_M = 0.7;
+/** 직선거리(km)를 걸었을 때 예상 걸음 수 (100걸음 단위) */
+export function walkSteps(km) {
+  return Math.round((km * DETOUR * 1000) / STRIDE_M / 100) * 100;
+}
+
+/** 하루 도보 이동 예상 걸음 수: 걸어갈 만한 구간(1.2km 이하)만 더한다. 대중교통 구간·관광지 안에서 걷는 건 뺀다. */
+export function daySteps(trip, dayIndex) {
+  const r = dayRoute(trip, dayIndex);
+  let steps = 0;
+  for (let i = 1; i < r.length; i++) steps += routeLeg(r[i - 1], r[i])?.steps ?? 0;
+  return steps;
+}
+
+/** "3,200" */
+export const formatSteps = (n) => Math.round(n).toLocaleString('ko-KR');
+
 /** 하루 동선: 출발 숙소 → 장소들 → 귀가 숙소. 지도 선·거리·길찾기가 모두 이 순서를 쓴다. */
 export function dayRoute(trip, dayIndex) {
   const day = trip.days[dayIndex];
@@ -234,6 +252,7 @@ export function routeLeg(from, to) {
     km,
     mode: walk ? 'walking' : 'transit',
     walkMin: walk ? Math.max(1, Math.round(((km * DETOUR) / WALK_KMH) * 60)) : null,
+    steps: walk ? walkSteps(km) : 0,
     url: directionsUrl(from, to, walk ? 'walking' : 'transit'),
   };
 }
@@ -549,4 +568,79 @@ export function validateTrip(obj) {
     if (typeof fl?.id !== 'string' || typeof fl.departAt !== 'string') fail('항공편');
   }
   return { ...obj, inbox: obj.inbox ?? [], stays: obj.stays ?? [], flights: obj.flights ?? [] };
+}
+
+/* ───────── 대시보드 (상단 요약) ───────── */
+
+/** 출발까지 남은 날: { label: 'D-4' | 'D-DAY' | 'Day 2' | '다녀옴', sub } */
+export function ddayInfo(trip, today) {
+  const start = parseDate(trip.startDate);
+  const end = parseDate(trip.endDate);
+  const t = parseDate(today);
+  if (!start || !t) return { label: '—', sub: '날짜 미정' };
+  const diff = Math.round((start - t) / 86400000);
+  if (diff > 0) return { label: `D-${diff}`, sub: '출발까지' };
+  if (diff === 0) return { label: 'D-DAY', sub: '오늘 출발' };
+  const day = Math.round((t - start) / 86400000);
+  if (end && t <= end) return { label: `Day ${day + 1}`, sub: '여행 중' };
+  return { label: '다녀옴', sub: '여행 끝' };
+}
+
+/** 오늘이 여행 중이면 그날 인덱스, 아니면 0 */
+export function todayIndex(trip, today) {
+  const i = indexOfDate(trip, today);
+  return i != null && i >= 0 && i < trip.days.length ? i : 0;
+}
+
+/** 하루 동선 거리(직선, km) */
+export function dayKm(trip, dayIndex) {
+  const r = dayRoute(trip, dayIndex);
+  let km = 0;
+  for (let i = 1; i < r.length; i++) km += distanceKm(r[i - 1], r[i]);
+  return km;
+}
+
+export function tripStats(trip, today) {
+  const places = trip.days.reduce((s, d) => s + d.items.length, 0);
+  const km = trip.days.reduce((s, _, i) => s + dayKm(trip, i), 0);
+  const n = trip.days.length;
+  return {
+    dday: ddayInfo(trip, today),
+    length: n > 1 ? `${n - 1}박 ${n}일` : '당일',
+    days: n,
+    places,
+    km,
+    steps: trip.days.reduce((s, _, i) => s + daySteps(trip, i), 0),
+  };
+}
+
+/** 하루 요약: 제목(장소 이름 이어 붙이기), 장소 수, 거리, 시간 범위 */
+export function daySummary(trip, dayIndex) {
+  const day = trip.days[dayIndex];
+  if (!day) return null;
+  const times = day.items.map((it) => it.time).filter(Boolean).sort();
+  return {
+    title: day.items.map((it) => it.name).join(' · '),
+    places: day.items.length,
+    km: dayKm(trip, dayIndex),
+    steps: daySteps(trip, dayIndex),
+    from: times[0] ?? '',
+    to: times.at(-1) ?? '',
+  };
+}
+
+/** 확인할 것 (상단 알림): 숙소가 빈 밤, 여행 기간 밖 항공편 */
+export function tripNotices(trip) {
+  const out = [];
+  const n = trip.days.length;
+  const lastFlightIn = (trip.flights ?? []).some((f) => f.kind === 'in' && f.departAt.slice(0, 10) === trip.endDate);
+  const empty = [];
+  for (let i = 0; i < n - 1; i++) if (!nightStay(trip, i)) empty.push(i + 1);
+  // 마지막 밤은 귀국편이 없을 때만 (당일 귀국이면 숙소가 필요 없다)
+  if (n > 1 && !lastFlightIn && !nightStay(trip, n - 1) && (trip.flights ?? []).some((f) => f.kind === 'in')) empty.push(n);
+  if (empty.length && (trip.stays ?? []).length) out.push(`Day ${empty.join(', ')} 밤 숙소가 아직 비어 있어요`);
+  else if (!(trip.stays ?? []).length && n > 1) out.push('숙소를 아직 정하지 않았어요. 검색할 때 "추가할 곳"을 🏨 숙소로 고르세요');
+  const outside = (trip.flights ?? []).filter((f) => trip.startDate && (f.departAt.slice(0, 10) < trip.startDate || f.departAt.slice(0, 10) > trip.endDate));
+  if (outside.length) out.push(`여행 기간 밖 항공편 ${outside.length}개는 일정에 안 보여요`);
+  return out;
 }
