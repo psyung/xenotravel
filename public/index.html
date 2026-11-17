@@ -7,11 +7,16 @@
   <meta name="description" content="가볍게 짜는 해외여행 일정">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2a10 10 0 0 0-10 10c0 7.5 10 18 10 18s10-10.5 10-18A10 10 0 0 0 16 2z' fill='%232563eb'/%3E%3Ccircle cx='16' cy='12' r='4' fill='white'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div id="app">
     <header class="topbar">
+      <span class="brand" aria-hidden="true">✈️<b class="hide-sm">XenoTravel</b></span>
       <button id="tripsBtn" class="btn ghost" title="내 여행 목록">☰ <span class="hide-sm">내 여행</span></button>
       <input id="tripTitle" class="title-input" aria-label="여행 이름" maxlength="60">
       <div class="dates">
@@ -19,7 +24,17 @@
         <span>~</span>
         <input type="date" id="endDate" aria-label="종료일">
       </div>
+      <div class="seg" role="group" aria-label="보기 방식">
+        <button data-view="list" title="날짜별 목록으로 보기">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3h12M2 8h12M2 13h12"/></svg>기본형
+        </button>
+        <button data-view="board" title="트렐로처럼 칸으로 보기">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2" width="3.5" height="12" rx="1"/><rect x="6.25" y="2" width="3.5" height="8" rx="1"/><rect x="11" y="2" width="3.5" height="10" rx="1"/></svg>보드형
+        </button>
+      </div>
+      <button id="mapToggle" class="btn ghost board-only">지도 숨기기</button>
       <div class="actions">
+        <button id="flightsBtn" class="btn flights-btn">✈ 항공편</button>
         <button id="exportXlsx" class="btn">엑셀</button>
         <button id="exportPdf" class="btn">PDF</button>
         <details class="menu">
@@ -34,18 +49,26 @@
       </div>
     </header>
 
-    <main class="layout" data-tab="plan">
+    <main class="layout" data-tab="plan" data-view="list">
       <section class="plan">
         <div class="search">
           <div class="search-row">
             <input id="search" type="search" autocomplete="off"
-                   placeholder="장소 검색 또는 구글맵 링크 붙여넣기">
+                   placeholder="가고 싶은 곳 검색 또는 구글맵 링크 붙여넣기">
             <button id="pickBtn" class="btn" title="지도를 클릭해서 장소 추가">📍 <span class="hide-sm">지도에서 찍기</span></button>
           </div>
           <label class="target">추가할 곳 <select id="target"></select></label>
+          <div id="stayOpts" class="stay-opts" hidden>
+            <label>체크인 <input type="date" id="stayIn"></label>
+            <span class="arrow">→</span>
+            <label>체크아웃 <input type="date" id="stayOut"></label>
+            <span id="stayNightsLabel" class="nights-chip">2박</span>
+            <span class="hint">숙소 이름을 검색하거나, 지도에서 우클릭해서 골라요</span>
+          </div>
           <ul id="results" class="results" hidden></ul>
         </div>
         <div id="days" class="days"></div>
+        <div id="inboxDock" class="inbox-dock"></div>
       </section>
       <section class="mapwrap">
         <div id="map"></div>
@@ -62,7 +85,7 @@
 
   <dialog id="tripsDialog">
     <div class="dialog-body">
-      <h2>내 여행</h2>
+      <h2>어디로 떠나볼까요?</h2>
       <ul id="tripList" class="trip-list"></ul>
       <form id="newTrip" class="new-trip">
         <h3>새 여행 만들기</h3>
@@ -74,12 +97,74 @@
         </div>
         <div class="dialog-actions">
           <button type="button" id="closeTrips" class="btn ghost">닫기</button>
-          <button type="submit" class="btn primary">만들기</button>
+          <button type="submit" class="btn primary">여행 만들기</button>
         </div>
       </form>
       <p class="fine">이 버전은 여행을 <b>이 브라우저에만</b> 저장해요. 다른 기기로 옮기려면 백업 파일을 쓰세요.</p>
     </div>
   </dialog>
+
+  <dialog id="flightDialog">
+    <div class="dialog-body">
+      <h2>항공편</h2>
+      <ul id="flightList" class="trip-list flight-list"></ul>
+      <form id="flightForm" class="new-trip flight-form" novalidate>
+        <h3 id="flightFormTitle">항공편 추가</h3>
+        <div class="kind-seg" role="radiogroup" aria-label="구분">
+          <label><input type="radio" name="kind" value="out" checked><span>출국</span></label>
+          <label><input type="radio" name="kind" value="move"><span>여행 중 이동</span></label>
+          <label><input type="radio" name="kind" value="in"><span>귀국</span></label>
+        </div>
+        <label>편명 <input name="flightNo" placeholder="예: KE723" autocomplete="off"></label>
+        <div class="row">
+          <label>출발 공항 <input name="from" list="airports" placeholder="ICN" autocomplete="off"></label>
+          <label>도착 공항 <input name="to" list="airports" placeholder="KIX" autocomplete="off"></label>
+        </div>
+        <div class="row">
+          <label>출발 (현지 시각) <input type="datetime-local" name="departAt"></label>
+          <label>도착 (현지 시각) <input type="datetime-local" name="arriveAt"></label>
+        </div>
+        <div class="row">
+          <label>예약번호 <input name="bookingRef" autocomplete="off"></label>
+          <label>메모 <input name="memo" placeholder="터미널, 수하물 등"></label>
+        </div>
+        <p id="flightError" class="form-error" hidden></p>
+        <div class="dialog-actions">
+          <button type="button" id="flightNew" class="btn ghost" hidden>새로 입력</button>
+          <button type="button" id="flightClose" class="btn ghost">닫기</button>
+          <button type="submit" id="flightSubmit" class="btn primary">추가</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+  <datalist id="airports">
+    <option value="ICN" label="인천"></option>
+    <option value="GMP" label="김포"></option>
+    <option value="PUS" label="김해(부산)"></option>
+    <option value="CJU" label="제주"></option>
+    <option value="TAE" label="대구"></option>
+    <option value="CJJ" label="청주"></option>
+    <option value="NRT" label="나리타(도쿄)"></option>
+    <option value="HND" label="하네다(도쿄)"></option>
+    <option value="KIX" label="간사이(오사카)"></option>
+    <option value="ITM" label="이타미(오사카)"></option>
+    <option value="FUK" label="후쿠오카"></option>
+    <option value="CTS" label="신치토세(삿포로)"></option>
+    <option value="OKA" label="나하(오키나와)"></option>
+    <option value="NGO" label="주부(나고야)"></option>
+    <option value="KMJ" label="구마모토"></option>
+    <option value="KOJ" label="가고시마"></option>
+    <option value="PVG" label="상하이 푸둥"></option>
+    <option value="SHA" label="상하이 훙차오"></option>
+    <option value="PEK" label="베이징 서우두"></option>
+    <option value="PKX" label="베이징 다싱"></option>
+    <option value="TAO" label="칭다오"></option>
+    <option value="CAN" label="광저우"></option>
+    <option value="SZX" label="선전"></option>
+    <option value="TFU" label="청두 톈푸"></option>
+    <option value="HKG" label="홍콩"></option>
+    <option value="TPE" label="타이베이 타오위안"></option>
+  </datalist>
 
   <div id="print" hidden></div>
   <div id="toast" role="status" aria-live="polite"></div>

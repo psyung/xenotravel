@@ -1,0 +1,333 @@
+{
+  "researchedAt": "2026-11-17",
+  "note": "웹 검색으로 모은 신규 오픈·기간 한정 정보입니다. 출처마다 날짜가 다른 경우가 있어 방문 전 공식 사이트 확인이 필요합니다. approx=true는 정확한 입구가 아닌 대략 위치입니다.",
+  "cities": [
+    {
+      "id": "tokyo",
+      "name": "도쿄",
+      "country": "JP",
+      "center": { "lat": 35.6812, "lng": 139.7671 },
+      "places": [
+        {
+          "id": "tokyo-pokepark-kanto",
+          "name": "PokéPark Kanto",
+          "area": "요미우리랜드 (이나기)",
+          "category": "테마파크",
+          "status": "new",
+          "since": "2026-02-05",
+          "summary": "요미우리랜드 안에 생긴 상설 야외 포켓몬 파크. 외국인 티켓은 2개월 전 오후 6시(일본시간)에 열리고 빨리 매진되는 편.",
+          "lat": 35.6250, "lng": 139.5172, "approx": true,
+          "sources": [
+            { "title": "Japan Travel – Japan's Biggest Attractions in 2026", "url": "https://en.japantravel.com/kanagawa/japan-2026-attractions/72385" },
+            { "title": "Tokyo Weekender – New Things Coming to Tokyo in 2026", "url": "https://www.tokyoweekender.com/things-to-do-in-tokyo/new-things-coming-to-tokyo-in-2026/" }
+          ]
+        },
+        {
+          "id": "tokyo-mon-takanawa",
+          "name": "MoN Takanawa (The Museum of Narratives)",
+          "area": "다카나와 게이트웨이 시티",
+          "category": "전시·문화",
+          "status": "new",
+          "since": "2026-03-28",
+          "summary": "다카나와 게이트웨이역 옆 새 복합 문화 시설. 역 일대 재개발 지구와 함께 둘러보기 좋음.",
+          "lat": 35.63944, "lng": 139.74166,
+          "sources": [
+            { "title": "FUN! JAPAN – Newly Opened Attractions in Tokyo", "url": "https://www.fun-japan.jp/en/articles/13670" },
+            { "title": "What's New in Tokyo 2026", "url": "https://en.miyakodori-geisha.com/2026/04/27/cool-things-to-do-tokyo-2026/" }
+          ]
+        },
+        {
+          "id": "tokyo-edo-tokyo-museum",
+          "name": "Edo-Tokyo Museum",
+          "area": "료고쿠",
+          "category": "박물관",
+          "status": "new",
+          "since": "2026-03-31",
+          "summary": "리뉴얼을 마치고 재개관한 에도·도쿄 역사 박물관. 핫토리 시계점 실물 크기 재현 등 새 전시가 추가됨.",
+          "lat": 35.69645, "lng": 139.79608,
+          "sources": [
+            { "title": "Tokyo Weekender – New Things Coming to Tokyo in 2026", "url": "https://www.tokyoweekender.com/things-to-do-in-tokyo/new-things-coming-to-tokyo-in-2026/" }
+          ]
+        },
+        {
+          "id": "tokyo-dream-park",
+          "name": "Tokyo Dream Park",
+          "area": "아리아케",
+          "category": "엔터테인먼트",
+          "status": "new",
+          "since": "2026-03-27",
+          "summary": "TV아사히가 만든 아리아케의 대형 엔터테인먼트 시설. 오다이바·아리아케 일정에 묶기 좋음 (개관일은 출처마다 3/26~3/27로 다름).",
+          "lat": 35.63375, "lng": 139.7902, "approx": true,
+          "sources": [
+            { "title": "FUN! JAPAN – Newly Opened Attractions in Tokyo", "url": "https://www.fun-japan.jp/en/articles/13670" },
+            { "title": "Tokyo Weekender – New Things Coming to Tokyo in 2026", "url": "https://www.tokyoweekender.com/things-to-do-in-tokyo/new-things-coming-to-tokyo-in-2026/" }
+          ]
+        },
+        {
+          "id": "tokyo-aqua-symphony",
+          "name": "Tokyo Aqua Symphony",
+          "area": "오다이바",
+          "category": "야경·쇼",
+          "status": "new",
+          "since": "2026",
+          "summary": "오다이바 해변에서 열리는 분수 쇼. 저녁 일정 마무리로 넣기 좋음. 공연 시간은 현지 확인 필요.",
+          "lat": 35.63108, "lng": 139.77735, "approx": true,
+          "sources": [
+            { "title": "26 Cool Things to Do in Tokyo (2026)", "url": "https://www.neverendingvoyage.com/cool-things-to-do-in-tokyo/" }
+          ]
+        },
+        {
+          "id": "tokyo-disneysea-25th",
+          "name": "Tokyo DisneySea 25주년 'Sparkling Jubilee'",
+          "area": "마이하마 (우라야스)",
+          "category": "테마파크",
+          "status": "event",
+          "since": "2026-04-15",
+          "until": "2027-03-31",
+          "summary": "디즈니씨 개장 25주년 기념 이벤트. 기간 한정 퍼레이드·굿즈가 있어 이번 겨울 여행이면 해당됨.",
+          "lat": 35.62726, "lng": 139.88441,
+          "sources": [
+            { "title": "Japan Experience – What's new in Japan in 2026", "url": "https://www.japan-experience.com/all-about-japan/news/new-attractions-japan-2026" }
+          ]
+        },
+        {
+          "id": "tokyo-tofrom-yaesu",
+          "name": "TOFROM Yaesu",
+          "area": "도쿄역 야에스",
+          "category": "쇼핑·복합시설",
+          "status": "new",
+          "since": "2026-09",
+          "summary": "도쿄역 야에스 쪽에 들어선 51층 복합 타워. 개관 시점은 출처마다 '3분기'와 '9/10'로 달라 방문 전 확인 필요.",
+          "lat": 35.6818, "lng": 139.76809, "approx": true,
+          "sources": [
+            { "title": "FUN! JAPAN – Newly Opened Attractions in Tokyo", "url": "https://www.fun-japan.jp/en/articles/13670" },
+            { "title": "Tokyo Weekender – New Things Coming to Tokyo in 2026", "url": "https://www.tokyoweekender.com/things-to-do-in-tokyo/new-things-coming-to-tokyo-in-2026/" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "osaka",
+      "name": "오사카",
+      "country": "JP",
+      "center": { "lat": 34.7025, "lng": 135.4959 },
+      "places": [
+        {
+          "id": "osaka-grand-green",
+          "name": "GRAND GREEN OSAKA (우메키타)",
+          "area": "JR 오사카역 북쪽",
+          "category": "공원·복합시설",
+          "status": "new",
+          "since": "2025",
+          "summary": "오사카역 바로 북쪽 우메키타 2기 재개발 지구. 대형 도심 공원과 상업시설이 함께 있어 오사카역 일정에 끼워 넣기 좋음.",
+          "lat": 34.70431, "lng": 135.49346,
+          "sources": [
+            { "title": "Arigato Travel – 10 New Things to Know Before Visiting Osaka", "url": "https://arigatotravel.com/blog/10-new-things-know-osaka" },
+            { "title": "Japan Royal Service – Post-Expo 2026: What's New in Osaka and Kyoto", "url": "https://www.japanroyalservice.com/places/osaka-to-kyoto" }
+          ]
+        },
+        {
+          "id": "osaka-lucua-south",
+          "name": "LUCUA SOUTH",
+          "area": "JR 오사카역",
+          "category": "쇼핑",
+          "status": "new",
+          "since": "2026-04",
+          "summary": "오사카역과 연결된 루쿠아의 남쪽 건물 리뉴얼. 캐릭터·애니 관련 층이 있다는 소개도 있으나 출처 신뢰도가 낮아 확인 필요.",
+          "lat": 34.70327, "lng": 135.49624,
+          "sources": [
+            { "title": "FUN! JAPAN – Newly Opened Spots in Osaka, Kyoto, Nara", "url": "https://www.fun-japan.jp/en/articles/13911" }
+          ]
+        },
+        {
+          "id": "osaka-quartz-shinsaibashi",
+          "name": "QUARTZ SHINSAIBASHI",
+          "area": "신사이바시",
+          "category": "쇼핑·복합시설",
+          "status": "new",
+          "since": "2026-04",
+          "summary": "패션·웰니스·아웃도어·아트·식당을 모은 신사이바시의 새 상업시설. 도톤보리·신사이바시 쇼핑 동선에 추가하기 좋음.",
+          "lat": 34.67452, "lng": 135.50036, "approx": true,
+          "sources": [
+            { "title": "FUN! JAPAN – Newly Opened Spots in Osaka, Kyoto, Nara", "url": "https://www.fun-japan.jp/en/articles/13911" }
+          ]
+        },
+        {
+          "id": "osaka-usj-25th",
+          "name": "유니버설 스튜디오 재팬 25주년",
+          "area": "유니버설시티",
+          "category": "테마파크",
+          "status": "event",
+          "since": "2026-03",
+          "summary": "개장 25주년 기념 연간 이벤트. 시즌별로 명탐정 코난·주술회전·몬스터헌터 등 기간 한정 어트랙션이 바뀌니 여행 시기 프로그램 확인 필요.",
+          "lat": 34.66564, "lng": 135.43245,
+          "sources": [
+            { "title": "Japan Royal Service – Post-Expo 2026: What's New in Osaka and Kyoto", "url": "https://www.japanroyalservice.com/places/osaka-to-kyoto" }
+          ]
+        },
+        {
+          "id": "osaka-hikari-renaissance",
+          "name": "OSAKA 빛의 르네상스 2026",
+          "area": "나카노시마 (오사카 시청 일대)",
+          "category": "야경·축제",
+          "status": "event",
+          "since": "2026-12-11",
+          "until": "2026-12-25",
+          "summary": "나카노시마 일대 겨울 일루미네이션 축제. 올해는 츠텐카쿠도 처음 참여. 12월 여행이면 저녁 일정 후보.",
+          "lat": 34.69384, "lng": 135.50218,
+          "sources": [
+            { "title": "MATCHA – Osaka Winter Illuminations 2026-2027", "url": "https://matcha-jp.com/en/15048" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "kyoto",
+      "name": "교토",
+      "country": "JP",
+      "center": { "lat": 35.0116, "lng": 135.7681 },
+      "places": [
+        {
+          "id": "kyoto-teamlab-biovortex",
+          "name": "teamLab Biovortex Kyoto",
+          "area": "교토역 남동쪽 (도보 약 10분)",
+          "category": "전시·미디어아트",
+          "status": "new",
+          "since": "2025-10-07",
+          "summary": "교토역 근처에 생긴 1만㎡ 이상 규모의 팀랩 상설관. 비 오는 날이나 도착·출발일 일정으로 넣기 좋음.",
+          "lat": 34.98375, "lng": 135.76542,
+          "sources": [
+            { "title": "Enjoy Osaka Kyoto Kobe – teamLab Biovortex Kyoto Guide", "url": "https://enjoy-osaka-kyoto-kobe.com/article/a/teamlab-biovortex-kyoto-guide/" },
+            { "title": "designboom – teamLab permanent museum in Kyoto", "url": "https://www.designboom.com/art/teamlab-permanent-museum-kyoto-october-2025-50-artworks-biovortex-09-30-2025/" }
+          ]
+        },
+        {
+          "id": "kyoto-uzumasa-village",
+          "name": "우즈마사 교토 빌리지 (구 도에이 교토 스튜디오 파크)",
+          "area": "우즈마사",
+          "category": "테마파크",
+          "status": "new",
+          "since": "2026-03-28",
+          "summary": "도에이 영화촬영소 테마파크가 새 이름으로 1단계 재개장. 닌자 어트랙션, 시대극 의상 체험, 에반게리온 기지 등.",
+          "lat": 35.01646, "lng": 135.70821,
+          "sources": [
+            { "title": "Wikipedia – Toei Kyoto Studio Park", "url": "https://en.wikipedia.org/wiki/Toei_Kyoto_Studio_Park" }
+          ]
+        },
+        {
+          "id": "kyoto-zen-ghibli",
+          "name": "선(禅)과 지브리 전시",
+          "area": "히가시야마 큐브 (교세라 미술관)",
+          "category": "전시·문화",
+          "status": "event",
+          "since": "2026-10-03",
+          "until": "2026-12-06",
+          "summary": "오카자키 교세라 미술관 히가시야마 큐브에서 열리는 기간 한정 지브리 전시. 헤이안 신궁·오카자키 공원과 같은 동선.",
+          "lat": 35.01356, "lng": 135.78329,
+          "sources": [
+            { "title": "Fizen – Kyoto Right Now 2026", "url": "https://blog.fizen.io/kyoto-right-now-new-rules-trends-2026/" }
+          ]
+        },
+        {
+          "id": "kyoto-naked-garden-nights",
+          "name": "NAKED GARDEN NIGHTS",
+          "area": "쇼세이엔 · 히가시혼간지",
+          "category": "야경·축제",
+          "status": "event",
+          "since": "2026-10-31",
+          "until": "2026-12-06",
+          "summary": "교토역 근처 정원 쇼세이엔과 히가시혼간지에서 밤마다 열리는 빛 설치 전시. 교토역 숙박이면 저녁에 걸어서 가기 좋음.",
+          "lat": 34.99123, "lng": 135.76201,
+          "sources": [
+            { "title": "Fizen – Kyoto Right Now 2026", "url": "https://blog.fizen.io/kyoto-right-now-new-rules-trends-2026/" }
+          ]
+        },
+        {
+          "id": "kyoto-ruru-gion",
+          "name": "RURU GION (말차 카페)",
+          "area": "기온 · 야스이 곤피라궁 옆",
+          "category": "카페",
+          "status": "new",
+          "since": "2026-10-16",
+          "summary": "야스이 곤피라궁 옆에 새로 생긴 말차 카페. 오픈 소식이 한 곳에서만 확인되어 방문 전 확인 필요.",
+          "lat": 34.99989, "lng": 135.77594, "approx": true,
+          "sources": [
+            { "title": "Kobe Brighten – Kyoto Openings", "url": "https://kobebrighten.com/en/openings/kyoto/" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "fukuoka",
+      "name": "후쿠오카",
+      "country": "JP",
+      "center": { "lat": 33.5902, "lng": 130.4017 },
+      "places": [
+        {
+          "id": "fukuoka-kuohka",
+          "name": "CANAL Gourmet Street KUOHKA",
+          "area": "캐널시티 하카타 지하",
+          "category": "맛집거리",
+          "status": "new",
+          "since": "2025",
+          "summary": "캐널시티 지하의 새 식당가. 21개 가게가 모여 있고 일본 첫 진출 매장도 있음. 하카타 일정 중 식사 장소로 편함.",
+          "lat": 33.58967, "lng": 130.41114,
+          "sources": [
+            { "title": "FUN! JAPAN – Newly Opened Spots in Fukuoka", "url": "https://www.fun-japan.jp/en/articles/13617" }
+          ]
+        },
+        {
+          "id": "fukuoka-gundam",
+          "name": "건담 실물 크기 입상 · GUNDAM SIDE-F",
+          "area": "라라포트 후쿠오카",
+          "category": "랜드마크",
+          "status": "classic",
+          "summary": "라라포트 후쿠오카의 실물 크기 건담과 건담 공식 매장. 정해진 시간에 움직이는 연출이 있음.",
+          "lat": 33.56477, "lng": 130.44032,
+          "sources": [
+            { "title": "LIVE JAPAN – Best Things to Do in Fukuoka 2026", "url": "https://livejapan.com/en/in-tokyo/in-pref-other/in-pref-fukuoka/article-a0004952/" }
+          ]
+        },
+        {
+          "id": "fukuoka-teamlab-forest",
+          "name": "teamLab Forest Fukuoka",
+          "area": "모모치 (BOSS E・ZO FUKUOKA)",
+          "category": "전시·미디어아트",
+          "status": "classic",
+          "summary": "후쿠오카 타워·모모치 해변 근처 팀랩 상설관. 여행 가이드에서 꾸준히 추천되는 곳.",
+          "lat": 33.59547, "lng": 130.36371,
+          "sources": [
+            { "title": "LIVE JAPAN – Best Things to Do in Fukuoka 2026", "url": "https://livejapan.com/en/in-tokyo/in-pref-other/in-pref-fukuoka/article-a0004952/" }
+          ]
+        },
+        {
+          "id": "fukuoka-prince-momochihama",
+          "name": "Fukuoka Prince Hotel Momochihama",
+          "area": "모모치하마",
+          "category": "숙소",
+          "status": "new",
+          "since": "2026-03-17",
+          "summary": "모모치 해변 앞에 새로 연 호텔. 바다와 도시가 같이 보이는 풍경이 특징. 팀랩·후쿠오카 타워와 가까움.",
+          "lat": 33.59346, "lng": 130.35044,
+          "sources": [
+            { "title": "JNTO 한국어 – 후쿠오카 프린스 호텔 모모치하마 개관", "url": "https://www.japan.travel/ko/kr/micenews/2026/?page=2" },
+            { "title": "FUN! JAPAN – Newly Opened Spots in Fukuoka", "url": "https://www.fun-japan.jp/en/articles/13617" }
+          ]
+        },
+        {
+          "id": "fukuoka-tenjin-1-7",
+          "name": "덴진 1-7 프로젝트 (덴진 빅뱅)",
+          "area": "덴진역 남쪽",
+          "category": "쇼핑·복합시설",
+          "status": "upcoming",
+          "since": "2026-12",
+          "summary": "덴진 재개발 '덴진 빅뱅'의 하나로 덴진역 남쪽에 짓는 복합시설. 2026년 12월 목표라 여행 시기에 열었는지 확인 필요.",
+          "lat": 33.59097, "lng": 130.39905, "approx": true,
+          "sources": [
+            { "title": "FUN! JAPAN – Newly Opened Spots in Fukuoka", "url": "https://www.fun-japan.jp/en/articles/13617" }
+          ]
+        }
+      ]
+    }
+  ]
+}
