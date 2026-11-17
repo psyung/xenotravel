@@ -1,0 +1,12 @@
+{
+  "name": "xenotravel",
+  "version": "0.1.0",
+  "private": true,
+  "description": "가볍고 웹 친화적인 해외여행 일정 플래너",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  }
+}
