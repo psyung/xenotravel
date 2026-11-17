@@ -85,3 +85,54 @@ test('checklist: 기본 항목, 추가, 체크, 남은 할 일', () => {
   t.checks = [];
   assert.equal(C.ensureChecks(t).length, 0);
 });
+
+test('나라별 쇼핑 목록: 자동으로 넣지 않고, 담기를 눌러야 빠진 것만 들어간다', () => {
+  const jp = trip(); // 오사카
+  C.ensureChecks(jp);
+  assert.equal(jp.checks.filter((c) => c.group === 'shop').length, 0);
+  const [donki, akachan] = C.shopPickSets(jp);
+  assert.equal(donki.title, '돈키호테 필수템');
+  assert.equal(akachan.title, '아카짱혼포 육아템');
+  assert.equal(C.missingPicks(jp, donki).length, donki.items.length);
+  assert.equal(C.addPicks(jp, 'donki'), donki.items.length);
+  assert.equal(C.addPicks(jp, 'donki'), 0);
+  assert.equal(C.addPicks(jp, 'nope'), 0);
+
+  // 이미 있는 품목은 다시 넣지 않는다
+  const mine = trip();
+  mine.checks = [{ id: 'x', group: 'shop', text: '휴족시간 (발 쿨링 시트)', done: true }];
+  mine.checksV = 2;
+  assert.equal(C.addPicks(mine, 'donki'), donki.items.length - 1);
+  assert.equal(mine.checks.filter((c) => c.text === '휴족시간 (발 쿨링 시트)').length, 1);
+
+  const mk = (dest) => M.createTrip({ title: dest, destination: dest, startDate: '2026-12-01', endDate: '2026-12-03' });
+  assert.equal(C.shopPickSets(mk('상하이'))[0].title, '따룬파 마트템');
+  assert.equal(C.shopPickSets(mk('타이베이'))[0].title, '까르푸 마트템');
+  assert.equal(C.shopPickSets(mk('다낭'))[0].title, '롯데마트 쇼핑템');
+  assert.equal(C.shopPickSets(mk('방콕'))[0].title, '빅씨 마트템');
+  const paris = mk('파리');
+  assert.deepEqual(C.shopPickSets(paris), []);
+  paris.budget = { currency: 'CNY' }; // 가계부 통화를 위안으로 바꾸면 중국으로 본다
+  assert.equal(C.shopPickSets(paris)[0].id, 'rtmart');
+});
+
+test('예전 버전이 자동으로 채운 쇼핑 리스트는 빼고, 손댄 리스트는 그대로 둔다', () => {
+  const mk = () => M.createTrip({ title: '다낭', destination: '다낭', startDate: '2026-12-01', endDate: '2026-12-03' });
+  const auto = C.SHOP_PICKS.VND[0].items;
+  const todo = { id: 't', group: 'todo', text: '여권', done: false };
+
+  const untouched = mk();
+  untouched.checks = [todo, ...auto.map((text, i) => ({ id: 's' + i, group: 'shop', text, done: false }))];
+  C.ensureChecks(untouched);
+  assert.deepEqual(untouched.checks.map((c) => c.id), ['t']);
+
+  const checked = mk();
+  checked.checks = [todo, ...auto.map((text, i) => ({ id: 's' + i, group: 'shop', text, done: i === 0 }))];
+  C.ensureChecks(checked);
+  assert.equal(checked.checks.length, auto.length + 1);
+
+  const added = mk();
+  added.checks = [todo, ...auto.map((text, i) => ({ id: 's' + i, group: 'shop', text, done: false })), { id: 'z', group: 'shop', text: '코코넛 칩', done: false }];
+  C.ensureChecks(added);
+  assert.equal(added.checks.length, auto.length + 2);
+});

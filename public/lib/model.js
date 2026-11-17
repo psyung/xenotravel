@@ -639,7 +639,7 @@ export function tripNotices(trip) {
   // 마지막 밤은 귀국편이 없을 때만 (당일 귀국이면 숙소가 필요 없다)
   if (n > 1 && !lastFlightIn && !nightStay(trip, n - 1) && (trip.flights ?? []).some((f) => f.kind === 'in')) empty.push(n);
   if (empty.length && (trip.stays ?? []).length) out.push(`Day ${empty.join(', ')} 밤 숙소가 아직 비어 있어요`);
-  else if (!(trip.stays ?? []).length && n > 1) out.push('숙소를 아직 정하지 않았어요. 검색할 때 "추가할 곳"을 🏨 숙소로 고르세요');
+  else if (!(trip.stays ?? []).length && n > 1) out.push('숙소를 아직 정하지 않았어요. 검색할 때 "추가할 곳"을 숙소로 고르세요');
   const outside = (trip.flights ?? []).filter((f) => trip.startDate && (f.departAt.slice(0, 10) < trip.startDate || f.departAt.slice(0, 10) > trip.endDate));
   if (outside.length) out.push(`여행 기간 밖 항공편 ${outside.length}개는 일정에 안 보여요`);
   return out;
