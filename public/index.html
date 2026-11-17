@@ -34,6 +34,7 @@
       </div>
       <button id="mapToggle" class="btn ghost board-only">지도 숨기기</button>
       <div class="actions">
+        <button id="shareBtn" class="btn share-btn" title="앱 설치 없이 볼 수 있는 링크 만들기">🔗 공유</button>
         <button id="flightsBtn" class="btn flights-btn">✈ 항공편</button>
         <button id="exportXlsx" class="btn">엑셀</button>
         <button id="exportPdf" class="btn">PDF</button>
@@ -41,13 +42,21 @@
           <summary class="btn ghost" aria-label="더보기">⋯</summary>
           <div class="menu-pop">
             <button data-menu="backup">백업 파일 저장 (JSON)</button>
-            <button data-menu="import">백업 파일 불러오기</button>
-            <button data-menu="delete" class="danger">이 여행 삭제</button>
+            <button data-menu="import" class="edit-only">백업 파일 불러오기</button>
+            <button data-menu="delete" class="danger edit-only">이 여행 삭제</button>
           </div>
         </details>
         <input type="file" id="importFile" accept=".json,application/json" hidden>
       </div>
     </header>
+
+    <div id="sharedBanner" class="shared-banner" hidden>
+      <span>👀 <b id="sharedTitle"></b> · 공유받은 일정이에요 (보기 전용)</span>
+      <span class="shared-actions">
+        <button id="sharedSave" class="btn primary">내 여행으로 저장</button>
+        <button id="sharedLeave" class="btn ghost">닫기</button>
+      </span>
+    </div>
 
     <main class="layout" data-tab="plan" data-view="list">
       <section class="plan">
@@ -137,6 +146,35 @@
       </form>
     </div>
   </dialog>
+  <dialog id="shareDialog" class="share-dialog">
+    <div class="dialog-body">
+      <h2>일정 공유하기</h2>
+      <p class="fine">받는 사람은 <b>앱 설치나 가입 없이</b> 링크만 누르면 바로 봐요.</p>
+      <div class="share-card" aria-label="메신저에 보이는 모습">
+        <div class="share-card-top">✈️</div>
+        <div class="share-card-body">
+          <strong id="shareTitle"></strong>
+          <span id="shareLine"></span>
+          <span id="shareLink" class="share-link"></span>
+        </div>
+      </div>
+      <p id="shareLong" class="fine warn" hidden>짧은 링크 서버에 연결되지 않아 긴 링크로 만들었어요. 링크는 그대로 잘 열려요.</p>
+      <div class="share-buttons">
+        <button type="button" id="shareCopy" class="btn primary share-main">📋 메시지 복사</button>
+        <button type="button" id="shareNative" class="btn" hidden>📤 다른 앱으로 보내기</button>
+        <button type="button" id="shareCopyLink" class="btn ghost">링크만 복사</button>
+      </div>
+      <ul class="share-notes">
+        <li>보기 전용이에요. 받은 사람이 원하면 자기 여행으로 저장해서 고칠 수 있어요.</li>
+        <li>링크는 <b>지금 일정의 사본</b>이에요. 일정을 고쳤다면 링크를 다시 보내 주세요.</li>
+        <li>링크를 가진 사람은 누구나 볼 수 있어요. 메모 속 예약번호에 주의하세요.</li>
+      </ul>
+      <div class="dialog-actions">
+        <button type="button" id="shareClose" class="btn ghost">닫기</button>
+      </div>
+    </div>
+  </dialog>
+
   <datalist id="airports">
     <option value="ICN" label="인천"></option>
     <option value="GMP" label="김포"></option>

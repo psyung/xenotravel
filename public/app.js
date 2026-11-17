@@ -4,6 +4,7 @@ import { searchPlaces, reversePlace } from './lib/geo.js';
 import { loadStore, saveStore } from './lib/store.js';
 import { exportXlsx, downloadJson } from './lib/export.js';
 import * as T from './lib/trends.js';
+import { encodeShare, decodeShare, shareUrl, shareCodeFromHash, shareSummary, shareMessage } from './lib/share.js';
 
 const COLORS = ['#ff6f61', '#4d9de0', '#2fbf9b', '#a77bf3', '#f2a116', '#ff6fae', '#22b8cf', '#7c8cf8'];
 const INBOX_COLOR = '#868e96';
@@ -62,6 +63,7 @@ const ui = {
   searchAbort: null,
   sortables: [],
   warnedStorage: false,
+  readonly: false, // 공유 링크로 연 일정 (저장·편집하지 않음)
 };
 
 /* ───────── 지도 ───────── */
@@ -96,8 +98,7 @@ function renderMap({ fit = false } = {}) {
     const dim = ui.focusList != null && ui.focusList !== l.id;
     // 동선: 출발 숙소 → 장소들 → 귀가 숙소
     const { start, end } = l.isDay ? M.dayStays(trip, dayIndex) : {};
-    const route = [...(start ? [start] : []), ...l.items, ...(end ? [end] : [])];
-    const pts = route.map((it) => [it.lat, it.lng]);
+    const pts = (l.isDay ? M.dayRoute(trip, dayIndex) : l.items).map((it) => [it.lat, it.lng]);
     if (!dim) [start, end].forEach((s) => s && bounds.push([s.lat, s.lng]));
     if (l.isDay && pts.length > 1) {
       L.polyline(pts, { color: l.color, weight: 3, opacity: dim ? 0.15 : 0.75, dashArray: '6 6' }).addTo(layer);
@@ -152,7 +153,7 @@ function findTrend(id) {
 
 function renderTrendMarkers() {
   const city = currentCity();
-  if (!city || (prefs.view === 'list' && !prefs.trendsOpen)) return;
+  if (!city || ui.readonly || (prefs.view === 'list' && !prefs.trendsOpen)) return;
   for (const p of T.activePlaces(city, TODAY)) {
     L.marker([p.lat, p.lng], {
       icon: L.divIcon({ className: '', html: '<div class="trend-pin">★</div>', iconSize: [22, 22], iconAnchor: [11, 11] }),
@@ -245,7 +246,7 @@ map.on('click', async (e) => {
 
 // 우클릭(모바일은 길게 누르기) → 그 자리에 "이 위치 추가" 창
 map.on('contextmenu', async (e) => {
-  if (!trip) return;
+  if (!trip || ui.readonly) return;
   const { lat, lng } = e.latlng;
   ui.ctxPlace = { name: '선택한 위치', address: '', lat, lng };
   const html = (name, address) =>
@@ -293,6 +294,7 @@ const persist = debounce(() => {
 }, 250);
 
 function commit({ fit = false } = {}) {
+  if (ui.readonly) return render({ fit }); // 공유받은 일정은 저장하지 않는다
   M.touch(trip);
   store.trips[trip.id] = trip;
   persist();
@@ -312,6 +314,8 @@ function render({ fit = false } = {}) {
   document.title = `${trip.title} · XenoTravel`;
   const title = $('#tripTitle');
   if (document.activeElement !== title) title.value = trip.title;
+  title.readOnly = ui.readonly;
+  $('#startDate').disabled = $('#endDate').disabled = ui.readonly;
   $('#startDate').value = trip.startDate;
   $('#endDate').value = trip.endDate;
   renderTarget();
@@ -398,12 +402,14 @@ function addStayFromOpts(place) {
   );
 }
 
-function stayRowHtml(stay, dayIndex, pos, flags) {
+function stayRowHtml(stay, dayIndex, pos, flags, leg = null) {
   const key = `${stay.id}|${dayIndex}|${pos}`;
   const open = ui.openStay === key;
   const tag = pos === 'start' && flags.checkOut ? '체크아웃' : pos === 'end' && flags.checkIn ? '체크인' : '';
   const n = trip.days.length;
-  const editor = open
+  const editor = open && ui.readonly
+    ? detailHtml(stay, { stay: true })
+    : open
     ? `<div class="editor stay-editor" data-stay="${stay.id}">
         <label>숙소 이름<input data-sfield="name" value="${esc(stay.name)}"></label>
         <div class="stay-range">
@@ -422,7 +428,7 @@ function stayRowHtml(stay, dayIndex, pos, flags) {
         </div>
       </div>`
     : '';
-  return `<div class="stay-row ${pos}${open ? ' open' : ''}" data-stay="${stay.id}" data-key="${key}">
+  return `${legHtml(leg)}<div class="stay-row ${pos}${open ? ' open' : ''}" data-stay="${stay.id}" data-key="${key}">
       <button class="stay-main" data-action="stay-toggle">
         <span class="stay-ic">🏨</span><span class="stay-pos">${pos === 'start' ? '출발' : '귀가'}</span>
         <span class="stay-name">${esc(stay.name)}</span>${tag ? `<span class="stay-tag">${tag}</span>` : ''}
@@ -431,10 +437,33 @@ function stayRowHtml(stay, dayIndex, pos, flags) {
     </div>${editor}`;
 }
 
-function itemHtml(it, i, isDay) {
+/** 앞 장소에서 여기까지: "🚶 약 12분 · 850m 길찾기 ↗" (직선거리 기준 어림값) */
+function legHtml(leg) {
+  if (!leg) return '';
+  const how = leg.mode === 'walking' ? `🚶 도보 약 ${leg.walkMin}분 · ${M.formatKm(leg.km)}` : `🚇 ${M.formatKm(leg.km)}`;
+  return `<a class="leg" href="${leg.url}" target="_blank" rel="noopener"
+      title="직선거리 기준 어림값이에요. 누르면 구글맵 길찾기(${leg.mode === 'walking' ? '도보' : '대중교통'})가 열려요">
+      <span class="leg-how">${how}</span><span class="leg-go">길찾기 ↗</span></a>`;
+}
+
+/** 보기 전용(공유받은 일정)에서 편집 창 대신 보여주는 상세 */
+function detailHtml(x, { stay = false } = {}) {
+  const url = M.safeUrl(x.url);
+  const range = stay ? M.stayDates(trip, x) : null;
+  return `<div class="editor detail">
+      ${stay ? `<p><b>${x.nights}박</b>${range.checkIn ? ` · ${esc(M.formatDate(range.checkIn))} ~ ${esc(M.formatDate(range.checkOut))}` : ''}</p>` : ''}
+      ${x.memo ? `<p class="memo-text">${esc(x.memo)}</p>` : ''}
+      ${url ? `<p><a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a></p>` : ''}
+      ${x.address ? `<p class="addr">${esc(x.address)}</p>` : ''}
+      <div class="editor-actions"><a href="${M.googleMapsUrl(x)}" target="_blank" rel="noopener">구글맵에서 열기 ↗</a></div>
+    </div>`;
+}
+
+function itemHtml(it, i, isDay, leg = null) {
   const open = ui.openItem === it.id;
   const sub = it.time ? `<b>${esc(it.time)}</b> ${esc(it.memo.split('\n')[0] || it.address)}` : esc(it.memo.split('\n')[0] || it.address);
   return `<li class="item${open ? ' open' : ''}" data-id="${it.id}">
+    ${legHtml(leg)}
     <div class="item-row">
       <span class="drag" title="끌어서 순서·날짜 바꾸기">⋮⋮</span>
       <span class="num">${isDay ? i + 1 : '•'}</span>
@@ -446,7 +475,9 @@ function itemHtml(it, i, isDay) {
       <button class="icon" data-action="locate" title="지도에서 보기">◎</button>
     </div>
     ${
-      open
+      open && ui.readonly
+        ? detailHtml(it)
+        : open
         ? `<div class="editor">
       <label>이름<input data-field="name" value="${esc(it.name)}"></label>
       <label>시간<input type="time" data-field="time" value="${esc(it.time)}"></label>
@@ -612,6 +643,7 @@ function sizeDockCards() {
 function renderDock() {
   const dock = $('#inboxDock');
   const items = trip.inbox;
+  dock.hidden = ui.readonly && !items.length; // 공유받은 일정: 빈 보관함은 보여줄 게 없다
   const open = prefs.dockOpen !== false;
   const cards = items
     .map(
@@ -654,19 +686,27 @@ function renderDays() {
     .map((l, i) => ({ ...l, dayIndex: i, title: M.dayTitle(trip.days[i], i) }));
   renderDock();
   daysEl.innerHTML =
-    trendSectionHtml() +
+    (ui.readonly ? '' : trendSectionHtml()) +
     lists
     .map((l) => {
       const title = l.title;
       const n = l.items.length;
       const st = l.isDay ? M.dayStays(trip, l.dayIndex) : {};
+      // 구간 거리: route[k-1] → route[k]. 출발 숙소가 있으면 장소 j는 route[j+1].
+      const route = M.dayRoute(trip, l.dayIndex);
+      const off = st.start ? 1 : 0;
+      const legTo = (k) => (k > 0 && route[k] ? M.routeLeg(route[k - 1], route[k]) : null);
+      const dayUrl = M.routeDirectionsUrl(route);
+      const routeBtn = dayUrl
+        ? `<a class="route-link" href="${dayUrl}" target="_blank" rel="noopener" title="이 날 동선 전체를 구글맵 길찾기로 열기">🧭 동선</a>`
+        : '';
       return `<section class="day${ui.focusList === l.id ? ' is-focus' : ''}" style="--c:${l.color}">
         <header class="day-head">
           <button class="day-title" data-action="focus" data-list="${l.id}" title="지도에서 이 날만 보기">
             <span class="dot"></span><strong>${esc(title)}</strong><span class="count">${n}곳</span>
           </button>
-          <div class="day-tools">${
-            l.isDay
+          <div class="day-tools">${routeBtn}${
+            l.isDay && !ui.readonly
               ? `${st.end ? '' : `<button data-action="stay-here" data-day="${l.dayIndex}" title="이 날부터 묵을 숙소 추가">🏨+</button>`}${
                   n > 1 ? `<button data-action="sort-time" data-list="${l.id}">시간순</button>` : ''
                 }`
@@ -675,9 +715,9 @@ function renderDays() {
         </header>
         ${flightRowsHtml(l.dayIndex, 'top')}
         ${st.start ? stayRowHtml(st.start, l.dayIndex, 'start', st) : ''}
-        <ol class="items" data-list="${l.id}">${l.items.map((it, j) => itemHtml(it, j, l.isDay)).join('')}</ol>
-        ${n === 0 ? `<p class="empty-list">${l.isDay ? '장소를 검색하거나 여기로 끌어오세요' : '가고 싶은 곳을 일단 모아두는 곳이에요'}</p>` : ''}
-        ${st.end ? stayRowHtml(st.end, l.dayIndex, 'end', st) : ''}
+        <ol class="items" data-list="${l.id}">${l.items.map((it, j) => itemHtml(it, j, l.isDay, legTo(off + j))).join('')}</ol>
+        ${n === 0 ? `<p class="empty-list">${ui.readonly ? '아직 정한 곳이 없어요' : '장소를 검색하거나 여기로 끌어오세요'}</p>` : ''}
+        ${st.end ? stayRowHtml(st.end, l.dayIndex, 'end', st, legTo(route.length - 1)) : ''}
         ${flightRowsHtml(l.dayIndex, 'bottom')}
       </section>`;
     })
@@ -687,6 +727,7 @@ function renderDays() {
     ui.sortables.push(
       new Sortable(ol, {
         group: 'plan',
+        disabled: Boolean(ui.readonly),
         handle: '.drag',
         animation: 150,
         ghostClass: 'ghost-item',
@@ -780,7 +821,7 @@ $('#days').addEventListener('click', (e) => {
     $(`.item[data-id="${CSS.escape(copy.id)}"]`)?.classList.add('flash');
     toast(`"${copy.name}"을(를) 복제했어요. 끌어서 다른 날로 옮길 수 있어요`);
   } else if (action === 'flight-edit') {
-    openFlights(btn.dataset.flight);
+    if (!ui.readonly) openFlights(btn.dataset.flight);
   } else if (action === 'stay-toggle') {
     const key = btn.closest('.stay-row').dataset.key;
     ui.openStay = ui.openStay === key ? null : key;
@@ -1146,6 +1187,7 @@ $('#newTrip').addEventListener('submit', async (e) => {
 });
 
 function switchTrip(t, { save = false } = {}) {
+  leaveShared();
   trip = t;
   store.currentId = t.id;
   if (save) store.trips[t.id] = t;
@@ -1230,8 +1272,7 @@ function openPrint() {
     });
     tiles.addTo(m);
     const st = l.isDay ? M.dayStays(trip, Number(div.dataset.day)) : {};
-    const route = [...(st.start ? [st.start] : []), ...l.items, ...(st.end ? [st.end] : [])];
-    const pts = route.map((it) => [it.lat, it.lng]);
+    const pts = (l.isDay ? M.dayRoute(trip, Number(div.dataset.day)) : l.items).map((it) => [it.lat, it.lng]);
     if (l.isDay && pts.length > 1) L.polyline(pts, { color: l.color, weight: 3, opacity: 0.8, dashArray: '6 6' }).addTo(m);
     l.items.forEach((it, j) => L.marker([it.lat, it.lng], { icon: pinIcon(l.isDay ? j + 1 : '•', l.color, false) }).addTo(m));
     new Set([st.start, st.end].filter(Boolean)).forEach((s) =>
@@ -1277,16 +1318,146 @@ function toast(text, ms = 2200) {
   toastTimer = setTimeout(() => el.classList.remove('show'), ms);
 }
 
+/* ───────── 공유 링크 ─────────
+ * 보내기: 여행을 압축한 코드를 서버에 맡기고 짧은 링크(/s/<id>)를 받는다.
+ *   서버 페이지에 제목·요약 미리보기 태그가 들어가서 카톡에서 카드로 보인다.
+ *   서버가 없으면(정적 호스팅 등) 코드를 URL # 뒤에 담은 긴 링크로 대신한다.
+ * 받기: /s/<id> 또는 #s=… 로 열리면 보기 전용으로 보여주고, 원하면 "내 여행으로 저장"으로 사본을 만든다.
+ */
+const shareDialog = $('#shareDialog');
+const SHARE_PATH = /\/s\/([A-Za-z0-9]{8})\/?$/;
+const appBase = () => new URL('./', document.baseURI).href; // /s/<id> 페이지에서도 앱 루트
+ui.share = null; // { url, message }
+
+async function createShareUrl(code) {
+  try {
+    const r = await fetch(new URL('api/share', appBase()), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    if (r.ok) return new URL((await r.json()).path, appBase()).href;
+  } catch {
+    /* 서버 없음 → 긴 링크 */
+  }
+  return shareUrl(appBase(), code);
+}
+
+async function openShare() {
+  if (!trip) return;
+  const { title, line } = shareSummary(trip);
+  $('#shareTitle').textContent = `✈️ ${title}`;
+  $('#shareLine').textContent = line;
+  $('#shareLink').textContent = '링크 만드는 중…';
+  $('#shareCopy').disabled = $('#shareNative').disabled = true;
+  $('#shareNative').hidden = !navigator.share;
+  ui.share = null;
+  if (!shareDialog.open) shareDialog.showModal();
+  try {
+    const url = await createShareUrl(await encodeShare(trip));
+    ui.share = { url, title, message: shareMessage(trip, url) };
+    $('#shareLink').textContent = url;
+    $('#shareLong').hidden = !url.includes('#s=');
+    $('#shareCopy').disabled = $('#shareNative').disabled = false;
+  } catch {
+    $('#shareLink').textContent = '';
+    toast('이 브라우저에서는 공유 링크를 만들 수 없어요', 4000);
+  }
+}
+
+async function copyText(text, done) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(done);
+  } catch {
+    window.prompt('아래 내용을 복사해 주세요', text);
+  }
+}
+
+$('#shareBtn').addEventListener('click', openShare);
+$('#shareCopy').addEventListener('click', () => ui.share && copyText(ui.share.message, '복사했어요. 카톡이나 메신저에 붙여넣으세요'));
+$('#shareCopyLink').addEventListener('click', () => ui.share && copyText(ui.share.url, '링크만 복사했어요'));
+$('#shareNative').addEventListener('click', () => {
+  if (!ui.share) return;
+  const { title, line } = shareSummary(trip);
+  navigator.share({ title: ui.share.title, text: `✈️ ${title}\n${line}`, url: ui.share.url }).catch(() => {});
+});
+$('#shareClose').addEventListener('click', () => shareDialog.close());
+
+function setReadonly(on) {
+  ui.readonly = on;
+  document.body.classList.toggle('readonly', on);
+  $('#sharedBanner').hidden = !on;
+}
+
+/** 공유 주소(/s/<id>, #s=…)를 앱 기본 주소로 되돌린다 (새로고침해도 다시 열리지 않게). */
+function clearShareAddress() {
+  if (SHARE_PATH.test(location.pathname) || shareCodeFromHash(location.hash)) history.replaceState(null, '', appBase());
+}
+
+function leaveShared() {
+  if (!ui.readonly) return;
+  setReadonly(false);
+  clearShareAddress();
+}
+
+/** 지금 주소의 공유 코드: 짧은 링크면 서버에서 받아 온다. 공유 주소가 아니면 null. */
+async function shareCodeFromAddress() {
+  const id = SHARE_PATH.exec(location.pathname)?.[1];
+  if (!id) return shareCodeFromHash(location.hash);
+  const r = await fetch(new URL(`api/share/${id}`, appBase())).catch(() => null);
+  if (!r?.ok) throw new Error(r?.status === 404 ? '공유 링크를 찾을 수 없어요. 보낸 사람에게 다시 받아 주세요.' : '공유 일정을 불러오지 못했어요. 잠시 후 다시 열어 주세요.');
+  return (await r.json()).code;
+}
+
+/** 주소가 공유 링크면 그 일정을 보기 전용으로 연다. 열었으면 true. */
+async function openSharedFromAddress() {
+  try {
+    const code = await shareCodeFromAddress();
+    if (!code) return false;
+    const shared = await decodeShare(code);
+    trip = shared;
+    ui.openItem = ui.openStay = null;
+    ui.focusList = null;
+    ui.target = null;
+    setReadonly(true);
+    $('#sharedTitle').textContent = shared.title;
+    if (dialog.open) dialog.close();
+    return true;
+  } catch (err) {
+    clearShareAddress();
+    toast(err.message, 5000);
+    return false;
+  }
+}
+
+$('#sharedSave').addEventListener('click', () => {
+  // 받은 일정은 새 id로 사본을 만들어 내 여행에 넣는다 (보낸 사람 일정과 섞이지 않게).
+  const copy = { ...trip, id: M.uid(), createdAt: new Date().toISOString() };
+  switchTrip(copy, { save: true });
+  toast(`"${copy.title}"을(를) 내 여행에 저장했어요. 이제 고칠 수 있어요`, 3000);
+});
+$('#sharedLeave').addEventListener('click', () => {
+  leaveShared();
+  trip = store.trips[store.currentId] ?? null;
+  render({ fit: true });
+});
+window.addEventListener('hashchange', async () => {
+  if (await openSharedFromAddress()) render({ fit: true });
+});
+
 /* ───────── 시작 ───────── */
 applyView();
-fetch('data/trends.json')
-  .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
-  .then((data) => (trends = data))
-  .catch(() => toast('트렌드 정보를 불러오지 못했어요'))
-  .finally(() => {
-    render({ fit: true });
-    document.fonts?.ready.then(sizeDockCards); // 글꼴이 늦게 로드되면 다시 잰다
-  });
+Promise.all([
+  openSharedFromAddress(),
+  fetch('data/trends.json')
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
+    .then((data) => (trends = data))
+    .catch(() => toast('트렌드 정보를 불러오지 못했어요')),
+]).finally(() => {
+  render({ fit: true });
+  document.fonts?.ready.then(sizeDockCards); // 글꼴이 늦게 로드되면 다시 잰다
+});
 
 /* ───────── 장소 보관함 (아래 고정 영역) / 날짜 옮기기 ───────── */
 $('#inboxDock').addEventListener('click', (e) => {
@@ -1337,3 +1508,4 @@ function closeOnBackdrop(dlg, canClose = () => true) {
 }
 closeOnBackdrop(dialog, () => Boolean(trip)); // 여행이 하나도 없으면 먼저 만들어야 하므로 닫지 않는다
 closeOnBackdrop(flightDialog);
+closeOnBackdrop(shareDialog);

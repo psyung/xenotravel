@@ -1,13 +1,8 @@
 // 트렌드(요즘 뜨는 곳) 데이터 처리. 순수 함수만 둔다.
 
-const R = 6371; // km
-export function distanceKm(a, b) {
-  const rad = (d) => (d * Math.PI) / 180;
-  const dLat = rad(b.lat - a.lat);
-  const dLng = rad(b.lng - a.lng);
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
+import { distanceKm } from './model.js';
+
+export { distanceKm };
 
 /** 여행의 기준 위치: 여행지 좌표, 없으면 담긴 장소들의 평균. */
 export function tripAnchor(trip) {

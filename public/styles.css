@@ -535,3 +535,62 @@ dialog#flightDialog { width: min(520px, calc(100vw - 32px)); }
 .dock-card { flex: 0 0 auto; width: max-content; min-width: 200px; max-width: 280px; }
 .dock-card .item-sub { width: 0; min-width: 100%; }
 .dock-card { min-width: 0; max-width: none; }
+
+/* ───────── 구간 거리 / 길찾기 ───────── */
+.leg {
+  display: flex; align-items: center; gap: 8px; padding: 3px 10px 3px 36px;
+  font-size: 11.5px; color: var(--muted); text-decoration: none;
+}
+.item > .leg { border-bottom: 1px dashed var(--line); }
+.leg:hover { color: var(--accent); }
+.leg-go { margin-left: auto; color: var(--accent); opacity: .8; white-space: nowrap; }
+.leg:hover .leg-go { opacity: 1; text-decoration: underline; }
+.layout[data-view="board"] .leg { padding-left: 10px; }
+.route-link {
+  color: var(--muted); font-size: 12px; text-decoration: none; padding: 4px 6px; white-space: nowrap;
+}
+.route-link:hover { color: var(--accent); }
+
+/* ───────── 공유 ───────── */
+.fine.warn { color: var(--danger); }
+.fine.warn:empty { display: none; }
+.shared-banner {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 16px;
+  background: var(--accent-soft); border-bottom: 1px solid var(--line); font-size: 13px;
+}
+.shared-banner[hidden] { display: none; }
+.shared-actions { margin-left: auto; display: flex; gap: 6px; }
+.detail p { margin: 0; }
+.detail .memo-text { white-space: pre-wrap; }
+.detail a { color: var(--accent); word-break: break-all; }
+
+/* 보기 전용: 편집 도구 숨김 */
+body.readonly .search,
+body.readonly .drag,
+body.readonly [data-action="duplicate"],
+body.readonly [data-action="delete"],
+body.readonly .move-to,
+body.readonly .dock-hint,
+body.readonly #flightsBtn,
+body.readonly .edit-only { display: none !important; }
+body.readonly .title-input { pointer-events: none; }
+
+.share-dialog { width: min(440px, calc(100vw - 32px)); }
+.share-card {
+  display: flex; gap: 12px; align-items: center; margin: 14px 0 10px; padding: 14px;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--bg);
+}
+.share-card-top {
+  flex: none; width: 52px; height: 52px; border-radius: 12px; display: grid; place-items: center;
+  font-size: 26px; background: var(--accent-soft);
+}
+.share-card-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.share-card-body strong { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.share-card-body span { color: var(--muted); font-size: 12.5px; }
+.share-link { color: var(--accent) !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.share-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.share-main { flex: 1 1 100%; padding: 10px; font-size: 15px; }
+.share-buttons .btn:not(.share-main) { flex: 1; }
+.share-buttons .btn:disabled { opacity: .5; cursor: default; }
+.share-notes { margin: 12px 0 0; padding-left: 18px; color: var(--muted); font-size: 12px; display: grid; gap: 3px; }
+.inbox-dock[hidden] { display: none; }

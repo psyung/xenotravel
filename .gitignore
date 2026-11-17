@@ -1,2 +1,5 @@
 node_modules/
 .env
+
+# 공유 링크 저장소
+data/

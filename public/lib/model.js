@@ -148,6 +148,76 @@ export function googleMapsUrl(item) {
   return `https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lng}`;
 }
 
+/** 링크 칸에 넣은 주소를 href로 써도 되는지 (http/https만). 공유받은 일정에 javascript: 같은 링크가 섞여도 막는다. */
+export function safeUrl(url) {
+  return /^https?:\/\//i.test(String(url ?? '').trim()) ? String(url).trim() : '';
+}
+
+/* ───────── 동선 / 거리 / 길찾기 ───────── */
+const EARTH_KM = 6371;
+/** 두 지점의 직선(대원) 거리 km */
+export function distanceKm(a, b) {
+  const rad = (d) => (d * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLng = rad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * EARTH_KM * Math.asin(Math.sqrt(h));
+}
+
+/** 이 거리(직선) 이하면 걸어가는 걸로 본다. */
+export const WALK_MAX_KM = 1.2;
+// 실제 길은 직선보다 25% 정도 길고, 걷는 속도는 시속 4.5km로 잡는다.
+const DETOUR = 1.25;
+const WALK_KMH = 4.5;
+
+/** 하루 동선: 출발 숙소 → 장소들 → 귀가 숙소. 지도 선·거리·길찾기가 모두 이 순서를 쓴다. */
+export function dayRoute(trip, dayIndex) {
+  const day = trip.days[dayIndex];
+  if (!day) return [];
+  const { start, end } = dayStays(trip, dayIndex);
+  return [...(start ? [start] : []), ...day.items, ...(end ? [end] : [])];
+}
+
+/** 이웃한 두 지점 사이 구간. 같은 곳(50m 미만)이면 null. */
+export function routeLeg(from, to) {
+  const km = distanceKm(from, to);
+  if (!(km >= 0.05)) return null;
+  const walk = km <= WALK_MAX_KM;
+  return {
+    km,
+    mode: walk ? 'walking' : 'transit',
+    walkMin: walk ? Math.max(1, Math.round(((km * DETOUR) / WALK_KMH) * 60)) : null,
+    url: directionsUrl(from, to, walk ? 'walking' : 'transit'),
+  };
+}
+
+/** "850m" / "3.4km" / "12km" */
+export function formatKm(km) {
+  if (km < 1) return `${Math.round(km * 1000 / 10) * 10}m`;
+  return km < 10 ? `${km.toFixed(1)}km` : `${Math.round(km)}km`;
+}
+
+const ll = (p) => `${p.lat},${p.lng}`;
+
+/** 구글맵 길찾기 (앱이 있으면 앱으로 열린다). mode: walking | transit | driving */
+export function directionsUrl(from, to, mode = 'transit') {
+  return `https://www.google.com/maps/dir/?api=1&origin=${ll(from)}&destination=${ll(to)}&travelmode=${mode}`;
+}
+
+// 구글맵 URL은 경유지를 9곳까지만 받는다.
+const MAX_WAYPOINTS = 9;
+/** 하루 전체 동선을 구글맵 길찾기로 연다. 두 곳 미만이거나 경유지가 너무 많으면 null. */
+export function routeDirectionsUrl(points) {
+  // 같은 곳이 연달아 나오면 (예: 출발·귀가 숙소가 같고 장소가 없음) 하나로 친다.
+  const pts = points.filter((p, i) => i === 0 || routeLeg(points[i - 1], p));
+  if (pts.length < 2 || pts.length - 2 > MAX_WAYPOINTS) return null;
+  const mid = pts.slice(1, -1).map(ll).join('|');
+  // 대중교통 모드는 경유지를 지원하지 않아서 이동 수단은 구글맵이 고르게 둔다.
+  return `https://www.google.com/maps/dir/?api=1&origin=${ll(pts[0])}&destination=${ll(pts.at(-1))}${
+    mid ? `&waypoints=${encodeURIComponent(mid)}` : ''
+  }`;
+}
+
 /* ───────── 숙소 ─────────
  * stay = { id, name, address, lat, lng, url, memo, startIndex, nights }
  * startIndex일차 밤부터 nights박. "n일차 밤"은 n일차가 끝나고 자는 곳이다.
