@@ -76,6 +76,8 @@ const ui = {
   sortables: [],
   warnedStorage: false,
   readonly: false, // 공유 링크로 연 일정 (저장·편집하지 않음)
+  routePlan: null, // 동선 정리 미리 보기 { listId, dayIndex, ids, beforeKm, afterKm, savedKm, fixed }
+  routeUndo: null, // 방금 적용한 동선 정리 되돌리기 { listId, dayIndex, prev, applied, savedKm }
 };
 
 /* ───────── 지도 ───────── */
@@ -140,18 +142,23 @@ function renderMap({ fit = false } = {}) {
   markers.clear();
   if (!trip) return;
   const bounds = [];
+  const plan = currentRoutePlan();
   allLists().forEach((l, dayIndex) => {
     const dim = ui.focusList != null && ui.focusList !== l.id;
+    // 동선 정리 미리 보기 중인 날은 제안 순서로 선과 번호를 그린다 (실선 = 아직 적용 전 제안).
+    const preview = plan?.listId === l.id ? plan.ids.map((id) => l.items.find((it) => it.id === id)) : null;
     // 동선: 출발 숙소 → 장소들 → 귀가 숙소
     const { start, end } = l.isDay ? M.dayStays(trip, dayIndex) : {};
-    const pts = (l.isDay ? M.dayRoute(trip, dayIndex) : l.items).map((it) => [it.lat, it.lng]);
+    const route = preview ? [start, ...preview, end].filter(Boolean) : l.isDay ? M.dayRoute(trip, dayIndex) : l.items;
+    const pts = route.map((it) => [it.lat, it.lng]);
     if (!dim) [start, end].forEach((s) => s && bounds.push([s.lat, s.lng]));
     if (l.isDay && pts.length > 1) {
-      L.polyline(pts, { color: l.color, weight: 3, opacity: dim ? 0.15 : 0.75, dashArray: '6 6' }).addTo(layer);
+      L.polyline(pts, preview ? { color: l.color, weight: 4, opacity: 0.9 } : { color: l.color, weight: 3, opacity: dim ? 0.15 : 0.75, dashArray: '6 6' }).addTo(layer);
     }
     l.items.forEach((it, i) => {
+      const n = preview ? preview.indexOf(it) + 1 : i + 1;
       const m = L.marker([it.lat, it.lng], {
-        icon: pinIcon(l.isDay ? i + 1 : '•', pinColorOf(it, l.color), dim),
+        icon: pinIcon(l.isDay ? n : '•', pinColorOf(it, l.color), dim),
         zIndexOffset: dim ? 0 : 1000,
       }).addTo(layer);
       m.bindPopup(
@@ -772,9 +779,99 @@ function dayToolsHtml(l) {
   const url = M.routeDirectionsUrl(M.dayRoute(trip, l.dayIndex));
   const route = url ? `<a class="route-link" href="${url}" target="_blank" rel="noopener" title="이 날 동선 전체를 구글맵 길찾기로 열기">길찾기</a>` : '';
   if (ui.readonly) return route;
+  const movable = l.items.filter((it) => !it.time).length;
   return `${route}${st.end ? '' : `<button data-action="stay-here" data-day="${l.dayIndex}" title="이 날부터 묵을 숙소 추가">+ 숙소</button>`}${
-    l.items.length > 1 ? `<button data-action="sort-time" data-list="${l.id}">시간순</button>` : ''
-  }`;
+    movable > 1 ? `<button data-action="route-opt" data-list="${l.id}" title="숙소 기준으로 덜 돌아가는 순서를 찾아요. 시간을 정한 장소는 그대로 둬요">동선 정리</button>` : ''
+  }${l.items.length > 1 ? `<button data-action="sort-time" data-list="${l.id}">시간순</button>` : ''}`;
+}
+
+/* ───────── 동선 자동 정리 ─────────
+ * 버튼 → 제안 계산(미리 보기) → 적용을 눌러야 순서가 바뀐다. 그사이 그날 장소가 바뀌면 제안은 버린다.
+ */
+const sameIds = (a, b) => a.length === b.length && a.every((id, i) => id === b[i]);
+const dayIds = (dayIndex) => trip.days[dayIndex]?.items.map((it) => it.id) ?? [];
+
+function currentRoutePlan() {
+  const p = ui.routePlan;
+  if (p && (trip.days[p.dayIndex]?.id !== p.listId || !sameIds(dayIds(p.dayIndex), p.current))) ui.routePlan = null;
+  return ui.routePlan;
+}
+
+function currentRouteUndo() {
+  const u = ui.routeUndo;
+  if (u && (trip.days[u.dayIndex]?.id !== u.listId || !sameIds(dayIds(u.dayIndex), u.applied))) ui.routeUndo = null;
+  return ui.routeUndo;
+}
+
+function proposeRoute(listId) {
+  const dayIndex = trip.days.findIndex((d) => d.id === listId);
+  const r = M.optimizeDay(trip, dayIndex);
+  if (!r) return;
+  if (!r.changed) {
+    ui.routePlan = null;
+    toast(r.fixed ? '시간을 정한 곳을 그대로 두면 지금 순서가 가장 짧아요' : '지금 순서가 이미 가장 짧아요');
+    return;
+  }
+  ui.routePlan = { listId, dayIndex, current: dayIds(dayIndex), ids: r.items.map((it) => it.id), beforeKm: r.beforeKm, afterKm: r.afterKm, savedKm: r.savedKm, fixed: r.fixed };
+  ui.routeUndo = null;
+  ui.focusList = listId;
+  ui.day = dayIndex;
+  renderDays();
+  renderMap({ fit: true });
+}
+
+function applyRoute() {
+  const p = currentRoutePlan();
+  if (!p) return;
+  if (!M.applyDayOrder(trip, p.dayIndex, p.ids)) {
+    ui.routePlan = null;
+    return toast('그사이 장소가 바뀌어서 다시 계산해 주세요');
+  }
+  ui.routeUndo = { listId: p.listId, dayIndex: p.dayIndex, prev: p.current, applied: p.ids, savedKm: p.savedKm };
+  ui.routePlan = null;
+  commit();
+}
+
+function undoRoute() {
+  const u = currentRouteUndo();
+  if (!u) return;
+  M.applyDayOrder(trip, u.dayIndex, u.prev);
+  ui.routeUndo = null;
+  commit();
+  toast('원래 순서로 되돌렸어요');
+}
+
+function routePlanHtml(l) {
+  const plan = currentRoutePlan();
+  if (plan?.listId === l.id) {
+    const byId = new Map(l.items.map((it) => [it.id, it]));
+    const rows = plan.ids
+      .map((id, i) => {
+        const it = byId.get(id);
+        const moved = plan.current[i] !== id;
+        return `<li class="${it.time ? 'fixed' : moved ? 'moved' : ''}"><span class="rp-num">${i + 1}</span><span class="rp-name">${esc(it.name)}</span>${
+          it.time ? `<span class="rp-tag">${esc(it.time)} 고정</span>` : ''
+        }</li>`;
+      })
+      .join('');
+    return `<div class="route-plan" role="region" aria-label="동선 정리 제안">
+        <div class="rp-head">
+          <strong>동선 정리 제안</strong>
+          <span class="rp-km">${M.formatKm(plan.beforeKm)} → <b>${M.formatKm(plan.afterKm)}</b></span>
+        </div>
+        <p class="rp-sub">이동 거리가 ${M.formatKm(plan.savedKm)} 줄어요. 숙소 기준 직선거리로 계산했어요${plan.fixed ? ` · 시간을 정한 ${plan.fixed}곳은 그대로 둬요` : ''}.</p>
+        <ol class="rp-list">${rows}</ol>
+        <div class="rp-actions">
+          <button class="btn" data-action="route-cancel">취소</button>
+          <button class="btn primary" data-action="route-apply">이 순서로 바꾸기</button>
+        </div>
+      </div>`;
+  }
+  const undo = currentRouteUndo();
+  if (undo?.listId === l.id) {
+    return `<div class="route-done"><span>동선을 정리했어요 · ${M.formatKm(undo.savedKm)} 줄었어요</span><button data-action="route-undo">되돌리기</button></div>`;
+  }
+  return '';
 }
 
 /** 하루 카드: 머리(날짜·장소 이름·요약) + 타임라인. 목록형은 위아래로, 보드형은 칸으로 늘어놓는다. */
@@ -798,6 +895,7 @@ function dayCardHtml(l) {
         <div class="day-tools">${dayToolsHtml(l)}</div>
       </div>
       ${sum.places || st.end ? `<div class="chips">${chips}</div>` : ''}
+      ${ui.readonly ? '' : routePlanHtml(l)}
       ${dayBodyHtml(l)}
     </section>`;
 }
@@ -914,6 +1012,16 @@ $('#days').addEventListener('click', (e) => {
   } else if (action === 'sort-time') {
     M.sortByTime(M.getList(trip, btn.dataset.list));
     commit();
+  } else if (action === 'route-opt') {
+    proposeRoute(btn.dataset.list);
+  } else if (action === 'route-apply') {
+    applyRoute();
+  } else if (action === 'route-cancel') {
+    ui.routePlan = null;
+    renderDays();
+    renderMap();
+  } else if (action === 'route-undo') {
+    undoRoute();
   } else if (action === 'duplicate') {
     const copy = M.duplicateItem(trip, id);
     if (!copy) return;

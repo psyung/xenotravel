@@ -284,6 +284,131 @@ export function routeDirectionsUrl(points) {
   }`;
 }
 
+/* ───────── 동선 자동 정리 ─────────
+ * 하루 장소를 "가장 덜 돌아가는 순서"로 바꾼다. 출발 숙소 → 장소들 → 귀가 숙소 직선거리 합이 기준이다.
+ * 시간을 정한 장소는 지금 자리(몇 번째)에 그대로 두고, 시간이 없는 장소만 나머지 자리에 다시 넣는다.
+ */
+// 시간이 없는 장소가 이 개수 이하면 모든 경우를 따져 최단 순서를 찾는다 (2^12 × 12 정도라 금방 끝난다).
+const EXACT_MAX = 12;
+
+/** 지점 목록을 차례로 이은 직선거리 합(km). null인 지점(숙소 없음)은 건너뛴다. */
+export function pathKm(points) {
+  const pts = points.filter(Boolean);
+  let km = 0;
+  for (let i = 1; i < pts.length; i++) km += distanceKm(pts[i - 1], pts[i]);
+  return km;
+}
+
+/** 시간 없는 장소들을 빈 자리에 넣어 전체 순서를 만든다. */
+function fillSlots(items, freeSlots, freeOrder) {
+  const out = items.slice();
+  freeSlots.forEach((slot, k) => (out[slot] = freeOrder[k]));
+  return out;
+}
+
+/** 모든 경우 비교 (자리 순서대로 채워 가며 "쓴 장소 묶음 + 마지막 장소"별 최단 거리만 남긴다). */
+function exactOrder(items, freeSlots, start, end) {
+  const free = freeSlots.map((s) => items[s]);
+  const isFree = new Set(freeSlots);
+  const d = (a, b) => (a && b ? distanceKm(a, b) : 0);
+  // 상태 키: mask(쓴 장소) + 마지막 장소 번호(-1 = 아직 없음 / 고정 장소는 자리 번호로 표시)
+  let layer = new Map([['0|s', { km: 0, last: start ?? null, mask: 0, path: [] }]]);
+  for (let p = 0; p < items.length; p++) {
+    const next = new Map();
+    const put = (key, st) => {
+      const old = next.get(key);
+      if (!old || st.km < old.km) next.set(key, st);
+    };
+    for (const st of layer.values()) {
+      if (!isFree.has(p)) {
+        const it = items[p];
+        put(`${st.mask}|f${p}`, { km: st.km + d(st.last, it), last: it, mask: st.mask, path: st.path });
+        continue;
+      }
+      for (let k = 0; k < free.length; k++) {
+        if (st.mask & (1 << k)) continue;
+        const it = free[k];
+        put(`${st.mask | (1 << k)}|${k}`, { km: st.km + d(st.last, it), last: it, mask: st.mask | (1 << k), path: [...st.path, k] });
+      }
+    }
+    layer = next;
+  }
+  let best = null;
+  for (const st of layer.values()) {
+    const km = st.km + d(st.last, end);
+    if (!best || km < best.km) best = { km, path: st.path };
+  }
+  return fillSlots(items, freeSlots, best.path.map((k) => free[k]));
+}
+
+/** 장소가 많을 때: 가까운 곳부터 잇고, 구간 뒤집기·자리 바꾸기로 더 줄어들지 않을 때까지 다듬는다. */
+function approxOrder(items, freeSlots, start, end) {
+  const cost = (order) => pathKm([start, ...fillSlots(items, freeSlots, order), end]);
+  const improve = (order) => {
+    let cur = order.slice();
+    let curKm = cost(cur);
+    for (let round = 0, better = true; better && round < 50; round++) {
+      better = false;
+      for (let i = 0; i < cur.length - 1; i++) {
+        for (let j = i + 1; j < cur.length; j++) {
+          const rev = [...cur.slice(0, i), ...cur.slice(i, j + 1).reverse(), ...cur.slice(j + 1)];
+          const swap = cur.slice();
+          [swap[i], swap[j]] = [swap[j], swap[i]];
+          for (const cand of [rev, swap]) {
+            const km = cost(cand);
+            if (km < curKm - 1e-9) [cur, curKm, better] = [cand, km, true];
+          }
+        }
+      }
+    }
+    return { order: cur, km: curKm };
+  };
+  // 출발점(숙소 또는 첫 장소)에서 가장 가까운 곳을 차례로 고른 순서
+  const rest = freeSlots.map((s) => items[s]);
+  const greedy = [];
+  let at = start ?? rest[0];
+  while (rest.length) {
+    let bi = 0;
+    rest.forEach((p, i) => distanceKm(at, p) < distanceKm(at, rest[bi]) && (bi = i));
+    at = rest.splice(bi, 1)[0];
+    greedy.push(at);
+  }
+  const a = improve(freeSlots.map((s) => items[s]));
+  const b = improve(greedy);
+  return fillSlots(items, freeSlots, (b.km < a.km ? b : a).order);
+}
+
+/**
+ * 하루 동선 정리 제안 (trip은 바꾸지 않는다).
+ * { items: 새 순서, beforeKm, afterKm, savedKm, changed, fixed: 시간 고정 장소 수, movable: 옮길 수 있는 장소 수 }
+ */
+export function optimizeDay(trip, dayIndex) {
+  const day = trip.days[dayIndex];
+  if (!day) return null;
+  const items = day.items;
+  const { start, end } = dayStays(trip, dayIndex);
+  const freeSlots = items.map((it, i) => (it.time ? -1 : i)).filter((i) => i !== -1);
+  const beforeKm = pathKm([start, ...items, end]);
+  const base = { items: items.slice(), beforeKm, afterKm: beforeKm, savedKm: 0, changed: false, fixed: items.length - freeSlots.length, movable: freeSlots.length };
+  if (freeSlots.length < 2) return base;
+  const order = (freeSlots.length <= EXACT_MAX ? exactOrder : approxOrder)(items, freeSlots, start, end);
+  const afterKm = pathKm([start, ...order, end]);
+  // 10m도 안 줄면 지금 순서가 이미 좋은 것으로 본다.
+  if (!(afterKm < beforeKm - 0.01) || order.every((it, i) => it === items[i])) return base;
+  return { ...base, items: order, afterKm, savedKm: beforeKm - afterKm, changed: true };
+}
+
+/** 제안받은 순서(장소 id 목록)를 적용한다. 그사이 장소가 바뀌었으면(추가·삭제·이동) 적용하지 않고 false. */
+export function applyDayOrder(trip, dayIndex, ids) {
+  const day = trip.days[dayIndex];
+  if (!day || ids.length !== day.items.length) return false;
+  const byId = new Map(day.items.map((it) => [it.id, it]));
+  const next = ids.map((id) => byId.get(id));
+  if (next.some((it) => !it) || new Set(ids).size !== ids.length) return false;
+  day.items.splice(0, day.items.length, ...next);
+  return true;
+}
+
 /* ───────── 숙소 ─────────
  * stay = { id, name, address, lat, lng, url, memo, startIndex, nights }
  * startIndex일차 밤부터 nights박. "n일차 밤"은 n일차가 끝나고 자는 곳이다.
