@@ -6,7 +6,7 @@
 //    data-dp-pair="여행 날짜"처럼 값에 제목을, data-dp-min-nights="1"로 최소 박 수를 줄 수 있다.
 //    고른 뒤 "적용"을 누르면 end input에 change(버블링)를 한 번만 보낸다.
 //  - 날짜+시간: input[type="datetime-local"] → 날짜 버튼 + 시간 칸.
-import { formatDate, parseDate } from './model.js';
+import { formatDate, parseDate, selectRangeDate } from './model.js';
 
 const ICON_CAL = '<svg class="dp-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5h16V20H4z M4 10.5h16 M8.5 3.5v4 M15.5 3.5v4"/></svg>';
 const CHEV = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;
@@ -111,23 +111,12 @@ function open(opts) {
   const months = opts.kind === 'range' && !mobile() ? 2 : 1;
   $q('.dp-title').textContent = opts.title;
   $q('.dp-cal').innerHTML = calendarHtml(opts.kind, months);
-  const cal = $q('.dp-c');
   const today = new Intl.DateTimeFormat('sv-SE').format(new Date());
-  if (opts.min) cal.setAttribute('min', opts.min);
-  if (opts.max) cal.setAttribute('max', opts.max);
   if (opts.kind === 'range') {
-    if (opts.start && opts.end) cal.value = `${opts.start}/${opts.end}`;
-    cal.focusedDate = opts.start || opts.min || today;
-    cal.addEventListener('rangestart', (e) => {
-      state.start = toISO(e.detail);
-      state.end = '';
-      update();
-    });
-    cal.addEventListener('change', () => {
-      [state.start, state.end] = cal.value.split('/');
-      update();
-    });
+    bindRange($q('.dp-c'), opts.activeField === 'end' && opts.end ? opts.end : opts.start || opts.min || today);
   } else {
+    const cal = $q('.dp-c');
+    setBounds(cal);
     if (opts.value) cal.value = opts.value;
     cal.focusedDate = opts.value || opts.near || opts.min || today;
     cal.addEventListener('change', () => {
@@ -143,15 +132,46 @@ function open(opts) {
   pop.hidden = false;
   update();
   place();
-  // 달력(웹 컴포넌트)이 그려진 뒤 높이가 정해지므로 한 번 더 자리를 잡는다.
-  customElements.whenDefined('calendar-month').then(() =>
-    requestAnimationFrame(() => {
-      if (cal !== $q('.dp-c')) return;
-      place();
-      pop.classList.add('show');
-      cal.focus();
-    }),
-  );
+  focusCalendar($q('.dp-c'));
+}
+
+function focusCalendar(cal) {
+  requestAnimationFrame(() => {
+    if (cal !== $q('.dp-c')) return;
+    place();
+    pop.classList.add('show');
+    cal.focus();
+  });
+}
+
+function setBounds(cal) {
+  if (state.min) cal.setAttribute('min', state.min);
+  if (state.max) cal.setAttribute('max', state.max);
+}
+
+function bindRange(cal, focusedDate) {
+  setBounds(cal);
+  if (state.start && state.end) cal.value = `${state.start}/${state.end}`;
+  cal.focusedDate = focusedDate;
+  cal.addEventListener('rangestart', choose);
+  cal.addEventListener('rangeend', choose);
+
+  function choose(e) {
+    if (!state || cal !== $q('.dp-c')) return;
+    const date = toISO(e.detail);
+    Object.assign(state, selectRangeDate(state, date));
+    const choosingStart = state.activeField === 'end';
+    update();
+    // Cally는 두 번 누를 때마다 임시 기간을 끝낸다. 두 입력칸의 선택 단계와 어긋날 때 새로 맞춘다.
+    if (choosingStart === (e.type === 'rangeend')) {
+      const next = cal.cloneNode(true);
+      cal.replaceWith(next);
+      bindRange(next, date);
+      focusCalendar(next);
+    } else if (!choosingStart) {
+      cal.value = `${state.start}/${state.end}`;
+    }
+  }
 }
 
 function $q(s) {
@@ -163,6 +183,8 @@ const toISO = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(
 function update() {
   if (!state) return;
   if (state.kind === 'range') {
+    state.startButton.classList.toggle('dp-active-field', state.activeField === 'start');
+    state.endButton.classList.toggle('dp-active-field', state.activeField === 'end');
     $q('.dp-sum').textContent = rangeText(state.start, state.end);
     const short = state.end && state.minNights && nights(state.start, state.end) < state.minNights;
     const err = $q('.dp-err');
@@ -203,6 +225,8 @@ function apply() {
 function close(restoreFocus = true) {
   if (!state) return;
   const anchor = state.anchor;
+  state.startButton?.classList.remove('dp-active-field');
+  state.endButton?.classList.remove('dp-active-field');
   anchor.setAttribute('aria-expanded', 'false');
   if (restoreFocus && (document.activeElement === document.body || pop.contains(document.activeElement))) {
     anchor.focus({ preventScroll: true });
@@ -269,6 +293,7 @@ function enhancePair(scope) {
   start.dataset.dpReady = end.dataset.dpReady = '1';
   const bs = fieldButton(start, '시작일');
   const be = fieldButton(end, '종료일');
+  bs.dataset.dpRange = be.dataset.dpRange = '';
   const sync = () => {
     paint(bs, start.value, start.disabled);
     paint(be, end.value, end.disabled);
@@ -280,6 +305,9 @@ function enhancePair(scope) {
     open({
       kind: 'range',
       anchor,
+      startButton: bs,
+      endButton: be,
+      activeField: anchor === bs ? 'start' : 'end',
       title: scope.dataset.dpPair || '날짜',
       minNights: Number(scope.dataset.dpMinNights) || 0,
       start: start.value,

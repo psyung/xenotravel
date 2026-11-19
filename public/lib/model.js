@@ -49,9 +49,15 @@ export function createTrip({ title, destination = '', startDate, endDate, center
     inbox: [],
     stays: [],
     flights: [],
+    expenses: [],
     createdAt: now,
     updatedAt: now,
   };
+}
+
+export function selectRangeDate({ start, activeField }, date) {
+  if (activeField !== 'end' || !start || date < start) return { start: date, end: '', activeField: 'end' };
+  return { start, end: date, activeField: null };
 }
 
 /** 날짜를 바꾸면 사라지는 날의 장소 수 (확인 메시지용). */

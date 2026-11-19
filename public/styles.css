@@ -191,7 +191,6 @@ a { color: var(--accent); text-decoration: none; }
 .seg button, .mtabs button { height: 28px; padding: 0 12px; border: 0; border-radius: 8px; background: none; font-weight: 600; font-size: 13px; color: var(--sub); }
 .seg button.active, .mtabs button.active { background: var(--paper); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
 .mtabs { display: none; }
-#heroRoute { margin-left: auto; }
 .board-only { display: none; }
 body[data-view="board"] .board-only { display: inline-flex; }
 
@@ -218,13 +217,34 @@ body[data-view="board"] .board-only { display: inline-flex; }
 .daytab .today { color: var(--hot); font-size: 11px; font-weight: 700; }
 
 /* 지도 위 */
-.map-ctl { position: absolute; z-index: 900; top: 12px; left: 12px; display: flex; gap: 4px; }
-.map-ctl button {
-  height: 32px; min-width: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line);
-  background: var(--paper); font-weight: 600; font-size: 13px; box-shadow: var(--shadow);
+.map-ctl { position: absolute; z-index: 900; top: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; white-space: nowrap; }
+.map-day-switcher, #showAll {
+  display: flex; align-items: center; border: 1px solid var(--line); border-radius: 999px;
+  background: color-mix(in srgb, var(--paper) 93%, transparent); backdrop-filter: blur(12px); box-shadow: var(--shadow);
 }
-.map-ctl button:hover { background: var(--hover); }
-.map-ctl button.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.map-day-switcher button, #showAll { min-height: 40px; padding: 0 10px; color: var(--ink); font-weight: 700; }
+.map-day-switcher button { min-width: 36px; border: 0; border-radius: 50%; background: none; font-size: 22px; }
+.map-day-switcher button:hover:not(:disabled), #showAll:hover { background: var(--hover); }
+.map-day-switcher button:disabled { opacity: .35; cursor: default; }
+.map-locate, .mapwrap .leaflet-control-zoom {
+  border: 1px solid var(--line); background: color-mix(in srgb, var(--paper) 93%, transparent);
+  color: var(--ink); border-radius: 12px; backdrop-filter: blur(12px); box-shadow: var(--shadow);
+}
+.mapwrap .leaflet-control-zoom { overflow: hidden; margin: 12px 10px 0 0; }
+.mapwrap .leaflet-control-zoom a { background: transparent; color: var(--ink); border-color: var(--line); }
+.map-locate { position: absolute; z-index: 900; right: 10px; top: 82px; width: 32px; height: 34px; font-size: 18px; }
+.map-locate:hover, .mapwrap .leaflet-control-zoom a:hover { background: var(--hover); }
+#mapDayLabel { font-size: 12px; }
+#showAll { font-size: 12px; }
+#showAll[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.map-place {
+  position: absolute; z-index: 901; bottom: 26px; left: 12px; right: 12px; margin-inline: auto; max-width: 440px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px; border: 1px solid var(--line);
+  border-radius: 16px; background: color-mix(in srgb, var(--paper) 95%, transparent); backdrop-filter: blur(12px); box-shadow: var(--shadow);
+}
+.map-place > div { flex: 1 1 130px; min-width: 0; overflow-wrap: anywhere; }
+.map-place small { display: block; color: var(--sub); }
+.map-place button, .map-place a { border: 0; border-radius: 8px; padding: 7px; background: var(--soft); color: var(--ink); font-size: 12px; font-weight: 700; }
 .pick-hint {
   position: absolute; z-index: 900; bottom: 28px; left: 50%; transform: translateX(-50%);
   width: max-content; max-width: calc(100% - 24px); text-align: center;
@@ -235,20 +255,23 @@ body[data-view="board"] .board-only { display: inline-flex; }
 #pickPin { position: absolute; z-index: 700; left: 50%; top: 50%; transform: translate(-50%, -22px); pointer-events: none; color: var(--accent); }
 #pickPin .ic { display: block; width: 24px; height: 24px; filter: drop-shadow(0 0 2px var(--paper)); }
 .leaflet-container.picking { cursor: grab; }
-.pin-legend { position: absolute; z-index: 900; top: 12px; right: 12px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.pin-legend { position: absolute; z-index: 900; top: 66px; left: 12px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .pin-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 9px; background: var(--paper); border: 1px solid var(--line); box-shadow: var(--shadow); }
 .pin-seg button { border: 0; background: none; border-radius: 7px; padding: 4px 9px; font-size: 12px; font-weight: 600; color: var(--sub); }
 .pin-seg button.active { background: var(--ink); color: var(--paper); }
-.legend { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 10px; max-width: 220px; padding: 7px 10px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; font-size: 12px; color: var(--sub); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 10px; max-width: 220px; padding: 7px 10px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; font-size: 12px; color: var(--sub); }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
 .legend i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
 
 /* 핀·팝업 */
 .pin {
-  width: 28px; height: 28px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+  width: 28px; height: 28px; border-radius: 50%;
   background: var(--c); border: 2.5px solid #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, .25); display: grid; place-items: center;
+  transition: transform .15s, box-shadow .15s;
 }
-.pin span { transform: rotate(45deg); color: #fff; font-weight: 700; font-size: 12px; }
+.pin span { color: #fff; font-weight: 700; font-size: 12px; }
+.leaflet-marker-icon:is(:hover, :focus-visible, .map-pin-selected) .pin { transform: scale(1.18); box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 35%, transparent); }
+@media (prefers-reduced-motion: reduce) { .pin { transition: none; } }
 .pin.dim { opacity: .3; }
 .stay-pin {
   width: 28px; height: 28px; border-radius: 9px; background: #fff; border: 2.5px solid var(--stay); color: var(--stay);
@@ -772,6 +795,20 @@ body[data-has-trip="no"] .trip-only { display: none !important; }
 .insp small { color: var(--mute); font-size: 12px; }
 .insp p { margin: 4px 0 0; color: var(--sub); font-size: 13px; line-height: 1.5; }
 .insp-go { margin-top: 12px; }
+.suggest-field { position: relative; }
+.home-hero:has(.suggestions:not([hidden])) { overflow: visible; z-index: 21; }
+.suggestions {
+  position: absolute; top: 100%; inset-inline: 0; z-index: 20; margin: 4px 0 0; padding: 4px; list-style: none;
+  max-height: 210px; overflow: auto; background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-pop);
+}
+.suggestions li { display: flex; align-items: baseline; gap: 8px; padding: 9px; border-radius: 8px; cursor: pointer; }
+.suggestions li:hover, .suggestions li[aria-selected="true"] { background: var(--accent-soft); }
+.suggestions small { color: var(--sub); }
+#new-trip-modal { width: min(520px, calc(100% - 24px)); }
+.new-trip-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.new-trip-head h2 { margin: 0; }
+#new-trip-modal .home-new { grid-template-columns: 1fr 1fr; }
+#new-trip-modal .hn-dest, #new-trip-modal .hn-go { grid-column: 1 / -1; }
 
 .feats { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .feats li { padding: 16px; border-radius: 16px; background: var(--paper); border: 1px solid var(--line); }
@@ -799,9 +836,18 @@ body[data-has-trip="no"] .trip-only { display: none !important; }
   .feats li { padding: 12px; }
   .feats b { font-size: 14px; }
   .feats p { font-size: 12.5px; }
-  .insp { grid-auto-columns: 78vw; }
   .pagebar { grid-template-columns: repeat(4, 1fr); }
   body[data-has-trip="no"] .pagebar { display: none; }
+}
+
+@media (max-width: 768px) {
+  .insp { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; overflow: visible; }
+  .insp li { min-height: 76px; padding: 8px 10px; gap: 2px; border-radius: 12px; }
+  .insp b { font-size: 13px; }
+  .insp small { font-size: 11px; }
+  .insp p { display: none; }
+  .trend-card { flex-basis: min(160px, 45vw); padding: 8px; }
+  .map-day-switcher button, #showAll { min-height: 44px; }
 }
 
 /* ═════════ 모바일 다듬기 ═════════ */
@@ -931,7 +977,8 @@ button.kpi:hover { border-color: var(--accent); }
   font-size: 13px; font-weight: 600; white-space: nowrap; text-align: left; transition: border-color .15s, background .15s;
 }
 .dp-field:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
-.dp-field[aria-expanded="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.dp-field[aria-expanded="true"]:not([data-dp-range]), .dp-field.dp-active-field { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.dp-field.dp-active-field { outline: 2px solid var(--accent); outline-offset: 1px; }
 .dp-field:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .dp-field:disabled { cursor: default; opacity: 1; background: transparent; border-color: transparent; padding: 0 4px; }
 .dp-field:disabled .dp-ic { display: none; }

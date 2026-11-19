@@ -8,6 +8,7 @@ import * as B from './lib/budget.js';
 import * as C from './lib/checklist.js';
 import { encodeShare, decodeShare, shareUrl, shareCodeFromHash, shareSummary, shareMessage } from './lib/share.js';
 import { enhanceDates } from './lib/datepicker.js';
+import { enhanceSuggestions } from './lib/suggestions.js';
 import { loadWeather, weatherSignature } from './lib/weather.js';
 
 const COLORS = ['#3B6FD6', '#E8590C', '#C2255C', '#0B8A6F', '#7048E8', '#1098AD', '#F08C00', '#5C940D'];
@@ -85,6 +86,17 @@ const ui = {
 
 /* ───────── 지도 ───────── */
 const map = L.map('map', { worldCopyJump: true }).setView([30, 20], 2);
+map.zoomControl.setPosition('topright');
+$('#mapLocate').addEventListener('click', () => {
+  if (!navigator.geolocation) return toast('이 브라우저에서는 현재 위치를 확인할 수 없어요');
+  map.locate({ setView: true, maxZoom: 16, timeout: 8000 });
+});
+let locationPoint;
+map.on('locationfound', ({ latlng }) => {
+  if (locationPoint) locationPoint.setLatLng(latlng);
+  else locationPoint = L.circleMarker(latlng, { radius: 7, color: '#fff', weight: 3, fillColor: '#3182f6', fillOpacity: 1, interactive: false }).addTo(map);
+});
+map.on('locationerror', () => toast('현재 위치를 확인하지 못했어요. 브라우저의 위치 권한을 확인해 주세요'));
 let baseKind = isDark() ? 'dark' : 'light';
 let baseTiles = tileGroup(baseKind).addTo(map);
 /** 밝기가 바뀌면 지도 타일도 바꾼다 */
@@ -103,8 +115,8 @@ function pinIcon(label, color, dim) {
   return L.divIcon({
     className: '',
     html: `<div class="pin${dim ? ' dim' : ''}" style="--c:${color}"><span>${esc(label)}</span></div>`,
-    iconSize: [26, 26],
-    iconAnchor: [13, 30],
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
     popupAnchor: [0, -28],
   });
 }
@@ -113,7 +125,7 @@ const UNSET_COLOR = '#94a3b8'; // 종류 보기에서 종류를 안 정한 장�
 const byCategory = () => prefs.pinColor === 'category';
 /** 핀 색: 일차별(동선 선과 같은 색) 또는 종류별(관광·맛집·카페·쇼핑) */
 const pinColorOf = (it, listColor) => (byCategory() ? M.CATEGORIES[it.category]?.color ?? UNSET_COLOR : listColor);
-const stayPinHtml = () => `<div class="stay-pin"${byCategory() ? ` style="background:${M.STAY_COLOR};border-color:${M.STAY_COLOR};color:#fff"` : ''}>숙소</div>`;
+const stayPinHtml = () => `<div class="stay-pin"${byCategory() ? ` style="background:${M.STAY_COLOR};border-color:${M.STAY_COLOR};color:#fff"` : ''}><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg></div>`;
 const catIcon = (it) => {
   const c = M.CATEGORIES[it.category];
   return c ? `<span class="cat-tag" style="--cc:${c.color}">${c.label}</span>` : '';
@@ -141,6 +153,7 @@ function allLists() {
 }
 
 function renderMap({ fit = false } = {}) {
+  $('#mapPlace').hidden = true;
   layer.clearLayers();
   markers.clear();
   if (!trip) return;
@@ -156,20 +169,17 @@ function renderMap({ fit = false } = {}) {
     const pts = route.map((it) => [it.lat, it.lng]);
     if (!dim) [start, end].forEach((s) => s && bounds.push([s.lat, s.lng]));
     if (l.isDay && pts.length > 1) {
-      L.polyline(pts, preview ? { color: l.color, weight: 4, opacity: 0.9 } : { color: l.color, weight: 3, opacity: dim ? 0.15 : 0.75, dashArray: '6 6' }).addTo(layer);
+      L.polyline(pts, { color: 'var(--paper)', weight: 7, opacity: dim ? 0.12 : 0.9, interactive: false }).addTo(layer);
+      L.polyline(pts, { color: l.color, weight: preview ? 4 : 3, opacity: dim ? 0.18 : 0.9, dashArray: preview ? null : '7 6', interactive: false }).addTo(layer);
     }
     l.items.forEach((it, i) => {
       const n = preview ? preview.indexOf(it) + 1 : i + 1;
       const m = L.marker([it.lat, it.lng], {
         icon: pinIcon(l.isDay ? n : '•', pinColorOf(it, l.color), dim),
+        title: it.name,
         zIndexOffset: dim ? 0 : 1000,
       }).addTo(layer);
-      m.bindPopup(
-        `<div class="popup-name">${esc(it.name)}</div>` +
-          `<div class="popup-meta">${M.CATEGORIES[it.category] ? `${M.CATEGORIES[it.category].label} · ` : ''}${esc(l.label)}${l.isDay ? ` · ${i + 1}번째` : ''}${it.time ? ` · ${esc(it.time)}` : ''}</div>` +
-          `<a href="${M.googleMapsUrl(it)}" target="_blank" rel="noopener">구글맵에서 열기</a>`,
-      );
-      m.on('click', () => openItem(it.id, { scroll: true }));
+      m.on('click', () => showMapPlace(it, [l.label, l.isDay ? `${n}번째` : '', it.time].filter(Boolean).join(' · '), true, m));
       markers.set(it.id, m);
       if (!dim) bounds.push([it.lat, it.lng]);
     });
@@ -178,19 +188,58 @@ function renderMap({ fit = false } = {}) {
     const { checkIn, checkOut } = M.stayDates(trip, s);
     const m = L.marker([s.lat, s.lng], {
       icon: L.divIcon({ className: '', html: stayPinHtml(), iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -12] }),
+      title: s.name,
       zIndexOffset: 1500,
     }).addTo(layer);
-    m.bindPopup(
-      `<div class="popup-name">${esc(s.name)}</div>` +
-        `<div class="popup-meta">${s.nights}박${checkIn ? ` · ${esc(M.formatDate(checkIn))} 체크인 ~ ${esc(M.formatDate(checkOut))} 체크아웃` : ''}</div>` +
-        `<a href="${M.googleMapsUrl(s)}" target="_blank" rel="noopener">구글맵에서 열기</a>`,
-    );
+    m.on('click', () => showMapPlace(s, `숙소 · ${s.nights}박${checkIn ? ` · ${M.formatDate(checkIn)} ~ ${M.formatDate(checkOut)}` : ''}`, false, m));
     markers.set(s.id, m);
+    if (ui.focusList == null) bounds.push([s.lat, s.lng]);
   }
   renderTrendMarkers();
   renderPinLegend();
-  $('#showAll').classList.toggle('on', ui.focusList == null);
+  const all = ui.focusList == null;
+  $('#showAll').setAttribute('aria-pressed', String(all));
+  const date = trip.days[ui.day]?.date;
+  $('#mapDayLabel').textContent = `Day ${ui.day + 1}${date ? ` · ${M.formatDate(date)}` : ''}`;
+  $('#dayPrev').disabled = ui.day <= 0;
+  $('#dayNext').disabled = ui.day >= trip.days.length - 1;
   if (fit) fitTo(bounds);
+}
+
+function showMapPlace(item, detail, hasSchedule, marker) {
+  const card = $('#mapPlace');
+  markers.get(card.dataset.item)?.getElement()?.classList.remove('map-pin-selected');
+  card.dataset.item = item.id;
+  marker.getElement()?.classList.add('map-pin-selected');
+  card.innerHTML = `<div><strong>${esc(item.name)}</strong><small>${esc(detail)}</small></div>
+    <a href="${M.directionsFromHereUrl(item)}" target="_blank" rel="noopener">길찾기</a>
+    ${hasSchedule ? `<button type="button" data-map-item="${esc(item.id)}">일정 보기</button>` : ''}
+    <button type="button" data-map-dismiss aria-label="장소 요약 닫기">×</button>`;
+  card.hidden = false;
+  if (document.activeElement === marker.getElement()) card.querySelector('a').focus({ preventScroll: true });
+}
+
+$('#mapPlace').addEventListener('click', (e) => {
+  const id = e.target.closest('[data-map-item]')?.dataset.mapItem;
+  if (id) {
+    $('#mapPlace').hidden = true;
+    markers.get(id)?.getElement()?.classList.remove('map-pin-selected');
+    openItem(id, { scroll: true });
+  }
+  if (e.target.closest('[data-map-dismiss]')) {
+    const card = $('#mapPlace');
+    card.hidden = true;
+    const marker = markers.get(card.dataset.item)?.getElement();
+    marker?.classList.remove('map-pin-selected');
+    marker?.focus({ preventScroll: true });
+  }
+});
+
+function locateMapPlace(item) {
+  ui.keepView = $('.layout').dataset.tab !== 'map';
+  showTab('map');
+  map.setView([item.lat, item.lng], Math.max(map.getZoom(), 16));
+  setTimeout(() => markers.get(item.id)?.fire('click'), 0);
 }
 
 /* ───────── 트렌드 (요즘 뜨는 곳) ───────── */
@@ -334,13 +383,14 @@ map.getContainer().addEventListener('click', (e) => {
 const pickViewport = matchMedia('(max-width: 900px)');
 function syncPickNavigation() {
   const locked = Boolean(ui.picking && pickViewport.matches);
-  for (const el of $$('.mtabs, #dayTabs, .pagebar, .map-ctl')) el.inert = locked;
+  for (const el of $$('.mtabs, #dayTabs, .pagebar, .map-ctl, #mapLocate')) el.inert = locked;
 }
 pickViewport.addEventListener('change', syncPickNavigation);
 
 function setPicking(on) {
   const restoreFocus = !on && $('#pickHint').contains(document.activeElement);
   ui.picking = on;
+  if (on) $('#mapPlace').hidden = true;
   map.getContainer().classList.toggle('picking', on);
   $('#pickHint').hidden = !on;
   $('#pickPin').hidden = !on;
@@ -656,6 +706,8 @@ function flightRowsHtml(dayIndex, where) {
 
 const flightDialog = $('#flightDialog');
 const flightForm = $('#flightForm');
+const airports = [...$('#airports').content.querySelectorAll('option')].map((o) => ({ value: o.value, detail: o.label }));
+for (const input of [$('#flightFrom'), $('#flightTo')]) enhanceSuggestions(input, () => airports);
 ui.editFlight = null;
 
 function openFlights(editId = null) {
@@ -1102,10 +1154,7 @@ $('#days').addEventListener('click', (e) => {
   } else if (action === 'locate') {
     const found = M.findItem(trip, id);
     if (!found) return;
-    ui.keepView = true;
-    showTab('map');
-    map.setView([found.item.lat, found.item.lng], Math.max(map.getZoom(), 16));
-    markers.get(id)?.openPopup();
+    locateMapPlace(found.item);
   } else if (action === 'delete') {
     const found = M.findItem(trip, id);
     if (found && confirm(`"${found.item.name}"을(를) 삭제할까요?`)) {
@@ -1193,10 +1242,7 @@ $('#days').addEventListener('click', (e) => {
   } else if (action === 'stay-locate') {
     const s = M.findStay(trip, btn.closest('.stay-row').dataset.stay);
     if (!s) return;
-    ui.keepView = true;
-    showTab('map');
-    map.setView([s.lat, s.lng], Math.max(map.getZoom(), 16));
-    markers.get(s.id)?.openPopup();
+    locateMapPlace(s);
   } else if (action === 'stay-delete') {
     const s = M.findStay(trip, btn.dataset.stay);
     if (s && confirm(`숙소 "${s.name}"(${s.nights}박)을 삭제할까요?`)) {
@@ -1306,6 +1352,7 @@ $('#pinLegend').addEventListener('click', (e) => {
 });
 
 $('#showAll').addEventListener('click', () => {
+  if (ui.focusList == null) return selectDay(ui.day, { scroll: false });
   ui.focusList = null;
   renderDays();
   renderMap({ fit: true });
@@ -1559,6 +1606,20 @@ $('#importFile').addEventListener('change', async (e) => {
  * 공유 링크(/s/<id>, #s=…)는 따로 처리한다.
  */
 const POPULAR = ['오사카', '도쿄', '후쿠오카', '교토', '삿포로', '오키나와', '다낭', '방콕', '타이베이', '파리'];
+const DESTINATIONS = [
+  ['오사카', '일본', 'osaka', 'ㅇㅅㅋ'], ['도쿄', '일본', 'tokyo', '동경', 'ㄷㅋ'],
+  ['후쿠오카', '일본', 'fukuoka', 'ㅎㅋㅇㅋ'], ['교토', '일본', 'kyoto', 'ㄱㅌ'],
+  ['삿포로', '일본', 'sapporo', 'ㅅㅍㄹ'], ['오키나와', '일본', 'okinawa', 'ㅇㅋㄴㅇ'],
+  ['다낭', '베트남', 'da nang', 'danang', 'ㄷㄴ'], ['방콕', '태국', 'bangkok', 'ㅂㅋ'],
+  ['타이베이', '대만', 'taipei', 'ㅌㅇㅂㅇ'], ['파리', '프랑스', 'paris', 'ㅍㄹ'],
+  ['도하', '카타르', 'doha', 'ㄷㅎ'], ['리스본', '포르투갈', 'lisbon', 'ㄹㅅㅂ'],
+].map(([value, detail, ...keywords]) => ({ value, detail, keywords }));
+
+function destinationOptions() {
+  const countryNames = Intl.DisplayNames ? new Intl.DisplayNames(['ko'], { type: 'region' }) : null;
+  return [...DESTINATIONS, ...trends.cities.filter((city) => !DESTINATIONS.some((d) => d.value === city.name))
+    .map((city) => ({ value: city.name, detail: countryNames?.of(city.country) ?? city.country, keywords: [city.id] }))];
+}
 
 function tripHash(page, id) {
   if (page === 'home' || !id) return '#/';
@@ -1673,9 +1734,31 @@ function tripCardHtml(t) {
     </li>`;
 }
 
+function newTripForm(id) {
+  const [ds, de] = defaultDates();
+  return `<form id="${id}" class="home-new" autocomplete="off" data-dp-pair="여행 날짜">
+    <label class="hn-dest suggest-field"><span>어디로 떠나요?</span><input id="${id}Destination" name="destination" placeholder="예: 오사카, 다낭, Lisbon" required></label>
+    <label class="hn-date"><span>가는 날</span><input type="date" name="startDate" data-dp="start" aria-label="가는 날" required value="${ds}"></label>
+    <label class="hn-date"><span>오는 날</span><input type="date" name="endDate" data-dp="end" aria-label="오는 날" required value="${de}"></label>
+    <button class="btn primary hn-go">일정 만들기</button>
+  </form>`;
+}
+
+const newTripDialog = $('#new-trip-modal');
+$('#newTripFields').innerHTML = newTripForm('modalNew');
+enhanceSuggestions($('#modalNewDestination'), destinationOptions);
+$('#newTripClose').addEventListener('click', () => newTripDialog.close());
+
+function openNewTrip() {
+  newTripDialog.showModal();
+  $('#modalNewDestination').focus();
+}
+
 function renderHome() {
   const el = $('#page-home');
   const form = $('#homeNew', el);
+  const restoreSearch = form && document.activeElement === $('#homeNewDestination', form);
+  const caret = restoreSearch ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
   const keep = form ? Object.fromEntries(new FormData(form)) : null; // 다시 그려도 입력 중인 값 유지
   const all = Object.values(store.trips);
   const { upcoming, past } = sortedTrips();
@@ -1685,17 +1768,11 @@ function renderHome() {
   ui.homeCity = cities.some((c) => c.id === ui.homeCity) ? ui.homeCity : near?.id ?? cities[0]?.id;
   const city = cities.find((c) => c.id === ui.homeCity);
   const places = city ? T.activePlaces(city, TODAY) : [];
-  const [ds, de] = defaultDates();
   el.innerHTML = `<div class="home">
     <section class="home-hero">
       <h1>지도와 일정을 한 화면에.<br><span>설치 없이 공유까지.</span></h1>
       <p>가입 없이 바로 시작하는 해외여행 플래너. 일정은 이 브라우저에 저장돼요.</p>
-      <form id="homeNew" class="home-new" autocomplete="off" data-dp-pair="여행 날짜">
-        <label class="hn-dest"><span>어디로 떠나요?</span><input name="destination" placeholder="예: 오사카, 다낭, Lisbon" required></label>
-        <label class="hn-date"><span>가는 날</span><input type="date" name="startDate" data-dp="start" aria-label="가는 날" required value="${ds}"></label>
-        <label class="hn-date"><span>오는 날</span><input type="date" name="endDate" data-dp="end" aria-label="오는 날" required value="${de}"></label>
-        <button class="btn primary hn-go">일정 만들기</button>
-      </form>
+      ${newTripForm('homeNew')}
       <div class="dest-chips"><span>많이 가는 곳</span>${POPULAR.map((d) => `<button type="button" data-dest="${esc(d)}">${esc(d)}</button>`).join('')}</div>
       ${all.length ? '' : '<button type="button" class="btn" data-home="sample">도쿄 3박 4일 샘플 열기</button>'}
     </section>
@@ -1743,6 +1820,12 @@ function renderHome() {
   </div>`;
   if (keep) for (const [k, v] of Object.entries(keep)) if (v) $(`#homeNew [name="${k}"]`).value = v;
   enhanceDates(el);
+  const destination = $('#homeNewDestination');
+  enhanceSuggestions(destination, destinationOptions);
+  if (caret) {
+    destination.focus({ preventScroll: true });
+    destination.setSelectionRange(...caret);
+  }
 }
 
 $('#page-home').addEventListener('click', (e) => {
@@ -1752,7 +1835,8 @@ $('#page-home').addEventListener('click', (e) => {
   const cityId = e.target.closest('[data-city]')?.dataset.city;
   if (open && store.trips[open]) go('plan', open);
   else if (del) deleteTrip(del);
-  else if (dest || e.target.closest('[data-focus-new]')) {
+  else if (e.target.closest('[data-focus-new]')) openNewTrip();
+  else if (dest) {
     const input = $('#homeNew [name="destination"]');
     if (dest) input.value = dest;
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1778,18 +1862,23 @@ $('#page-home').addEventListener('click', (e) => {
     days.forEach((places, i) => {
       places.forEach(([name, lat, lng]) => M.addItem(sample, sample.days[i].id, { name, lat, lng }));
     });
-    B.addExpense(sample, { amount: 1200, cat: 'food', day: 0, memo: '점심 식사 예시' });
     C.addCheck(sample, 'pack', '보조 배터리 챙기기');
     switchTrip(sample, { save: true });
   }
 });
-$('#page-home').addEventListener('submit', (e) => {
+async function submitNewTrip(e) {
   e.preventDefault();
   const f = e.target;
   let [startDate, endDate] = [f.startDate.value, f.endDate.value];
   if (endDate < startDate) endDate = startDate;
-  createTripFrom({ destination: f.destination.value, startDate, endDate }, $('.hn-go', f));
-});
+  await createTripFrom({ destination: f.destination.value, startDate, endDate }, $('.hn-go', f));
+  if (f.id === 'modalNew') {
+    newTripDialog.close();
+    f.reset();
+  }
+}
+$('#page-home').addEventListener('submit', submitNewTrip);
+$('#modalNew').addEventListener('submit', submitNewTrip);
 $('#tripsBtn').addEventListener('click', () => go('home'));
 
 /* 상단: 지금 보고 있는 여행 이름 + 다른 여행으로 바꾸기 */
@@ -1824,10 +1913,8 @@ $('#tripSwList').addEventListener('click', (e) => {
   const id = e.target.closest('[data-sw]')?.dataset.sw;
   $('#tripSw').open = false;
   if (id && store.trips[id]) go(prefs.page === 'home' ? 'plan' : prefs.page, id); // 같은 탭 그대로 다른 여행으로
-  else if (e.target.closest('[data-sw-new]')) {
-    go('home');
-    setTimeout(() => $('#homeNew [name="destination"]')?.focus(), 50);
-  } else if (e.target.closest('[data-sw-home]')) go('home');
+  else if (e.target.closest('[data-sw-new]')) openNewTrip();
+  else if (e.target.closest('[data-sw-home]')) go('home');
 });
 document.addEventListener('click', (e) => {
   if (!e.target.closest('#tripSw')) $('#tripSw').open = false;
@@ -2112,14 +2199,8 @@ $('#dayTabs').addEventListener('click', (e) => {
   const b = e.target.closest('[data-day]');
   if (b) selectDay(Number(b.dataset.day));
 });
-$('#dayPrev').addEventListener('click', () => selectDay(ui.day - 1));
-$('#dayNext').addEventListener('click', () => selectDay(ui.day + 1));
-$('#heroRoute').addEventListener('click', () => {
-  ui.focusList = null;
-  renderDays();
-  renderMap({ fit: true });
-  $('.mapwrap').scrollIntoView({ block: 'center' });
-});
+$('#dayPrev').addEventListener('click', () => selectDay(ui.day - 1, { scroll: false }));
+$('#dayNext').addEventListener('click', () => selectDay(ui.day + 1, { scroll: false }));
 $('#heroFlight').addEventListener('click', (e) => {
   const b = e.target.closest('[data-hero="flights"]');
   if (b) openFlights(b.dataset.flight || null);
@@ -2132,7 +2213,7 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (!trip || prefs.page !== 'plan' || prefs.view === 'board' || e.altKey || e.ctrlKey || e.metaKey) return;
-  if (e.target.closest('input, textarea, select, [contenteditable]') || document.querySelector('dialog[open]')) return;
+  if (e.defaultPrevented || e.target.closest('input, textarea, select, [contenteditable], #datePicker, .leaflet-container') || document.querySelector('dialog[open]')) return;
   if (e.key === 'ArrowLeft') selectDay(ui.day - 1);
   else if (e.key === 'ArrowRight') selectDay(ui.day + 1);
 });
@@ -2321,7 +2402,7 @@ function renderBudget() {
                   <button class="icon" data-b="del" data-id="${e.id}" title="삭제">✕</button></li>`;
               })
               .join('')}</ul>`
-          : '<p class="empty-note">아직 기록이 없어요. 위에서 금액만 넣고 기록을 누르면 돼요.</p>'
+          : '<p class="empty-note">아직 기록된 지출이 없어요. 첫 지출을 추가해 보세요.</p>'
       }
     </div>
     <p class="fine">가계부는 이 브라우저에만 저장되고 공유 링크에는 들어가지 않아요. 백업 파일에는 포함돼요. 자동 환율: ExchangeRate-API (하루 1번 갱신).</p>
@@ -2784,10 +2865,7 @@ $('#inboxDock').addEventListener('click', (e) => {
   } else if (btn.dataset.action === 'locate') {
     const found = M.findItem(trip, id);
     if (!found) return;
-    ui.keepView = true;
-    showTab('map');
-    map.setView([found.item.lat, found.item.lng], Math.max(map.getZoom(), 16));
-    markers.get(id)?.openPopup();
+    locateMapPlace(found.item);
   } else if (btn.dataset.action === 'delete') {
     const found = M.findItem(trip, id);
     if (found && confirm(`"${found.item.name}"을(를) 삭제할까요?`)) {
@@ -2821,6 +2899,7 @@ function closeOnBackdrop(dlg, canClose = () => true) {
   });
 }
 closeOnBackdrop(flightDialog);
+closeOnBackdrop(newTripDialog);
 closeOnBackdrop(shareDialog);
 
 /* ───────── 장소 여러 개 한 번에 담기 ─────────

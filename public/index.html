@@ -126,7 +126,6 @@
           <button data-tab="map">지도</button>
         </div>
         <button id="mapToggle" class="pill board-only">지도 숨기기</button>
-        <button id="heroRoute" class="pill hide-sm">전체 동선 보기</button>
       </div>
 
       <div class="layout" data-view="list" data-tab="plan">
@@ -158,10 +157,15 @@
           <section class="mapwrap">
             <div id="map"></div>
             <div class="map-ctl">
-              <button id="dayPrev" title="이전 날 (←)" aria-label="이전 날">‹</button>
-              <button id="dayNext" title="다음 날 (→)" aria-label="다음 날">›</button>
-              <button id="showAll">전체 동선</button>
+              <div class="map-day-switcher" role="group" aria-label="지도 일차 전환">
+                <button type="button" id="dayPrev" aria-label="이전 일차">‹</button>
+                <span id="mapDayLabel" role="status"></span>
+                <button type="button" id="dayNext" aria-label="다음 일차">›</button>
+              </div>
+              <button type="button" id="showAll" aria-pressed="false">전체 동선</button>
             </div>
+            <button type="button" id="mapLocate" class="map-locate" aria-label="현재 위치 보기" title="현재 위치 보기">◎</button>
+            <div id="mapPlace" class="map-place" role="region" aria-label="지도 장소 요약" hidden></div>
             <div id="pickPin" hidden aria-hidden="true"><svg class="ic"><use href="#i-pin"/></svg></div>
             <div id="pickHint" class="pick-hint" hidden>지도를 움직여 핀을 맞추세요.
               <button type="button" id="pickConfirm">이 위치 선택</button><button type="button" id="pickCancel">취소</button>
@@ -185,6 +189,11 @@
   </div>
 
 
+  <dialog id="new-trip-modal" aria-labelledby="newTripTitle">
+    <div class="new-trip-head"><h2 id="newTripTitle">새 여행</h2><button type="button" id="newTripClose" class="icon" aria-label="닫기">×</button></div>
+    <div id="newTripFields"></div>
+  </dialog>
+
   <dialog id="flightDialog">
     <div class="dialog-body">
       <h2>항공편</h2>
@@ -198,8 +207,8 @@
         </div>
         <label>편명 <input name="flightNo" placeholder="예: KE723" autocomplete="off"></label>
         <div class="row">
-          <label>출발 공항 <input name="from" list="airports" placeholder="ICN" autocomplete="off"></label>
-          <label>도착 공항 <input name="to" list="airports" placeholder="KIX" autocomplete="off"></label>
+          <label class="suggest-field">출발 공항 <input name="from" id="flightFrom" placeholder="ICN" autocomplete="off"></label>
+          <label class="suggest-field">도착 공항 <input name="to" id="flightTo" placeholder="KIX" autocomplete="off"></label>
         </div>
         <div class="row">
           <label>출발 (현지 시각) <input type="datetime-local" name="departAt"></label>
@@ -270,7 +279,7 @@
     </div>
   </dialog>
 
-  <datalist id="airports">
+  <template id="airports">
     <option value="ICN" label="인천"></option>
     <option value="GMP" label="김포"></option>
     <option value="PUS" label="김해(부산)"></option>
@@ -297,7 +306,7 @@
     <option value="TFU" label="청두 톈푸"></option>
     <option value="HKG" label="홍콩"></option>
     <option value="TPE" label="타이베이 타오위안"></option>
-  </datalist>
+  </template>
 
   <div id="print" hidden></div>
   <div id="toast" role="status" aria-live="polite"></div>
