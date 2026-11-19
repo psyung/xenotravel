@@ -916,3 +916,124 @@ button.kpi:hover { border-color: var(--accent); }
   .checks li.editing label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .plan-bar { flex-wrap: wrap; }
 }
+
+/* ───────── 날짜 고르기 (Cally 달력) ─────────
+ * 원래 date input은 숨기고 .dp-field 버튼이 대신 보인다. 달력은 화면에 하나뿐인 .dp-pop에 그린다.
+ */
+.dp-native { display: none !important; }
+.dp-field {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 0; height: 30px; padding: 0 10px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink);
+  font-size: 13px; font-weight: 600; white-space: nowrap; text-align: left; transition: border-color .15s, background .15s;
+}
+.dp-field:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.dp-field:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.dp-field:disabled { cursor: default; opacity: 1; background: transparent; border-color: transparent; padding: 0 4px; }
+.dp-field:disabled .dp-ic { display: none; }
+.dp-field.empty .dp-val { color: var(--mute); font-weight: 500; }
+.dp-val { overflow: hidden; text-overflow: ellipsis; }
+.dp-ic { width: 15px; height: 15px; flex: none; fill: none; stroke: var(--mute); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* 놓이는 곳별 모양 */
+.sum-dates .dp-field { height: 28px; background: color-mix(in srgb, var(--paper) 80%, transparent); }
+.home-new .dp-field { height: auto; padding: 2px 0; border: 0; background: none; font-size: 15px; }
+.home-new .dp-field .dp-ic { display: none; }
+.home-new label:has(.dp-field) { cursor: pointer; }
+.stay-range label, .stay-opts label { min-width: 0; }
+.stay-range .dp-field { width: 100%; height: 34px; }
+.flight-form .dp-dt { display: flex; gap: 6px; min-width: 0; }
+.flight-form .dp-field { flex: 1; height: 40px; border: 0; border-radius: 10px; background: var(--soft); font-weight: 500; font-size: 14px; padding: 0 12px; }
+.flight-form .dp-time, .dp-time { width: 132px; flex: none; height: 40px; border: 0; border-radius: 10px; padding: 0 10px; background: var(--soft); color: var(--ink); font-variant-numeric: tabular-nums; }
+.dp-time:focus { outline: 2px solid var(--accent); }
+
+/* 팝오버 */
+.dp-pop { position: fixed; inset: 0; z-index: 3000; pointer-events: none; }
+.dp-pop[hidden] { display: none; }
+.dp-scrim { position: absolute; inset: 0; background: rgba(0, 12, 30, .4); opacity: 0; transition: opacity .2s; }
+.dp-pop:not(.sheet) .dp-scrim { display: none; }
+.dp-panel {
+  position: absolute; pointer-events: auto; padding: 16px; border-radius: 18px; background: var(--paper); color: var(--ink);
+  border: 1px solid var(--line); box-shadow: var(--shadow-pop); outline: none;
+  opacity: 0; transform: translateY(-4px) scale(.98); transform-origin: top left; transition: opacity .16s ease, transform .16s ease;
+}
+.dp-pop.show .dp-panel { opacity: 1; transform: none; }
+.dp-grip { display: none; }
+.dp-head { display: flex; flex-direction: column; gap: 2px; margin: 0 4px 10px; }
+.dp-title { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; }
+.dp-sum { font-size: 12.5px; color: var(--sub); min-height: 1.4em; font-variant-numeric: tabular-nums; }
+.dp-err { margin: 8px 4px 0; font-size: 12px; color: var(--hot); }
+.dp-foot { display: flex; justify-content: flex-end; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.dp-foot[hidden] { display: none; }
+.dp-btn { height: 36px; padding: 0 16px; border-radius: 10px; border: 0; font-size: 13px; font-weight: 600; background: none; color: var(--sub); }
+.dp-btn.ghost:hover { background: var(--soft); color: var(--ink); }
+.dp-btn.primary { background: var(--ink); color: var(--paper); }
+.dp-btn.primary:hover:not(:disabled) { opacity: .88; }
+.dp-btn:disabled { opacity: .35; cursor: default; }
+
+/* 좁은 화면: 아래에서 올라오는 시트 */
+.dp-pop.sheet { pointer-events: auto; }
+.dp-pop.sheet.show .dp-scrim { opacity: 1; }
+.dp-pop.sheet .dp-panel {
+  left: 0; right: 0; bottom: 0; top: auto; border-radius: 22px 22px 0 0; border-width: 1px 0 0;
+  padding: 8px 16px calc(16px + env(safe-area-inset-bottom)); transform: translateY(24px);
+}
+.dp-pop.sheet.show .dp-panel { transform: none; }
+.dp-pop.sheet .dp-grip { display: block; width: 36px; height: 4px; margin: 0 auto 12px; border-radius: 2px; background: var(--line); }
+.dp-pop.sheet .dp-foot { border-top: 0; padding-top: 4px; }
+.dp-pop.sheet .dp-btn { flex: 1; height: 46px; font-size: 15px; }
+.dp-pop.sheet .dp-btn.ghost { flex: 0 0 30%; background: var(--soft); }
+
+/* Cally 달력 테마 */
+.dp-c { --color-accent: var(--ink); --color-text-on-accent: var(--paper); display: block; width: 100%; }
+.dp-months { display: flex; gap: 24px; }
+.dp-pop.sheet .dp-months { justify-content: center; }
+.dp-c::part(header) { position: relative; height: 0; justify-content: space-between; z-index: 1; }
+.dp-c::part(heading) { display: none; }
+.dp-c::part(button) {
+  position: relative; top: 14px; width: 32px; height: 32px; border: 0; border-radius: 10px; background: none; color: var(--sub); cursor: pointer;
+}
+.dp-c::part(button):hover { background: var(--soft); color: var(--ink); }
+.dp-c::part(disabled) { opacity: .25; }
+.dp-c svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.dp-c calendar-month { --color-accent: var(--ink); --color-text-on-accent: var(--paper); }
+calendar-month::part(heading) { display: block; height: 32px; margin-bottom: 6px; line-height: 32px; text-align: center; font-size: 14px; font-weight: 700; letter-spacing: -0.01em; }
+calendar-month::part(table) { border-collapse: separate; border-spacing: 0 2px; }
+calendar-month::part(th) { height: 28px; font-size: 11.5px; font-weight: 600; color: var(--mute); }
+calendar-month::part(day) {
+  width: 40px; height: 40px; border-radius: 12px; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink); cursor: pointer;
+  transition: background .12s;
+}
+calendar-month::part(day day-0) { color: var(--hot); }
+calendar-month::part(day day-6) { color: var(--accent); }
+calendar-month::part(day):hover { background: var(--soft); }
+calendar-month::part(today) { font-weight: 800; text-decoration: underline 2px; text-underline-offset: 5px; }
+calendar-month::part(selected) { background: var(--ink); color: var(--paper); font-weight: 700; }
+calendar-month::part(range-inner) { border-radius: 0; background: var(--soft); color: var(--ink); font-weight: 600; }
+calendar-month::part(range-inner day-0) { color: var(--hot); }
+calendar-month::part(range-inner day-6) { color: var(--accent); }
+calendar-month::part(range-start) { border-radius: 12px 0 0 12px; }
+calendar-month::part(range-end) { border-radius: 0 12px 12px 0; }
+calendar-month::part(range-start range-end) { border-radius: 12px; }
+calendar-month::part(selected):hover { background: var(--ink); }
+calendar-month::part(range-inner):hover { background: color-mix(in srgb, var(--ink) 10%, var(--soft)); }
+calendar-month::part(disallowed) { opacity: .25; cursor: default; text-decoration: line-through; }
+calendar-month::part(disallowed):hover { background: none; }
+@media (max-width: 640px) {
+  calendar-month::part(day) { width: calc((100vw - 40px) / 7); max-width: 48px; height: 44px; font-size: 14px; }
+}
+
+/* ───────── 일차별 날씨 ───────── */
+.wx-slot { display: contents; }
+.chips:not(:has(.chip)) { display: none; }
+.chip.wx { gap: 5px; background: var(--paper); border: 1px solid var(--line); color: var(--ink); padding: 0 8px 0 6px; }
+.chip.wx b { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--sub); }
+.chip.wx em { font-style: normal; font-weight: 600; color: var(--accent); }
+.chip.wx small { font-size: 11px; color: var(--mute); }
+.wx-ic { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.wx-sun .wx-ic, .wx-partly .wx-ic { color: #F59F00; }
+.wx-cloud .wx-ic, .wx-fog .wx-ic { color: var(--mute); }
+.wx-rain .wx-ic, .wx-storm .wx-ic { color: var(--accent); }
+.wx-snow .wx-ic { color: #74C0FC; }
+.chip.wx-ref { border-style: dashed; color: var(--sub); }
+.chip.wx-wet { background: var(--accent-soft); border-color: transparent; }
+.wx-hint { margin: 2px 0 6px; padding: 7px 10px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-ink); font-size: 12px; font-weight: 500; line-height: 1.45; }

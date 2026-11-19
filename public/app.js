@@ -7,6 +7,8 @@ import * as T from './lib/trends.js';
 import * as B from './lib/budget.js';
 import * as C from './lib/checklist.js';
 import { encodeShare, decodeShare, shareUrl, shareCodeFromHash, shareSummary, shareMessage } from './lib/share.js';
+import { enhanceDates } from './lib/datepicker.js';
+import { loadWeather, weatherSignature } from './lib/weather.js';
 
 const COLORS = ['#3B6FD6', '#E8590C', '#C2255C', '#0B8A6F', '#7048E8', '#1098AD', '#F08C00', '#5C940D'];
 const INBOX_COLOR = '#868e96';
@@ -78,6 +80,7 @@ const ui = {
   readonly: false, // 공유 링크로 연 일정 (저장·편집하지 않음)
   routePlan: null, // 동선 정리 미리 보기 { listId, dayIndex, ids, beforeKm, afterKm, savedKm, fixed }
   routeUndo: null, // 방금 적용한 동선 정리 되돌리기 { listId, dayIndex, prev, applied, savedKm }
+  weather: { sig: '', data: {} }, // 일차 id → 날씨 요약
 };
 
 /* ───────── 지도 ───────── */
@@ -384,6 +387,7 @@ function render({ fit = false } = {}) {
   if (prefs.page === 'budget') renderBudget();
   if (prefs.page === 'check') renderChecks();
   if (prefs.page === 'home') renderHome();
+  refreshWeatherSoon();
 }
 
 /** 여행지 이름이 트렌드 도시인데 좌표가 그 도시와 멀면(예전 검색이 서울의 "오사카○○" 식당을 찾은 경우) 도시 좌표로 고친다. */
@@ -486,10 +490,10 @@ function stayRowHtml(stay, dayIndex, pos, flags, leg = null) {
     : open
     ? `<div class="editor stay-editor" data-stay="${stay.id}">
         <label>숙소 이름<input data-sfield="name" value="${esc(stay.name)}"></label>
-        <div class="stay-range">
-          <label>체크인<input type="date" data-srange="in" value="${M.dateAtIndex(trip, stay.startIndex)}"
+        <div class="stay-range" data-dp-pair="숙소 날짜" data-dp-min-nights="1">
+          <label>체크인<input type="date" data-srange="in" data-dp="start" aria-label="체크인" value="${M.dateAtIndex(trip, stay.startIndex)}"
             min="${M.dateAtIndex(trip, 0)}" max="${M.dateAtIndex(trip, n - 1)}"></label>
-          <label>체크아웃<input type="date" data-srange="out" value="${M.dateAtIndex(trip, stay.startIndex + stay.nights)}"
+          <label>체크아웃<input type="date" data-srange="out" data-dp="end" aria-label="체크아웃" value="${M.dateAtIndex(trip, stay.startIndex + stay.nights)}"
             min="${M.dateAtIndex(trip, stay.startIndex + 1)}" max="${M.dateAtIndex(trip, n)}"></label>
           <span class="nights-chip">${stay.nights}박</span>
         </div>
@@ -785,6 +789,54 @@ function dayToolsHtml(l) {
   }${l.items.length > 1 ? `<button data-action="sort-time" data-list="${l.id}">시간순</button>` : ''}`;
 }
 
+/* ───────── 일차별 날씨 ─────────
+ * 날짜·숙소 위치가 바뀔 때만 다시 가져온다(캐시는 weather.js). 도착하면 카드 전체를 다시 그리지 않고
+ * 날씨 칸만 채운다 (메모를 입력하는 중이어도 커서가 튀지 않게).
+ */
+const WX_ICONS = {
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 3v2 M12 19v2 M3 12h2 M19 12h2 M5.6 5.6l1.4 1.4 M17 17l1.4 1.4 M5.6 18.4 7 17 M17 7l1.4-1.4"/>',
+  partly: '<path d="M8 4.5v1.2 M3.8 9H5 M5 5.9l.9.9 M11.3 7.6A3.5 3.5 0 0 0 5.7 11"/><path d="M9 19h8.5a3.5 3.5 0 0 0 .3-7A5 5 0 0 0 8.4 13 3 3 0 0 0 9 19Z"/>',
+  cloud: '<path d="M7.5 18.5h10a4 4 0 0 0 .4-8A6 6 0 0 0 6.6 12a3.3 3.3 0 0 0 .9 6.5Z"/>',
+  rain: '<path d="M7.5 14.5h10a4 4 0 0 0 .4-8A6 6 0 0 0 6.6 8a3.3 3.3 0 0 0 .9 6.5Z M8.5 17.5l-1 2.5 M12.5 17.5l-1 2.5 M16.5 17.5l-1 2.5"/>',
+  snow: '<path d="M7.5 14.5h10a4 4 0 0 0 .4-8A6 6 0 0 0 6.6 8a3.3 3.3 0 0 0 .9 6.5Z M8 18.5h.01 M12 20h.01 M16 18.5h.01"/>',
+  storm: '<path d="M7.5 14.5h10a4 4 0 0 0 .4-8A6 6 0 0 0 6.6 8a3.3 3.3 0 0 0 .9 6.5Z M12.5 15.5l-2 3h3l-2 3"/>',
+  fog: '<path d="M4 9h16 M6 13h12 M4 17h16"/>',
+};
+
+function wxChipHtml(w) {
+  if (!w) return '';
+  const icon = `<svg class="wx-ic" viewBox="0 0 24 24" aria-hidden="true">${WX_ICONS[w.icon] ?? WX_ICONS.cloud}</svg>`;
+  const rain = w.prob != null && w.prob >= 20 ? `<em>비 ${w.prob}%</em>` : '';
+  const pre = w.kind === 'climate' ? '<small>작년 이맘때</small>' : '';
+  return `<span class="chip wx wx-${w.icon}${w.kind === 'climate' ? ' wx-ref' : ''}${w.wet ? ' wx-wet' : ''}" title="${esc(w.title)}">${icon}${pre}${esc(w.text)} <b>${esc(w.temp)}</b>${rain}</span>`;
+}
+
+function wxHintHtml(w) {
+  if (!w?.wet) return '';
+  const what = w.icon === 'snow' ? '눈' : '비';
+  return `<p class="wx-hint">${what} 소식이 있어요${w.prob != null ? ` (${what} ${w.prob}%)` : ''}. 실내 장소 위주로 짜거나 우산을 챙기세요</p>`;
+}
+
+function paintWeather() {
+  for (const el of $$('[data-wx]')) el.innerHTML = wxChipHtml(ui.weather.data[el.dataset.wx]);
+  for (const el of $$('[data-wx-hint]')) el.innerHTML = wxHintHtml(ui.weather.data[el.dataset.wxHint]);
+}
+
+function refreshWeather() {
+  if (!trip) return;
+  const sig = `${trip.id}#${weatherSignature(trip, TODAY)}`;
+  if (sig === ui.weather.sig) return;
+  ui.weather.sig = sig;
+  loadWeather(trip, TODAY)
+    .then((data) => {
+      if (ui.weather.sig !== sig) return; // 그사이 날짜·여행이 바뀜
+      ui.weather.data = data;
+      paintWeather();
+    })
+    .catch(() => {});
+}
+const refreshWeatherSoon = debounce(refreshWeather, 600);
+
 /* ───────── 동선 자동 정리 ─────────
  * 버튼 → 제안 계산(미리 보기) → 적용을 눌러야 순서가 바뀐다. 그사이 그날 장소가 바뀌면 제안은 버린다.
  */
@@ -879,8 +931,10 @@ function dayCardHtml(l) {
   const sum = M.daySummary(trip, l.dayIndex);
   const st = M.dayStays(trip, l.dayIndex);
   const date = M.formatDate(trip.days[l.dayIndex].date);
+  const dayId = trip.days[l.dayIndex].id;
   const chips = [
-    `<span class="chip">${sum.places}곳</span>`,
+    `<span class="wx-slot" data-wx="${dayId}">${wxChipHtml(ui.weather.data[dayId])}</span>`,
+    sum.places ? `<span class="chip">${sum.places}곳</span>` : '',
     sum.km >= 0.05 ? `<span class="chip">이동 ${M.formatKm(sum.km)}</span>` : '',
     sum.steps ? `<span class="chip" title="걸어갈 만한 구간만 더한 어림값">약 ${M.formatSteps(sum.steps)}걸음</span>` : '',
     sum.from ? `<span class="chip">${esc(sum.from)}${sum.to !== sum.from ? ` – ${esc(sum.to)}` : ''}</span>` : '',
@@ -894,7 +948,8 @@ function dayCardHtml(l) {
         </button>
         <div class="day-tools">${dayToolsHtml(l)}</div>
       </div>
-      ${sum.places || st.end ? `<div class="chips">${chips}</div>` : ''}
+      <div class="chips">${chips}</div>
+      <div class="wx-hint-slot" data-wx-hint="${dayId}">${wxHintHtml(ui.weather.data[dayId])}</div>
       ${ui.readonly ? '' : routePlanHtml(l)}
       ${dayBodyHtml(l)}
     </section>`;
@@ -912,6 +967,7 @@ function renderDays() {
   renderDayTabs();
   daysEl.innerHTML =
     (ui.readonly ? '' : trendSectionHtml()) + lists.map(dayCardHtml).join('');
+  enhanceDates(daysEl);
 
   for (const ol of [...$$('ol.items', daysEl), ...$$('ol.items', $('#inboxDock'))]) {
     ui.sortables.push(
@@ -1484,10 +1540,10 @@ function renderHome() {
     <section class="home-hero">
       <h1>지도와 일정을 한 화면에.<br><span>설치 없이 공유까지.</span></h1>
       <p>가입 없이 바로 시작하는 해외여행 플래너. 일정은 이 브라우저에 저장돼요.</p>
-      <form id="homeNew" class="home-new" autocomplete="off">
+      <form id="homeNew" class="home-new" autocomplete="off" data-dp-pair="여행 날짜">
         <label class="hn-dest"><span>어디로 떠나요?</span><input name="destination" placeholder="예: 오사카, 다낭, Lisbon" required></label>
-        <label class="hn-date"><span>가는 날</span><input type="date" name="startDate" required value="${ds}"></label>
-        <label class="hn-date"><span>오는 날</span><input type="date" name="endDate" required value="${de}"></label>
+        <label class="hn-date"><span>가는 날</span><input type="date" name="startDate" data-dp="start" aria-label="가는 날" required value="${ds}"></label>
+        <label class="hn-date"><span>오는 날</span><input type="date" name="endDate" data-dp="end" aria-label="오는 날" required value="${de}"></label>
         <button class="btn primary hn-go">일정 만들기</button>
       </form>
       <div class="dest-chips"><span>많이 가는 곳</span>${POPULAR.map((d) => `<button type="button" data-dest="${esc(d)}">${esc(d)}</button>`).join('')}</div>
@@ -1535,6 +1591,7 @@ function renderHome() {
     <p class="home-foot">일정·가계부는 이 브라우저에만 저장돼요. 다른 기기로 옮길 땐 백업 파일을 쓰세요 · <button class="linkbtn" data-home="import">백업 파일 불러오기</button></p>
   </div>`;
   if (keep) for (const [k, v] of Object.entries(keep)) if (v) $(`#homeNew [name="${k}"]`).value = v;
+  enhanceDates(el);
 }
 
 $('#page-home').addEventListener('click', (e) => {
@@ -2477,3 +2534,4 @@ function closeOnBackdrop(dlg, canClose = () => true) {
 }
 closeOnBackdrop(flightDialog);
 closeOnBackdrop(shareDialog);
+enhanceDates(document); // 처음부터 있는 날짜 칸 (여행 날짜, 숙소 추가, 항공편)

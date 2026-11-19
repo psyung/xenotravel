@@ -73,10 +73,10 @@
           <div class="hero-l">
             <span id="heroTag" class="eyebrow"></span>
             <input id="tripTitle" class="trip-title" aria-label="여행 이름" maxlength="60">
-            <div class="sum-dates">
-              <input type="date" id="startDate" aria-label="시작일">
+            <div class="sum-dates" data-dp-pair="여행 날짜">
+              <input type="date" id="startDate" data-dp="start" aria-label="시작일">
               <span>–</span>
-              <input type="date" id="endDate" aria-label="종료일">
+              <input type="date" id="endDate" data-dp="end" aria-label="종료일">
               <span id="heroMeta" class="sum-meta"></span>
             </div>
             <div id="heroFlight" class="routes"></div>
@@ -108,10 +108,10 @@
               <button id="pickBtn" class="pill" title="지도를 클릭해서 장소 추가"><svg class="ic"><use href="#i-pin"/></svg><span class="hide-sm">지도에서 찍기</span></button>
             </div>
             <label class="target">추가할 곳 <select id="target"></select></label>
-            <div id="stayOpts" class="stay-opts" hidden>
-              <label>체크인 <input type="date" id="stayIn"></label>
+            <div id="stayOpts" class="stay-opts" data-dp-pair="숙소 날짜" data-dp-min-nights="1" hidden>
+              <label>체크인 <input type="date" id="stayIn" data-dp="start" aria-label="체크인"></label>
               <span class="arrow">→</span>
-              <label>체크아웃 <input type="date" id="stayOut"></label>
+              <label>체크아웃 <input type="date" id="stayOut" data-dp="end" aria-label="체크아웃"></label>
               <span id="stayNightsLabel" class="nights-chip">2박</span>
               <span class="hint">숙소 이름을 검색하거나, 지도에서 우클릭해서 골라요</span>
             </div>
@@ -245,6 +245,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/cally@0.9.2/dist/cally.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>
