@@ -3,6 +3,7 @@
 //   total: 1인 예산(원), currency: 현지 통화 코드, krwPerUnit: 현지 통화 1단위가 몇 원인지
 // trip.expenses = [{ id, amount, cur: 'local'|'KRW', krw, cat, pay, day, memo, at }]
 //   day: -1 = 출발 전, 0.. = Day n,  krw: 기록한 순간의 환율로 바꾼 원화 (나중에 환율이 바뀌어도 그대로)
+//   krw: null = 환율을 모를 때(오프라인 등) 현지 돈으로만 적은 것. 환율이 정해지면 fillPendingKrw가 채운다.
 import { uid } from './model.js';
 
 export const CURRENCIES = {
@@ -82,8 +83,7 @@ export function toKrw(amount, cur, budget) {
 export function expenseProblem({ amount, cur }, budget) {
   const a = Number(amount);
   if (!Number.isFinite(a) || a <= 0) return '금액을 입력해 주세요';
-  if (cur !== 'KRW' && budget.currency !== 'KRW' && !(budget.krwPerUnit > 0)) return '환율을 먼저 정해 주세요';
-  return null;
+  return null; // 환율이 없어도 현지 돈으로 적어 둔다 (해외에서 인터넷이 안 될 때)
 }
 
 export function addExpense(trip, { amount, cur = 'local', cat = 'etc', pay = 'card', day = -1, memo = '' }) {
@@ -92,7 +92,7 @@ export function addExpense(trip, { amount, cur = 'local', cat = 'etc', pay = 'ca
     id: uid(),
     amount: Number(amount),
     cur: cur === 'KRW' ? 'KRW' : 'local',
-    krw: toKrw(amount, cur, budget) ?? 0,
+    krw: toKrw(amount, cur, budget), // 환율을 모르면 null (나중에 채움)
     cat: EXPENSE_CATS[cat] ? cat : 'etc',
     pay: PAYMENTS[pay] ? pay : 'card',
     day: Number.isInteger(day) ? day : -1,
@@ -101,6 +101,27 @@ export function addExpense(trip, { amount, cur = 'local', cat = 'etc', pay = 'ca
   };
   trip.expenses.push(e);
   return e;
+}
+
+/** 환율을 몰라 원화가 비어 있는 기록을 지금 환율로 채운다. 채운 개수를 돌려준다. */
+export function fillPendingKrw(trip) {
+  const budget = ensureBudget(trip);
+  let n = 0;
+  for (const e of trip.expenses) {
+    if (e.krw != null) continue;
+    const krw = toKrw(e.amount, e.cur, budget);
+    if (krw != null) {
+      e.krw = krw;
+      n++;
+    }
+  }
+  return n;
+}
+
+/** 원화가 아직 없는 기록: { count, amount(현지 돈 합계) } */
+export function pendingKrw(trip) {
+  const list = (trip.expenses ?? []).filter((e) => e.krw == null);
+  return { count: list.length, amount: list.reduce((s, e) => s + (Number(e.amount) || 0), 0) };
 }
 
 export function removeExpense(trip, id) {
@@ -122,6 +143,7 @@ export function summarize(trip) {
     total: budget.total,
     spent,
     left: budget.total - spent,
+    pending: pendingKrw(trip), // 환율 미정 (spent에 아직 안 들어감)
     byCat: group('cat'),
     byDay: group('day'),
     byPay: group('pay'),
@@ -157,7 +179,7 @@ export function expensesCsv(trip) {
     PAYMENTS[e.pay]?.label ?? '',
     e.amount,
     e.cur === 'KRW' ? 'KRW' : budget.currency,
-    e.krw,
+    e.krw ?? '',
     e.memo,
     e.at,
   ]);

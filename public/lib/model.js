@@ -613,7 +613,62 @@ export function flightSummary(f) {
   return [f.flightNo, `${from} → ${to}`].filter(Boolean).join(' ');
 }
 
-export const EXPORT_HEADER = ['일차', '날짜', '순서', '시간', '종류', '장소', '주소', '메모', '링크', '구글맵', '위도', '경도'];
+/** 현재 위치에서 그곳까지 구글맵 길찾기 (출발지를 비우면 구글맵이 내 위치를 쓴다) */
+export function directionsFromHereUrl(to, mode = 'transit') {
+  return `https://www.google.com/maps/dir/?api=1&destination=${ll(to)}&travelmode=${mode}`;
+}
+
+/**
+ * 여행 당일 화면에 쓸 오늘 계획. 여행 기간이 아니면 null.
+ * now = 'HH:MM' (기기 시각). 다음 장소 = 시간이 지금 이후인 첫 장소 (시간을 정한 곳이 없으면 없음).
+ * { dayIndex, items, nextId, stay: 오늘 밤 숙소(없으면 출발 숙소) }
+ */
+export function todayPlan(trip, today, now) {
+  const i = indexOfDate(trip, today);
+  if (i == null || i < 0 || i >= trip.days.length) return null;
+  const items = trip.days[i].items;
+  const next = items.find((it) => it.time && it.time >= now);
+  const { start, end } = dayStays(trip, i);
+  return { dayIndex: i, items, nextId: next?.id ?? null, stay: end ?? start ?? null };
+}
+
+/**
+ * 카톡·메신저에 붙일 하루 일정 텍스트. 동행이 앱 없이 그날 계획을 볼 수 있게 한다.
+ *   [오사카] Day 2 · 12월 1일 (화)
+ *   09:00 출국 KE723 ICN 09:00 → KIX 11:00
+ *   출발  난바 호텔
+ *   1. 도톤보리
+ *   12:00  2. 구로몬 시장 · 메모 첫 줄
+ *   귀가  난바 호텔
+ *   동선 지도 https://www.google.com/maps/dir/...
+ */
+export function dayShareText(trip, dayIndex) {
+  const day = trip.days[dayIndex];
+  if (!day) return '';
+  const date = formatDate(day.date);
+  const lines = [`[${trip.title}] Day ${dayIndex + 1}${date ? ` · ${date}` : ''}`];
+  const { start, end } = dayStays(trip, dayIndex);
+  const flights = day.date ? flightsOnDate(trip, day.date) : [];
+  const flightLine = ({ flight: f, role }) => {
+    const t = (role === 'arrive' ? f.arriveAt : f.departAt).slice(11, 16);
+    return `${t ? `${t} ` : ''}${FLIGHT_KINDS[f.kind]} ${flightSummary(f)}`;
+  };
+  lines.push(...flights.filter((x) => x.flight.kind !== 'in').map(flightLine));
+  if (start) lines.push(`출발  ${start.name}`);
+  day.items.forEach((it, i) => {
+    const memo = String(it.memo ?? '').split('\n')[0].trim();
+    lines.push(`${it.time ? `${it.time}  ` : ''}${i + 1}. ${it.name}${memo ? ` · ${memo}` : ''}`);
+  });
+  if (!day.items.length) lines.push('(아직 정한 곳이 없어요)');
+  if (end) lines.push(`귀가  ${end.name}`);
+  lines.push(...flights.filter((x) => x.flight.kind === 'in').map(flightLine));
+  const url = routeDirectionsUrl(dayRoute(trip, dayIndex));
+  if (url) lines.push(`동선 지도 ${url}`);
+  else if (day.items[0]) lines.push(`지도 ${googleMapsUrl(day.items[0])}`);
+  return lines.join('\n');
+}
+
+export const EXPORT_HEADER =['일차', '날짜', '순서', '시간', '종류', '장소', '주소', '메모', '링크', '구글맵', '위도', '경도'];
 
 /** 엑셀 내보내기용 행 (헤더 이름을 키로 갖는 객체). */
 export function tripToRows(trip) {

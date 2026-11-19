@@ -143,7 +143,7 @@ export function toggleCheck(trip, id, today = '') {
     trip.expenses = trip.expenses.filter((e) => e.checkId !== c.id);
     return { check: c, expense: null, removed: before - trip.expenses.length };
   }
-  if (!(c.price > 0) || toKrw(c.price, c.cur, budget) == null) return { check: c, expense: null, removed: 0 };
+  if (!(c.price > 0)) return { check: c, expense: null, removed: 0 }; // 환율을 몰라도 기록 (원화는 나중에)
   const i = indexOfDate(trip, today);
   const day = i != null && i >= 0 && i < trip.days.length ? i : -1;
   const e = addExpense(trip, { amount: c.price, cur: c.cur, cat: GROUP_CAT[c.group] ?? 'etc', pay: 'card', day, memo: c.text });

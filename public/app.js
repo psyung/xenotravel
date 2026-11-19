@@ -380,6 +380,7 @@ function render({ fit = false } = {}) {
   $('#endDate').value = trip.endDate;
   renderHero();
   renderNotice();
+  renderToday();
   renderTarget();
   renderDays();
   renderMap({ fit });
@@ -781,7 +782,9 @@ function dayBodyHtml(l) {
 function dayToolsHtml(l) {
   const st = M.dayStays(trip, l.dayIndex);
   const url = M.routeDirectionsUrl(M.dayRoute(trip, l.dayIndex));
-  const route = url ? `<a class="route-link" href="${url}" target="_blank" rel="noopener" title="이 날 동선 전체를 구글맵 길찾기로 열기">길찾기</a>` : '';
+  const link = url ? `<a class="route-link" href="${url}" target="_blank" rel="noopener" title="이 날 동선 전체를 구글맵 길찾기로 열기">길찾기</a>` : '';
+  const copy = `<button data-action="day-copy" data-day="${l.dayIndex}" title="이 날 일정을 카톡에 붙일 글로 복사해요">카톡용 복사</button>`;
+  const route = link + copy;
   if (ui.readonly) return route;
   const movable = l.items.filter((it) => !it.time).length;
   return `${route}${st.end ? '' : `<button data-action="stay-here" data-day="${l.dayIndex}" title="이 날부터 묵을 숙소 추가">+ 숙소</button>`}${
@@ -803,8 +806,16 @@ const WX_ICONS = {
   fog: '<path d="M4 9h16 M6 13h12 M4 17h16"/>',
 };
 
-function wxChipHtml(w) {
+function wxChipHtml(w, dayId) {
   if (!w) return '';
+  if (w.kind === 'climate') {
+    // 예보 전: 작년 기록은 눌러야 보인다 (다음 달 비 소식으로 읽히지 않게)
+    const d = M.parseDate(w.forecastFrom);
+    const from = d ? `${d.getUTCMonth() + 1}/${d.getUTCDate()}부터` : '';
+    const open = ui.wxRefOpen?.has(dayId) && w.ref;
+    return `<button type="button" class="chip wx wx-ref" data-action="wx-ref" data-day-id="${dayId}" title="예보는 여행 16일 전부터 나와요${w.ref ? '. 누르면 작년 같은 날 날씨를 보여줘요' : ''}"${w.ref ? '' : ' disabled'}>
+        예보 전${from ? ` · ${from}` : ''}${open ? ` <span class="wx-last">작년 이맘때 ${esc(w.ref.text)} <b>${esc(w.ref.temp)}</b></span>` : ''}</button>`;
+  }
   const icon = `<svg class="wx-ic" viewBox="0 0 24 24" aria-hidden="true">${WX_ICONS[w.icon] ?? WX_ICONS.cloud}</svg>`;
   const rain = w.prob != null && w.prob >= 20 ? `<em>비 ${w.prob}%</em>` : '';
   const pre = w.kind === 'climate' ? '<small>작년 이맘때</small>' : '';
@@ -818,7 +829,7 @@ function wxHintHtml(w) {
 }
 
 function paintWeather() {
-  for (const el of $$('[data-wx]')) el.innerHTML = wxChipHtml(ui.weather.data[el.dataset.wx]);
+  for (const el of $$('[data-wx]')) el.innerHTML = wxChipHtml(ui.weather.data[el.dataset.wx], el.dataset.wx);
   for (const el of $$('[data-wx-hint]')) el.innerHTML = wxHintHtml(ui.weather.data[el.dataset.wxHint]);
 }
 
@@ -933,7 +944,7 @@ function dayCardHtml(l) {
   const date = M.formatDate(trip.days[l.dayIndex].date);
   const dayId = trip.days[l.dayIndex].id;
   const chips = [
-    `<span class="wx-slot" data-wx="${dayId}">${wxChipHtml(ui.weather.data[dayId])}</span>`,
+    `<span class="wx-slot" data-wx="${dayId}">${wxChipHtml(ui.weather.data[dayId], dayId)}</span>`,
     sum.places ? `<span class="chip">${sum.places}곳</span>` : '',
     sum.km >= 0.05 ? `<span class="chip">이동 ${M.formatKm(sum.km)}</span>` : '',
     sum.steps ? `<span class="chip" title="걸어갈 만한 구간만 더한 어림값">약 ${M.formatSteps(sum.steps)}걸음</span>` : '',
@@ -1068,6 +1079,13 @@ $('#days').addEventListener('click', (e) => {
   } else if (action === 'sort-time') {
     M.sortByTime(M.getList(trip, btn.dataset.list));
     commit();
+  } else if (action === 'wx-ref') {
+    ui.wxRefOpen ??= new Set();
+    const id = btn.dataset.dayId;
+    ui.wxRefOpen.has(id) ? ui.wxRefOpen.delete(id) : ui.wxRefOpen.add(id);
+    paintWeather();
+  } else if (action === 'day-copy') {
+    copyText(M.dayShareText(trip, Number(btn.dataset.day)), '그날 일정을 복사했어요. 카톡에 붙여넣으세요');
   } else if (action === 'route-opt') {
     proposeRoute(btn.dataset.list);
   } else if (action === 'route-apply') {
@@ -1836,6 +1854,76 @@ function renderHero() {
     : '<button class="route add" data-hero="flights"><span class="rt-kind">항공편</span><span class="rt-add">+ 출국·귀국편 넣기</span></button>';
 }
 
+/* ───────── 여행 당일: 오늘 카드 ─────────
+ * 여행 기간 중에만 맨 위에 보인다. 현장에서 자주 하는 일(다음 장소 길찾기, 주소 보여주기, 숙소로 가기,
+ * 지출 적기, 동행에게 오늘 일정 보내기)을 한두 번 눌러서 하게 한다. 인터넷 없이도 열린다 (길찾기만 인터넷 필요).
+ */
+const nowHHMM = () => {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
+function todayRowHtml(it, n, isNext) {
+  const addr = it.address || `${(+it.lat).toFixed(5)}, ${(+it.lng).toFixed(5)}`;
+  const memo = String(it.memo ?? '').split('\n')[0];
+  return `<li class="td-row${isNext ? ' next' : ''}">
+      <span class="td-time">${esc(it.time) || ''}</span>
+      <span class="td-num">${n}</span>
+      <div class="td-body">
+        <b>${esc(it.name)}${isNext ? '<span class="td-next">다음</span>' : ''}</b>
+        <small>${esc(addr)}</small>
+        ${memo ? `<small class="td-memo">${esc(memo)}</small>` : ''}
+      </div>
+      <div class="td-acts">
+        <button type="button" data-today="copy" data-text="${esc(addr)}" title="주소 복사 (택시 기사에게 보여주기)">주소</button>
+        <a href="${M.directionsFromHereUrl(it)}" target="_blank" rel="noopener" title="지금 위치에서 길찾기">길찾기</a>
+      </div>
+    </li>`;
+}
+
+function renderToday() {
+  const el = $('#today');
+  const p = trip && M.todayPlan(trip, TODAY, nowHHMM());
+  el.hidden = !p;
+  if (!p) return (el.innerHTML = '');
+  const day = trip.days[p.dayIndex];
+  const s = p.stay;
+  const stayAddr = s ? s.address || s.name : '';
+  el.innerHTML = `<div class="td-head">
+      <div><span class="td-eyebrow">오늘 · Day ${p.dayIndex + 1}</span><h2>${esc(M.formatDate(day.date))}</h2></div>
+      <span class="wx-slot" data-wx="${day.id}">${wxChipHtml(ui.weather.data[day.id], day.id)}</span>
+    </div>
+    ${
+      p.items.length
+        ? `<ol class="td-list">${p.items.map((it, i) => todayRowHtml(it, i + 1, it.id === p.nextId)).join('')}</ol>`
+        : '<p class="td-empty">오늘은 정한 곳이 없어요.</p>'
+    }
+    ${
+      s
+        ? `<div class="td-stay"><div><span>오늘 밤 숙소</span><b>${esc(s.name)}</b>${s.address ? `<small>${esc(s.address)}</small>` : ''}</div>
+          <div class="td-acts"><button type="button" data-today="copy" data-text="${esc(stayAddr)}">주소</button><a href="${M.directionsFromHereUrl(s)}" target="_blank" rel="noopener">숙소로 가기</a></div></div>`
+        : ''
+    }
+    <div class="td-foot">
+      ${ui.readonly ? '' : '<button type="button" class="btn primary" data-today="expense">지출 적기</button>'}
+      <button type="button" class="btn" data-today="share" data-day="${p.dayIndex}">카톡으로 오늘 일정 보내기</button>
+    </div>`;
+}
+
+$('#today').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-today]');
+  if (!b) return;
+  const act = b.dataset.today;
+  if (act === 'copy') copyText(b.dataset.text, '주소를 복사했어요');
+  else if (act === 'share') copyText(M.dayShareText(trip, Number(b.dataset.day)), '오늘 일정을 복사했어요. 카톡에 붙여넣으세요');
+  else if (act === 'expense') {
+    showPage('budget');
+    setTimeout(() => $('#bAmount')?.focus(), 50);
+  }
+});
+// 시간이 지나면 "다음" 장소가 바뀐다
+setInterval(() => !$('#today').hidden && prefs.page === 'plan' && renderToday(), 60_000);
+
 function renderNotice() {
   const list = ui.readonly ? [] : M.tripNotices(trip);
   const total = trip.budget?.total;
@@ -1987,7 +2075,7 @@ function renderBudget() {
         <span>예상 (체크리스트)</span><b>${plan.priced ? B.won(plan.total) : '—'}</b>
         <small>${plan.priced ? (b.total && plan.total > b.total ? `예산보다 ${B.won(plan.total - b.total)} 많아요` : `${plan.priced}개 품목 · 가격 고치기 →`) : '체크리스트에 가격 넣기 →'}</small>
       </button>
-      <div class="kpi"><span>쓴 돈</span><b>${B.won(s.spent)}</b><small>${trip.expenses.length}건</small></div>
+      <div class="kpi"><span>쓴 돈</span><b>${B.won(s.spent)}</b><small>${trip.expenses.length}건${s.pending.count ? ` · <span class="pend">환율 미정 ${s.pending.count}건 (${esc(B.money(s.pending.amount, b.currency))})</span>` : ''}</small></div>
       <div class="kpi ${s.left < 0 ? 'hot' : 'ok'}"><span>${s.left < 0 ? '예산 초과' : '남은 예산'}</span><b>${b.total ? B.won(Math.abs(s.left)) : '—'}</b><small>${b.total ? `${Math.min(999, Math.round((s.spent / b.total) * 100))}% 사용` : '예산을 넣으면 계산해요'}</small></div>
     </div>
 
@@ -2048,7 +2136,7 @@ function renderBudget() {
                 const orig = e.cur === 'KRW' ? '' : B.money(e.amount, b.currency);
                 return `<li>
                   <span class="rec-main"><b>${esc(e.memo || c.label)}</b><small>${dayLabel(e.day)} · ${c.label} · ${pay.label}</small></span>
-                  <span class="rec-amt">${B.won(e.krw)}${orig ? `<small>${esc(orig)}</small>` : ''}</span>
+                  <span class="rec-amt">${e.krw == null ? '<span class="pend">환율 미정</span>' : B.won(e.krw)}${orig ? `<small>${esc(orig)}</small>` : ''}</span>
                   <button class="icon" data-b="del" data-id="${e.id}" title="삭제">✕</button></li>`;
               })
               .join('')}</ul>`
@@ -2080,8 +2168,10 @@ async function fetchRate({ quiet = false } = {}) {
     b.krwPerUnit = 1 / per;
     b.rateSource = 'auto';
     b.rateAt = new Date().toISOString();
+    const filled = B.fillPendingKrw(trip);
     commit();
-    if (!quiet) toast(`환율을 받았어요: ${B.rateLabel(b)}`);
+    if (filled) toast(`환율을 받아서 환율 미정이던 ${filled}건을 원화로 계산했어요`, 3200);
+    else if (!quiet) toast(`환율을 받았어요: ${B.rateLabel(b)}`);
   } catch {
     if (!quiet) toast('환율을 받아오지 못했어요. 직접 입력해 주세요', 3500);
   }
@@ -2101,7 +2191,7 @@ function addExpenseFromForm() {
   }
   const e = B.addExpense(trip, data);
   commit();
-  toast(`${B.won(e.krw)} 기록했어요`);
+  toast(e.krw == null ? `${B.money(e.amount, b.currency)} 기록했어요. 원화는 환율을 받으면 계산해요` : `${B.won(e.krw)} 기록했어요`, e.krw == null ? 3200 : 2200);
   $('#bAmount')?.focus();
 }
 
@@ -2159,7 +2249,9 @@ $('#page-budget').addEventListener('change', (e) => {
     b.krwPerUnit = v > 0 ? v / B.CURRENCIES[b.currency].unit : 0;
     b.rateSource = 'manual';
     b.rateAt = new Date().toISOString();
+    const filled = B.fillPendingKrw(trip);
     commit();
+    if (filled) toast(`환율 미정이던 ${filled}건을 원화로 계산했어요`);
   } else if (e.target.id === 'bCurrency') {
     b.currency = e.target.value;
     b.krwPerUnit = 0;
@@ -2272,7 +2364,7 @@ $('#page-check').addEventListener('change', (e) => {
   if (e.target.dataset.c !== 'toggle') return;
   const r = C.toggleCheck(trip, e.target.dataset.id, TODAY);
   commit();
-  if (r.expense) toast(`가계부에 ${B.won(r.expense.krw)} 기록했어요`);
+  if (r.expense) toast(r.expense.krw == null ? '가계부에 기록했어요. 원화는 환율을 받으면 계산해요' : `가계부에 ${B.won(r.expense.krw)} 기록했어요`);
   else if (r.removed) toast('체크를 풀어서 가계부 기록도 지웠어요');
 });
 $('#page-check').addEventListener('click', (e) => {
@@ -2535,3 +2627,24 @@ function closeOnBackdrop(dlg, canClose = () => true) {
 closeOnBackdrop(flightDialog);
 closeOnBackdrop(shareDialog);
 enhanceDates(document); // 처음부터 있는 날짜 칸 (여행 날짜, 숙소 추가, 항공편)
+
+/* ───────── 오프라인 (PWA) ─────────
+ * 서비스 워커가 앱 파일을 저장해서 인터넷 없이도 새로 열린다. 일정·가계부·체크리스트는 원래 이 브라우저에 있다.
+ * 인터넷이 끊기면 위에 한 줄로 알려 준다 (지도 바탕·검색·길찾기는 인터넷이 필요).
+ */
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  navigator.serviceWorker.register(new URL('sw.js', document.baseURI), { scope: './' }).catch(() => {});
+}
+function syncOnline() {
+  const off = !navigator.onLine;
+  document.body.classList.toggle('offline', off);
+  $('#offlineBar').hidden = !off;
+}
+addEventListener('online', () => {
+  syncOnline();
+  toast('다시 인터넷에 연결됐어요');
+  // 오프라인에서 현지 돈으로만 적은 지출이 있으면 환율을 받아 원화를 채운다
+  if (trip && !ui.readonly && trip.budget && B.pendingKrw(trip).count) fetchRate({ quiet: true });
+});
+addEventListener('offline', syncOnline);
+syncOnline();

@@ -97,7 +97,11 @@ test('loadWeather: 일차별로 붙이고, 캐시가 있으면 다시 묻지 않
   assert.equal(first.text, '비');
   assert.equal(first.prob, 80);
   assert.equal(first.wet, true);
-  assert.equal(wx[t.days.at(-1).id].kind, 'climate');
+  const far = wx[t.days.at(-1).id];
+  assert.equal(far.kind, 'climate');
+  assert.equal(far.forecastFrom, '2026-11-23'); // 12/8 - 15일
+  assert.equal(far.ref.text, '비'); // 작년 기록은 ref에만
+  assert.equal(far.ref.wet, false); // 작년 기록으로는 비 안내를 하지 않는다
 
   // 1시간 뒤: 캐시 사용
   await W.loadWeather(t, TODAY, { fetch: fakeFetch(calls), storage, now: now + 3600e3 });
@@ -111,6 +115,15 @@ test('loadWeather: 일차별로 붙이고, 캐시가 있으면 다시 묻지 않
 test('loadWeather: 처음부터 오프라인이면 빈 결과 (오류 없이)', async () => {
   const wx = await W.loadWeather(trip('2026-12-01', '2026-12-02'), TODAY, { fetch: fakeFetch([], { fail: true }), storage: memStorage() });
   assert.deepEqual(wx, {});
+});
+
+test('loadWeather: 먼 여행은 오프라인이어도 "예보 전"은 보여준다', async () => {
+  const t = trip('2027-03-01', '2027-03-02');
+  const wx = await W.loadWeather(t, TODAY, { fetch: fakeFetch([], { fail: true }), storage: memStorage() });
+  assert.deepEqual(Object.values(wx), [
+    { kind: 'climate', forecastFrom: '2027-02-14', ref: null },
+    { kind: 'climate', forecastFrom: '2027-02-15', ref: null },
+  ]);
 });
 
 test('weatherSignature: 날짜나 숙소 위치가 바뀌면 달라진다', () => {

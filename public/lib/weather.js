@@ -117,6 +117,22 @@ export function isWet(w) {
   return ['rain', 'snow', 'storm'].includes(icon) && (w.rainMm ?? 1) >= 1;
 }
 
+/** 예보가 열리는 날 (여행 날짜 - 15일) */
+export function forecastFrom(date) {
+  const d = parseDate(date);
+  if (!d) return '';
+  d.setUTCDate(d.getUTCDate() - FORECAST_DAYS);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * 먼 날(예보 전) 표시: 예보가 아니라는 걸 먼저 보여주고, 작년 기록은 사용자가 펼쳐 볼 때만 쓴다.
+ * { kind: 'climate', forecastFrom, ref: 작년 요약 | null }
+ */
+export function climateEntry(date, lastYear) {
+  return { kind: 'climate', forecastFrom: forecastFrom(date), ref: summarize(lastYear, 'climate') };
+}
+
 /** 일차 카드에 붙일 요약. { kind, text, icon, temp: '18° / 9°', prob, wet, title } */
 export function summarize(w, kind) {
   if (!w) return null;
@@ -179,10 +195,13 @@ export async function loadWeather(trip, today, { fetch: fetchImpl = globalThis.f
           // 오프라인 등: 있으면 오래된 캐시라도 쓴다
         }
       }
-      if (!entry) return;
       for (const d of req.days) {
-        const s = summarize(entry.data[d.query], req.kind);
-        if (s) result[d.dayId] = s;
+        // 예보 전인 날은 작년 기록을 못 받아도(오프라인) "예보 전"은 보여준다
+        if (req.kind === 'climate') result[d.dayId] = climateEntry(d.date, entry?.data[d.query]);
+        else if (entry) {
+          const s = summarize(entry.data[d.query], req.kind);
+          if (s) result[d.dayId] = s;
+        }
       }
     }),
   );

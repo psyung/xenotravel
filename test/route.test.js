@@ -82,3 +82,46 @@ test('걸음 수: 도보 구간만, 100걸음 단위', () => {
   assert.equal(M.tripStats(t, '2026-11-01').steps, 600);
   assert.equal(M.formatSteps(12345), '12,345');
 });
+
+test('dayShareText: 카톡용 하루 일정 (항공·숙소·시간·메모·동선 링크)', () => {
+  const t = M.createTrip({ title: '오사카', startDate: '2026-12-01', endDate: '2026-12-03' });
+  M.addStay(t, HOTEL, 0, 2);
+  M.addFlight(t, { kind: 'out', flightNo: 'KE723', from: 'ICN', to: 'KIX', departAt: '2026-12-01T09:00', arriveAt: '2026-12-01T11:10' });
+  M.addItem(t, t.days[0].id, NAMBA);
+  const lunch = M.addItem(t, t.days[0].id, { ...DOTON, time: '12:00', memo: '예약 2명\n두 번째 줄' });
+  lunch.time = '12:00';
+  const text = M.dayShareText(t, 0);
+  assert.equal(text.split('\n')[0], '[오사카] Day 1 · 12월 1일 (화)');
+  assert.match(text, /^09:00 출국 KE723 ICN 09:00 → KIX 11:10$/m);
+  assert.doesNotMatch(text, /^출발/m); // 첫날은 비행기로 도착해서 공항에서 시작한다
+  assert.match(M.dayShareText(t, 1), /^출발  호텔$/m);
+  assert.match(text, /^1\. 난바$/m);
+  assert.match(text, /^12:00  2\. 도톤보리 · 예약 2명$/m);
+  assert.doesNotMatch(text, /두 번째 줄/);
+  assert.match(text, /^귀가  호텔$/m);
+  assert.match(text, /^동선 지도 https:\/\/www\.google\.com\/maps\/dir\//m);
+  assert.match(M.dayShareText(t, 2), /아직 정한 곳이 없어요/);
+  assert.equal(M.dayShareText(t, 9), '');
+});
+
+test('todayPlan: 여행 중일 때만, 다음 장소는 지금 이후 첫 시간', () => {
+  const t = M.createTrip({ title: 't', startDate: '2026-12-01', endDate: '2026-12-03' });
+  M.addStay(t, HOTEL, 0, 2);
+  const a = M.addItem(t, t.days[1].id, NAMBA);
+  const b = M.addItem(t, t.days[1].id, DOTON);
+  const c = M.addItem(t, t.days[1].id, UMEDA);
+  b.time = '13:00';
+  c.time = '18:30';
+  assert.equal(M.todayPlan(t, '2026-11-30', '10:00'), null);
+  assert.equal(M.todayPlan(t, '2026-12-04', '10:00'), null);
+  const p = M.todayPlan(t, '2026-12-02', '14:05');
+  assert.equal(p.dayIndex, 1);
+  assert.equal(p.nextId, c.id);
+  assert.equal(p.stay.name, '호텔');
+  assert.equal(M.todayPlan(t, '2026-12-02', '20:00').nextId, null);
+  assert.equal(M.todayPlan(t, '2026-12-02', '09:00').nextId, b.id);
+  assert.equal(a.time, '');
+  // 마지막 날: 오늘 밤 숙소가 없으면 출발 숙소
+  assert.equal(M.todayPlan(t, '2026-12-03', '09:00').stay.name, '호텔');
+  assert.match(M.directionsFromHereUrl(NAMBA), /dir\/\?api=1&destination=34\.6656,135\.5013&travelmode=transit$/);
+});

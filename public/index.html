@@ -9,6 +9,12 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
   <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#3182F6">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="XenoTravel">
 </head>
 <body data-page="plan">
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -55,6 +61,7 @@
         <input type="file" id="importFile" accept=".json,application/json" hidden>
       </div>
     </header>
+    <div id="offlineBar" class="offline-bar" role="status" hidden>인터넷이 끊겼어요. 저장된 일정·가계부·체크리스트는 그대로 쓸 수 있고, 지도 바탕·검색·길찾기는 연결되면 다시 돼요.</div>
 
     <div id="sharedBanner" class="shared-banner" hidden>
       <span><b id="sharedTitle"></b> · 공유받은 일정이에요 (보기 전용)</span>
@@ -84,6 +91,7 @@
           <div id="heroStats" class="bento"></div>
         </div>
         <div id="notice" class="notice" hidden></div>
+        <section id="today" class="today" aria-label="오늘 일정" hidden></section>
       </div>
 
       <div class="plan-toolbar">

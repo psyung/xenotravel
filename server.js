@@ -21,6 +21,7 @@ const TYPES = {
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
 
 const MAX_BODY = 200 * 1024; // 공유 코드 최대 크기 (장소 수천 곳도 들어간다)

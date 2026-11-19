@@ -47,7 +47,7 @@ test('budget: 통화 추측, 환율, 기록, 합계', () => {
   const t = trip();
   const b = B.ensureBudget(t);
   assert.equal(b.currency, 'JPY');
-  assert.equal(B.expenseProblem({ amount: 1000, cur: 'local' }, b), '환율을 먼저 정해 주세요');
+  assert.equal(B.expenseProblem({ amount: 1000, cur: 'local' }, b), null); // 환율이 없어도 현지 돈으로 적을 수 있다
   assert.equal(B.expenseProblem({ amount: 0, cur: 'KRW' }, b), '금액을 입력해 주세요');
   b.krwPerUnit = 9.12;
   b.total = 500000;
@@ -192,4 +192,24 @@ test('체크리스트 일괄 삭제: 체크한 것만 / 전체, 기록된 지출
   assert.equal(t.expenses[0].checkId, undefined); // 연결만 끊김
   assert.equal(C.clearGroup(t, 'shop'), 1);
   assert.deepEqual(t.checks.map((c) => c.text), ['C']);
+});
+
+test('budget: 환율을 모를 때(오프라인) 현지 돈으로 적고, 환율이 정해지면 원화를 채운다', () => {
+  const t = M.createTrip({ title: '오사카', destination: '오사카', startDate: '2026-12-01', endDate: '2026-12-02' });
+  const b = B.ensureBudget(t);
+  assert.equal(b.krwPerUnit, 0);
+  const taxi = B.addExpense(t, { amount: 1800, cur: 'local', cat: 'transport', memo: '택시' });
+  B.addExpense(t, { amount: 5000, cur: 'KRW', memo: '유심' });
+  assert.equal(taxi.krw, null);
+  let s = B.summarize(t);
+  assert.equal(s.spent, 5000); // 환율 미정은 합계에서 빠진다
+  assert.deepEqual(s.pending, { count: 1, amount: 1800 });
+  assert.match(B.expensesCsv(t), /"1800","JPY","","택시"/);
+  b.krwPerUnit = 9.1;
+  assert.equal(B.fillPendingKrw(t), 1);
+  assert.equal(taxi.krw, 16380);
+  assert.equal(B.fillPendingKrw(t), 0); // 이미 채운 건 다시 바꾸지 않는다
+  s = B.summarize(t);
+  assert.equal(s.spent, 21380);
+  assert.deepEqual(s.pending, { count: 0, amount: 0 });
 });
