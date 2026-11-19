@@ -39,17 +39,23 @@ export function shareMessage(trip, url) {
 export const SHARE_PREFIX = '#s=';
 const FORMAT = '1'; // 압축 형식이 바뀌면 올린다
 
-const noId = ({ id, ...rest }) => rest;
-
-/** 공유에 필요 없는 값은 뺀다. id는 받는 쪽에서 새로 만들므로 넣지 않는다 (무작위 문자열이라 압축이 안 돼 링크가 길어진다). */
-function snapshot(trip) {
-  const { id, createdAt, updatedAt, ...rest } = trip;
+/** 받는 화면에서 사용하는 일정 필드만 링크에 넣는다. */
+function shareSnapshot(trip, { includePrivate = false } = {}) {
+  const { version, title, destination, startDate, endDate, center, trendCity } = trip;
+  const place = ({ name, address, lat, lng, url, memo }) => ({
+    name, address, lat, lng, url, ...(includePrivate ? { memo } : {}),
+  });
   return {
-    ...rest,
-    days: trip.days.map((d) => ({ ...noId(d), items: d.items.map(noId) })),
-    inbox: (trip.inbox ?? []).map(noId),
-    stays: (trip.stays ?? []).map(noId),
-    flights: (trip.flights ?? []).map(noId),
+    version, title, destination, startDate, endDate, center, trendCity,
+    sharedAt: new Date().toISOString(),
+    days: trip.days.map(({ date, items }) => ({ date, items: items.map((it) => ({
+      ...place(it), time: it.time, category: it.category,
+    })) })),
+    inbox: (trip.inbox ?? []).map((it) => ({ ...place(it), time: it.time, category: it.category })),
+    stays: (trip.stays ?? []).map((stay) => ({ ...place(stay), startIndex: stay.startIndex, nights: stay.nights })),
+    flights: (trip.flights ?? []).map(({ kind, flightNo, from, to, departAt, arriveAt, bookingRef, memo }) => ({
+      kind, flightNo, from, to, departAt, arriveAt, ...(includePrivate ? { bookingRef, memo } : {}),
+    })),
   };
 }
 
@@ -84,8 +90,8 @@ function fromBase64Url(s) {
 }
 
 /** 여행 → 링크용 문자열 ('1.' + base64url(deflate(JSON))) */
-export async function encodeShare(trip) {
-  const json = new TextEncoder().encode(JSON.stringify(snapshot(trip)));
+export async function encodeShare(trip, options) {
+  const json = new TextEncoder().encode(JSON.stringify(shareSnapshot(trip, options)));
   return `${FORMAT}.${toBase64Url(await pipe(json, new CompressionStream('deflate-raw')))}`;
 }
 
@@ -163,5 +169,6 @@ export async function decodeShare(code) {
     })),
     createdAt: now,
     updatedAt: now,
+    sharedAt: typeof raw.sharedAt === 'string' && Number.isFinite(Date.parse(raw.sharedAt)) ? raw.sharedAt : null,
   };
 }

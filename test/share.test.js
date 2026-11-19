@@ -14,7 +14,7 @@ function sampleTrip() {
 
 test('공유 링크: 왕복하면 내용이 같고 id는 새로 만든다', async () => {
   const t = sampleTrip();
-  const code = await encodeShare(t);
+  const code = await encodeShare(t, { includePrivate: true });
   assert.match(code, /^1\.[A-Za-z0-9_-]+$/); // URL에 그대로 넣을 수 있는 문자만
   const back = await decodeShare(code);
 
@@ -30,6 +30,24 @@ test('공유 링크: 왕복하면 내용이 같고 id는 새로 만든다', asyn
   assert.notEqual(back.days[0].id, t.days[0].id);
   assert.notEqual(back.days[0].items[0].id, t.days[0].items[0].id);
   assert.doesNotThrow(() => M.validateTrip(back));
+});
+
+test('공유 링크 기본값: 개인 기록을 원본에만 두고 기준 시각을 공유한다', async () => {
+  const t = sampleTrip();
+  t.inbox[0].memo = t.stays[0].memo = t.flights[0].memo = 'PRIVATE';
+  t.flights[0].bookingRef = 'BOOKING123';
+  t.budget = { expenses: [{ memo: 'BUDGET123' }] };
+  t.checks = [{ text: 'CHECK123' }];
+  const code = await encodeShare(t);
+  const compressed = Buffer.from(code.slice(2), 'base64url');
+  const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  const raw = JSON.parse(await new Response(stream).text());
+  assert.doesNotMatch(JSON.stringify(raw), /타코야키|PRIVATE|BOOKING123|BUDGET123|CHECK123/);
+  const back = await decodeShare(code);
+  assert.equal(back.sharedAt, raw.sharedAt);
+  assert.ok(Number.isFinite(Date.parse(back.sharedAt)));
+  assert.equal(t.flights[0].bookingRef, 'BOOKING123');
+  assert.equal((await decodeShare(await encodeShare(t, { includePrivate: true }))).flights[0].bookingRef, 'BOOKING123');
 });
 
 test('공유 링크: 남이 만든 id에 HTML이 있어도 새 id로 바뀐다', async () => {

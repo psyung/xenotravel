@@ -226,11 +226,15 @@ body[data-view="board"] .board-only { display: inline-flex; }
 .map-ctl button:hover { background: var(--hover); }
 .map-ctl button.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .pick-hint {
-  position: absolute; z-index: 900; bottom: 16px; left: 50%; transform: translateX(-50%); white-space: nowrap;
-  background: var(--ink); color: var(--paper); border-radius: 999px; padding: 8px 16px; font-weight: 600; font-size: 13px;
+  position: absolute; z-index: 900; bottom: 28px; left: 50%; transform: translateX(-50%);
+  width: max-content; max-width: calc(100% - 24px); text-align: center;
+  background: var(--paper); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 16px; padding: 4px 12px; font-weight: 600; font-size: 13px; box-shadow: var(--shadow);
 }
-.pick-hint button { border: 0; background: none; color: var(--accent); font-weight: 700; }
-.leaflet-container.picking { cursor: crosshair; }
+.pick-hint button { min-height: 44px; border: 0; background: none; color: var(--accent); font-weight: 700; }
+#pickPin { position: absolute; z-index: 700; left: 50%; top: 50%; transform: translate(-50%, -22px); pointer-events: none; color: var(--accent); }
+#pickPin .ic { display: block; width: 24px; height: 24px; filter: drop-shadow(0 0 2px var(--paper)); }
+.leaflet-container.picking { cursor: grab; }
 .pin-legend { position: absolute; z-index: 900; top: 12px; right: 12px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .pin-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 9px; background: var(--paper); border: 1px solid var(--line); box-shadow: var(--shadow); }
 .pin-seg button { border: 0; background: none; border-radius: 7px; padding: 4px 9px; font-size: 12px; font-weight: 600; color: var(--sub); }

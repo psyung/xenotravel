@@ -287,25 +287,22 @@ function fitTo(bounds) {
   else if (trip?.center) map.setView([trip.center.lat, trip.center.lng], 12);
 }
 
-map.on('click', async (e) => {
-  if (!ui.picking) return;
+$('#pickConfirm').addEventListener('click', () => {
+  if (!ui.picking || !trip || ui.readonly) return;
+  const latlng = map.wrapLatLng(map.getCenter());
   setPicking(false);
-  const { lat, lng } = e.latlng;
-  let place = { name: '선택한 위치', address: '', lat, lng };
-  try {
-    const r = await reversePlace(lat, lng);
-    if (r) place = { ...r, lat, lng };
-  } catch {
-    /* 주소를 못 찾아도 좌표로 추가 */
-  }
-  addPlace(place, { edit: true });
+  showLocationChoices(latlng);
 });
 
-// 우클릭(모바일은 길게 누르기) → 그 자리에 "이 위치 추가" 창
-map.on('contextmenu', async (e) => {
+map.on('contextmenu', (e) => {
+  if (!ui.picking) showLocationChoices(map.wrapLatLng(e.latlng));
+});
+
+async function showLocationChoices(latlng) {
   if (!trip || ui.readonly) return;
-  const { lat, lng } = e.latlng;
-  ui.ctxPlace = { name: '선택한 위치', address: '', lat, lng };
+  const { lat, lng } = latlng;
+  const place = { name: '선택한 위치', address: '', lat, lng };
+  ui.ctxPlace = place;
   const html = (name, address) =>
     `<div class="ctx">
       <div class="popup-name">${esc(name)}</div>
@@ -313,21 +310,21 @@ map.on('contextmenu', async (e) => {
       <button class="ctx-btn" data-ctx-add="item">+ 이 위치 추가 <small>(${esc(targetLabel())})</small></button>
       <button class="ctx-btn stay" data-ctx-add="stay">숙소로 추가 <small>(${esc(stayOptsLabel())})</small></button>
     </div>`;
-  const popup = L.popup({ minWidth: 220 }).setLatLng(e.latlng).setContent(html('위치 확인 중…', '')).openOn(map);
+  const popup = L.popup({ minWidth: 220 }).setLatLng(latlng).setContent(html(place.name, '')).openOn(map);
   try {
     const r = await reversePlace(lat, lng);
-    if (r && ui.ctxPlace?.lat === lat) {
+    if (r && ui.ctxPlace === place && popup.isOpen()) {
       ui.ctxPlace = { ...r, lat, lng };
-      if (popup.isOpen()) popup.setContent(html(r.name, r.address));
+      popup.setContent(html(r.name, r.address));
     }
   } catch {
-    if (popup.isOpen()) popup.setContent(html('선택한 위치', ''));
+    // 주소를 못 찾아도 좌표로 추가할 수 있다.
   }
-});
+}
 
 map.getContainer().addEventListener('click', (e) => {
   const kind = e.target.closest('[data-ctx-add]')?.dataset.ctxAdd;
-  if (!kind || !ui.ctxPlace) return;
+  if (!kind || !ui.ctxPlace || !trip || ui.readonly) return;
   map.closePopup();
   if (kind === 'stay') addStayFromOpts(ui.ctxPlace);
   else addPlace(ui.ctxPlace, { edit: true, listId: ui.target === STAY_TARGET ? lastListId() : null });
@@ -338,8 +335,13 @@ function setPicking(on) {
   ui.picking = on;
   map.getContainer().classList.toggle('picking', on);
   $('#pickHint').hidden = !on;
+  $('#pickPin').hidden = !on;
   $('#pickBtn').classList.toggle('active', on);
-  if (on) showTab('map');
+  $('#pickBtn').setAttribute('aria-pressed', String(on));
+  if (on) {
+    map.closePopup();
+    showTab('map');
+  }
 }
 
 /* ───────── 저장 ───────── */
@@ -1196,7 +1198,7 @@ $('#days').addEventListener('click', (e) => {
     ui.stayNights = null;
     renderTarget();
     searchEl.focus();
-    toast('숙소 이름을 검색하거나, 지도에서 우클릭해서 추가하세요');
+    toast('숙소 이름을 검색하거나 ‘지도에서 찍기’로 위치를 골라요');
   }
 });
 
@@ -1551,6 +1553,8 @@ function route() {
 /** 여행 열기 (화면 이동 없이 상태만) */
 function openTrip(t, { save = false } = {}) {
   leaveShared();
+  setPicking(false);
+  map.closePopup();
   trip = t;
   store.currentId = t.id;
   if (save) store.trips[t.id] = t;
@@ -1657,6 +1661,7 @@ function renderHome() {
         <button class="btn primary hn-go">일정 만들기</button>
       </form>
       <div class="dest-chips"><span>많이 가는 곳</span>${POPULAR.map((d) => `<button type="button" data-dest="${esc(d)}">${esc(d)}</button>`).join('')}</div>
+      ${all.length ? '' : '<button type="button" class="btn" data-home="sample">도쿄 3박 4일 샘플 열기</button>'}
     </section>
 
     ${
@@ -1720,6 +1725,27 @@ $('#page-home').addEventListener('click', (e) => {
     ui.homeCity = cityId;
     renderHome();
   } else if (e.target.closest('[data-home="import"]')) $('#importFile').click();
+  else if (e.target.closest('[data-home="sample"]')) {
+    const [startDate] = defaultDates();
+    const end = M.parseDate(startDate);
+    end.setUTCDate(end.getUTCDate() + 3);
+    const sample = M.createTrip({
+      title: '도쿄 3박 4일 샘플', destination: '도쿄', startDate,
+      endDate: end.toISOString().slice(0, 10), center: { lat: 35.6812, lng: 139.7671 },
+    });
+    const days = [
+      [['센소지', 35.7148, 139.7967], ['도쿄 스카이트리', 35.7101, 139.8107]],
+      [['메이지 신궁', 35.6764, 139.6993], ['시부야 스크램블 교차로', 35.6595, 139.7005]],
+      [['츠키지 장외시장', 35.6655, 139.7707], ['도쿄 타워', 35.6586, 139.7454]],
+      [['도쿄역', 35.6812, 139.7671]],
+    ];
+    days.forEach((places, i) => {
+      places.forEach(([name, lat, lng]) => M.addItem(sample, sample.days[i].id, { name, lat, lng }));
+    });
+    B.addExpense(sample, { amount: 1200, cat: 'food', day: 0, memo: '점심 식사 예시' });
+    C.addCheck(sample, 'pack', '보조 배터리 챙기기');
+    switchTrip(sample, { save: true });
+  }
 });
 $('#page-home').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -1865,6 +1891,7 @@ function showTab(tab) {
   if (prefs.page !== 'plan') showPage('plan');
   const layout = $('.layout');
   if (layout.dataset.tab === tab) return;
+  if (tab !== 'map') setPicking(false);
   layout.dataset.tab = tab;
   $$('.mtabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   if (tab === 'map') setTimeout(() => { map.invalidateSize(); renderMap({ fit: !ui.keepView }); ui.keepView = false; }, 0);
@@ -2074,8 +2101,10 @@ document.addEventListener('keydown', (e) => {
 const PAGES = ['home', 'plan', 'budget', 'check'];
 function showPage(page) {
   prefs.page = PAGES.includes(page) && (page === 'home' || trip) ? page : 'home';
+  if (prefs.page !== 'plan') setPicking(false);
   document.body.dataset.page = prefs.page;
   document.body.dataset.hasTrip = trip || store.currentId ? 'yes' : 'no';
+  $('#inAppBackup').hidden = prefs.page === 'home' || ui.readonly;
   for (const p of PAGES) $(`#page-${p}`).hidden = p !== prefs.page;
   $$('button.pg').forEach((b) => b.classList.toggle('on', b.dataset.page === prefs.page));
   if (prefs.page === 'home') {
@@ -2547,7 +2576,8 @@ $('#page-check').addEventListener('focusout', (e) => {
 const shareDialog = $('#shareDialog');
 const SHARE_PATH = /\/s\/([A-Za-z0-9]{8})\/?$/;
 const appBase = () => new URL('./', document.baseURI).href; // /s/<id> 페이지에서도 앱 루트
-ui.share = null; // { url, message }
+ui.share = null;
+let shareRequest = 0;
 
 async function createShareUrl(code) {
   try {
@@ -2555,6 +2585,7 @@ async function createShareUrl(code) {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ code }),
+      signal: AbortSignal.timeout(5000),
     });
     if (r.ok) return new URL((await r.json()).path, appBase()).href;
   } catch {
@@ -2563,23 +2594,29 @@ async function createShareUrl(code) {
   return shareUrl(appBase(), code);
 }
 
-async function openShare() {
-  if (!trip) return;
-  const { title, line } = shareSummary(trip);
+async function updateShare() {
+  const request = ++shareRequest;
+  const source = trip;
+  const includePrivate = !$('#shareExcludePrivate').checked;
+  const { title, line } = shareSummary(source);
   $('#shareTitle').textContent = title;
   $('#shareLine').textContent = line;
   $('#shareLink').textContent = '링크 만드는 중…';
-  $('#shareCopy').disabled = $('#shareNative').disabled = true;
-  $('#shareNative').hidden = !navigator.share;
+  for (const id of ['shareCopy', 'shareCopyLink', 'shareNative']) $(`#${id}`).disabled = true;
+  for (const id of ['shareLong', 'shareTooLong', 'shareFile']) $(`#${id}`).hidden = true;
   ui.share = null;
-  if (!shareDialog.open) shareDialog.showModal();
   try {
-    const url = await createShareUrl(await encodeShare(trip));
-    ui.share = { url, title, message: shareMessage(trip, url) };
+    const code = await encodeShare(source, { includePrivate });
+    const url = await createShareUrl(code);
+    if (request !== shareRequest || !shareDialog.open) return;
+    ui.share = { url, title, line, code, message: shareMessage({ ...source, title }, url) };
     $('#shareLink').textContent = url;
     $('#shareLong').hidden = !url.includes('#s=');
-    $('#shareCopy').disabled = $('#shareNative').disabled = false;
+    const tooLong = !$('#shareLong').hidden && url.length > 2000;
+    $('#shareTooLong').hidden = $('#shareFile').hidden = !tooLong;
+    for (const id of ['shareCopy', 'shareCopyLink', 'shareNative']) $(`#${id}`).disabled = false;
   } catch {
+    if (request !== shareRequest || !shareDialog.open) return;
     $('#shareLink').textContent = '';
     toast('이 브라우저에서는 공유 링크를 만들 수 없어요', 4000);
   }
@@ -2594,13 +2631,30 @@ async function copyText(text, done) {
   }
 }
 
-$('#shareBtn').addEventListener('click', openShare);
+$('#shareBtn').addEventListener('click', () => {
+  if (!trip) return;
+  $('#shareExcludePrivate').checked = true;
+  $('#shareNative').hidden = !navigator.share;
+  shareDialog.showModal();
+  updateShare();
+});
+$('#shareExcludePrivate').addEventListener('change', updateShare);
+$('#shareFile').addEventListener('click', async () => {
+  const current = ui.share;
+  if (!current) return;
+  try {
+    const snapshot = await decodeShare(current.code);
+    if (shareDialog.open && ui.share === current) downloadJson(snapshot);
+  } catch (err) {
+    toast(err.message);
+  }
+});
 $('#shareCopy').addEventListener('click', () => ui.share && copyText(ui.share.message, '복사했어요. 카톡이나 메신저에 붙여넣으세요'));
 $('#shareCopyLink').addEventListener('click', () => ui.share && copyText(ui.share.url, '링크만 복사했어요'));
 $('#shareNative').addEventListener('click', () => {
   if (!ui.share) return;
-  const { title, line } = shareSummary(trip);
-  navigator.share({ title: ui.share.title, text: `${title}\n${line}`, url: ui.share.url }).catch(() => {});
+  const { url, title, line } = ui.share;
+  navigator.share({ title, text: `${title}\n${line}`, url }).catch(() => {});
 });
 $('#shareClose').addEventListener('click', () => shareDialog.close());
 
@@ -2625,7 +2679,7 @@ function leaveShared() {
 async function shareCodeFromAddress() {
   const id = SHARE_PATH.exec(location.pathname)?.[1];
   if (!id) return shareCodeFromHash(location.hash);
-  const r = await fetch(new URL(`api/share/${id}`, appBase())).catch(() => null);
+  const r = await fetch(new URL(`api/share/${id}`, appBase()), { signal: AbortSignal.timeout(5000) }).catch(() => null);
   if (!r?.ok) throw new Error(r?.status === 404 ? '공유 링크를 찾을 수 없어요. 보낸 사람에게 다시 받아 주세요.' : '공유 일정을 불러오지 못했어요. 잠시 후 다시 열어 주세요.');
   return (await r.json()).code;
 }
@@ -2636,6 +2690,8 @@ async function openSharedFromAddress() {
     const code = await shareCodeFromAddress();
     if (!code) return false;
     const shared = await decodeShare(code);
+    setPicking(false);
+    map.closePopup();
     trip = shared;
     ui.openItem = ui.openStay = null;
     ui.day = 0;
@@ -2643,6 +2699,9 @@ async function openSharedFromAddress() {
     ui.target = null;
     setReadonly(true);
     $('#sharedTitle').textContent = shared.title;
+    $('#sharedAt').textContent = shared.sharedAt
+      ? ` · ${new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(shared.sharedAt))} 기준 사본`
+      : '';
     return true;
   } catch (err) {
     clearShareAddress();
@@ -2667,24 +2726,6 @@ window.addEventListener('hashchange', async () => {
     render({ fit: true });
     showPage('plan');
   } else route();
-});
-
-/* ───────── 시작 ───────── */
-applyView();
-applyTheme();
-trip = null; // 주소(#/trip/<id>)를 보고 연다
-Promise.all([
-  openSharedFromAddress(),
-  fetch('data/trends.json')
-    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
-    .then((data) => (trends = data))
-    .catch(() => toast('트렌드 정보를 불러오지 못했어요')),
-]).finally(() => {
-  if (ui.readonly) {
-    render({ fit: true });
-    showPage('plan');
-  } else route();
-  document.fonts?.ready.then(sizeDockCards); // 글꼴이 늦게 로드되면 다시 잰다
 });
 
 /* ───────── 장소 보관함 (아래 고정 영역) / 날짜 옮기기 ───────── */
@@ -2859,7 +2900,13 @@ $('#bulkFile').addEventListener('change', async (e) => {
   e.target.value = '';
   if (!f) return;
   if (f.size > 5 * 1024 * 1024) return toast('파일이 너무 커요 (5MB까지)');
-  const text = await f.text();
+  let text;
+  try {
+    text = await f.text();
+  } catch {
+    return toast('파일을 읽지 못했어요. 파일을 다시 선택해 주세요');
+  }
+  if (!bulkDialog.open) return;
   $('#bulkText').value = text.length > 20000 ? `${f.name} (${Math.round(f.size / 1024)}KB)를 읽었어요` : text;
   readBulk(text);
 });
@@ -2902,3 +2949,25 @@ addEventListener('online', () => {
 });
 addEventListener('offline', syncOnline);
 syncOnline();
+
+/* ───────── 시작 ───────── */
+$('#inAppBar').hidden = !/KAKAOTALK|Instagram|FBAN|FBAV|Line\//i.test(navigator.userAgent);
+$('#inAppBackup').addEventListener('click', () => {
+  if (trip && !ui.readonly) downloadJson(trip);
+});
+applyView();
+applyTheme();
+trip = null; // 주소(#/trip/<id>)를 보고 연다
+if (await openSharedFromAddress()) {
+  render({ fit: true });
+  showPage('plan');
+} else route();
+$('#appShell').hidden = true;
+document.fonts?.ready.then(sizeDockCards); // 글꼴이 늦게 로드되면 다시 잰다
+fetch('data/trends.json')
+  .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
+  .then((data) => {
+    trends = data;
+    if (prefs.page === 'home') renderHome();
+  })
+  .catch(() => {});

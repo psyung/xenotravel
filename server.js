@@ -118,6 +118,7 @@ async function sharePage(req, res, id) {
   html = html
     .replace(/<title>.*?<\/title>/, `<title>${esc(title)} · XenoTravel</title>`)
     .replace(/<meta name="description"[^>]*>/, `<meta name="description" content="${esc(desc)}">`)
+    .replace(/^[ \t]*<meta property="og:[^"]+"[^>]*>\r?\n/gm, '')
     .replace('<meta charset="utf-8">', `<meta charset="utf-8">\n  ${meta}`);
   res.writeHead(share ? 200 : 404, { 'content-type': TYPES['.html'], 'cache-control': 'no-cache' });
   res.end(html);
