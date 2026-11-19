@@ -118,6 +118,7 @@ export function parseCsv(text) {
       cell = '';
     } else cell += ch;
   }
+  if (q) throw new SyntaxError('Unclosed CSV field');
   if (cell || row.length) {
     row.push(cell);
     rows.push(row);
@@ -130,6 +131,7 @@ export function parseLocationList(text) {
   const s = String(text ?? '').replace(/^﻿/, '').trim();
   if (!s) return out;
   const seen = new Set();
+  const seenNames = new Set();
   const addPlace = (p) => {
     const key = `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`;
     if (seen.has(key)) return;
@@ -138,7 +140,8 @@ export function parseLocationList(text) {
   };
   const addName = (name, memo = '') => {
     const n = String(name ?? '').trim();
-    if (!n || out.names.some((x) => x.name === n)) return;
+    if (!n || seenNames.has(n)) return;
+    seenNames.add(n);
     out.names.push({ name: n, memo });
   };
   const take = (r, hint = '', memo = '') => {
@@ -151,13 +154,14 @@ export function parseLocationList(text) {
   };
 
   // 1) GeoJSON (구글 테이크아웃 "Saved Places.json")
-  if (s.startsWith('{')) {
+  if (s.startsWith('{') || s.startsWith('[')) {
     try {
       const j = JSON.parse(s);
       if (Array.isArray(j.features)) {
         for (const f of j.features) {
           const p = f?.properties ?? {};
-          const [lng, lat] = f?.geometry?.coordinates ?? [];
+          const coords = f?.geometry?.coordinates;
+          const [lng, lat] = Array.isArray(coords) ? coords : [];
           const name = p.Title || p.title || p.location?.name || p.name || '';
           const c = coord(lat, lng, name);
           if (c && (c.lat !== 0 || c.lng !== 0)) addPlace({ ...c, address: p.location?.address || p.address || '' });
@@ -170,15 +174,24 @@ export function parseLocationList(text) {
         }
         return out;
       }
-    } catch {
-      /* JSON이 아니면 아래에서 글로 읽는다 */
+    } catch (err) {
+      if (!(err instanceof SyntaxError)) throw err;
+      return { ...out, error: 'JSON 형식을 읽을 수 없어요. 파일을 다시 내보내 주세요.' };
     }
+    return { ...out, error: 'Google Takeout 저장 장소 JSON 또는 GeoJSON 파일을 선택해 주세요.' };
   }
 
   // 2) CSV (테이크아웃 저장 목록: 첫 줄이 Title,Note,URL …)
   const firstLine = s.split(/\r?\n/, 1)[0];
   if (/^\s*"?title"?\s*,/i.test(firstLine)) {
-    const [head, ...rows] = parseCsv(s);
+    let table;
+    try {
+      table = parseCsv(s);
+    } catch (err) {
+      if (!(err instanceof SyntaxError)) throw err;
+      return { ...out, error: 'CSV 형식을 읽을 수 없어요. 닫히지 않은 따옴표를 확인해 주세요.' };
+    }
+    const [head, ...rows] = table;
     const col = (re) => head.findIndex((h) => re.test(h.trim()));
     const ti = col(/^title$/i);
     const ni = col(/^note$/i);

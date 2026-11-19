@@ -35,35 +35,59 @@ let state = null; // { kind: 'range'|'date', anchor, onApply, minNights, start, 
 function ensurePop() {
   if (pop) return pop;
   pop = document.createElement('div');
+  pop.id = 'datePicker';
   pop.className = 'dp-pop';
   pop.hidden = true;
   pop.setAttribute('role', 'dialog');
+  pop.setAttribute('aria-labelledby', 'datePickerTitle');
   pop.innerHTML = `<div class="dp-scrim" data-dp-close></div>
     <div class="dp-panel" tabindex="-1">
       <div class="dp-grip" aria-hidden="true"></div>
-      <div class="dp-head"><strong class="dp-title"></strong><span class="dp-sum"></span></div>
+      <div class="dp-head">
+        <div><h2 class="dp-title" id="datePickerTitle"></h2><p class="dp-sum" role="status"></p></div>
+        <button type="button" class="dp-dismiss" data-dp-close aria-label="달력 닫기">×</button>
+      </div>
       <div class="dp-cal"></div>
-      <p class="dp-err" hidden></p>
+      <p class="dp-err" role="status" hidden></p>
       <div class="dp-foot">
         <button type="button" class="dp-btn ghost" data-dp-close>취소</button>
         <button type="button" class="dp-btn primary" data-dp-apply>적용</button>
       </div>
+      <span class="dp-focus-end" tabindex="0"></span>
     </div>`;
   document.body.append(pop);
+  $q('.dp-focus-end').addEventListener('focus', () => $q('.dp-dismiss').focus());
   pop.addEventListener('click', (e) => {
     if (e.target.closest('[data-dp-close]')) close();
     else if (e.target.closest('[data-dp-apply]')) apply();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && state) {
+    if (!state) return;
+    if (e.key === 'Escape') {
       e.preventDefault(); // 항공편 창(<dialog>)까지 닫히지 않게
       e.stopPropagation();
       close();
+    } else if (e.key === 'Tab' && mobile()) {
+      const active = document.activeElement;
+      const last = $q('[data-dp-apply]:not(:disabled)')?.offsetWidth
+        ? $q('[data-dp-apply]')
+        : state.kind === 'range' ? $q('.dp-foot [data-dp-close]') : $q('.dp-c');
+      const first = $q('.dp-dismiss');
+      if (!pop.contains(active)) {
+        e.preventDefault();
+        first.focus();
+      } else if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      }
     }
   }, true);
   document.addEventListener('pointerdown', (e) => {
     if (state && !mobile() && !pop.contains(e.target) && !state.anchor.contains(e.target)) close();
   });
+  document.addEventListener('close', (e) => {
+    if (state && e.target === pop.parentElement && !e.target.open) close(false);
+  }, true);
   addEventListener('resize', () => state && place());
   return pop;
 }
@@ -81,12 +105,14 @@ function calendarHtml(kind, months) {
 function open(opts) {
   ensurePop();
   if (state?.anchor === opts.anchor) return close();
+  if (state) close(false);
   state = { ...opts };
+  opts.anchor.setAttribute('aria-expanded', 'true');
   const months = opts.kind === 'range' && !mobile() ? 2 : 1;
   $q('.dp-title').textContent = opts.title;
   $q('.dp-cal').innerHTML = calendarHtml(opts.kind, months);
   const cal = $q('.dp-c');
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Intl.DateTimeFormat('sv-SE').format(new Date());
   if (opts.min) cal.setAttribute('min', opts.min);
   if (opts.max) cal.setAttribute('max', opts.max);
   if (opts.kind === 'range') {
@@ -115,18 +141,17 @@ function open(opts) {
   const host = opts.anchor.closest('dialog[open]') ?? document.body;
   if (pop.parentNode !== host) host.append(pop);
   pop.hidden = false;
-  pop.classList.toggle('sheet', mobile());
   update();
   place();
   // 달력(웹 컴포넌트)이 그려진 뒤 높이가 정해지므로 한 번 더 자리를 잡는다.
   customElements.whenDefined('calendar-month').then(() =>
     requestAnimationFrame(() => {
-      if (!state) return;
+      if (cal !== $q('.dp-c')) return;
       place();
       pop.classList.add('show');
+      cal.focus();
     }),
   );
-  setTimeout(() => cal.focus?.(), 50);
 }
 
 function $q(s) {
@@ -145,13 +170,16 @@ function update() {
     err.textContent = short ? `${state.minNights}박 이상 골라 주세요` : '';
     $q('[data-dp-apply]').disabled = !state.end || short;
   } else {
-    $q('.dp-sum').textContent = state.value ? label(state.value) : '';
+    $q('.dp-sum').textContent = state.value ? label(state.value) : '날짜를 골라 주세요';
   }
 }
 
 /** 넓은 화면: 누른 칸 아래(모자라면 위)에 띄운다. 좁은 화면: 아래에서 올라오는 시트. */
 function place() {
   const panel = $q('.dp-panel');
+  pop.classList.toggle('sheet', mobile());
+  if (mobile()) pop.setAttribute('aria-modal', 'true');
+  else pop.removeAttribute('aria-modal');
   panel.style.left = panel.style.top = '';
   if (mobile()) return;
   const r = state.anchor.getBoundingClientRect();
@@ -159,7 +187,7 @@ function place() {
   const h = panel.offsetHeight;
   const left = Math.max(12, Math.min(r.left, innerWidth - w - 12));
   const below = r.bottom + 8;
-  const top = below + h > innerHeight - 12 && r.top - h - 8 > 12 ? r.top - h - 8 : below;
+  const top = below + h > innerHeight - 12 ? Math.min(r.top - h - 8, innerHeight - h - 12) : below;
   panel.style.left = `${left}px`;
   panel.style.top = `${Math.max(12, top)}px`;
 }
@@ -172,14 +200,17 @@ function apply() {
   s.onApply(s);
 }
 
-function close() {
+function close(restoreFocus = true) {
   if (!state) return;
   const anchor = state.anchor;
+  anchor.setAttribute('aria-expanded', 'false');
+  if (restoreFocus && (document.activeElement === document.body || pop.contains(document.activeElement))) {
+    anchor.focus({ preventScroll: true });
+  }
   state = null;
   pop.classList.remove('show');
   pop.hidden = true;
   $q('.dp-cal').innerHTML = '';
-  if (document.activeElement === document.body || pop.contains(document.activeElement)) anchor.focus?.({ preventScroll: true });
 }
 
 /* ───────── input 감싸기 ───────── */
@@ -206,8 +237,9 @@ function fieldButton(input, placeholder) {
   btn.type = 'button';
   btn.className = 'dp-field';
   btn.setAttribute('aria-haspopup', 'dialog');
-  const aria = input.getAttribute('aria-label');
-  if (aria) btn.setAttribute('aria-label', aria);
+  btn.setAttribute('aria-controls', 'datePicker');
+  btn.setAttribute('aria-expanded', 'false');
+  btn.dataset.label = input.getAttribute('aria-label') || input.closest('label')?.firstChild?.textContent.trim() || placeholder;
   btn.innerHTML = `${ICON_CAL}<span class="dp-val"></span>`;
   btn.dataset.placeholder = placeholder;
   input.classList.add('dp-native');
@@ -225,6 +257,7 @@ function shortLabel(date) {
 function paint(btn, value, disabled, short = false) {
   const v = btn.querySelector('.dp-val');
   v.textContent = value ? (short ? shortLabel(value) : label(value)) : btn.dataset.placeholder;
+  btn.setAttribute('aria-label', `${btn.dataset.label} · ${value ? label(value) : '날짜 선택'}`);
   btn.classList.toggle('empty', !value);
   btn.disabled = disabled;
 }

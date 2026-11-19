@@ -2,7 +2,7 @@ import * as M from './lib/model.js';
 import { parseLocationInput, parseLocationList } from './lib/links.js';
 import { searchPlaces, searchPlacesKo, HANGUL, reversePlace, geocodeDestination } from './lib/geo.js';
 import { loadStore, saveStore } from './lib/store.js';
-import { exportXlsx, downloadJson } from './lib/export.js';
+import { exportXlsx, downloadJson, downloadCalendar } from './lib/export.js';
 import * as T from './lib/trends.js';
 import * as B from './lib/budget.js';
 import * as C from './lib/checklist.js';
@@ -331,7 +331,15 @@ map.getContainer().addEventListener('click', (e) => {
   ui.ctxPlace = null;
 });
 
+const pickViewport = matchMedia('(max-width: 900px)');
+function syncPickNavigation() {
+  const locked = Boolean(ui.picking && pickViewport.matches);
+  for (const el of $$('.mtabs, #dayTabs, .pagebar, .map-ctl')) el.inert = locked;
+}
+pickViewport.addEventListener('change', syncPickNavigation);
+
 function setPicking(on) {
+  const restoreFocus = !on && $('#pickHint').contains(document.activeElement);
   ui.picking = on;
   map.getContainer().classList.toggle('picking', on);
   $('#pickHint').hidden = !on;
@@ -341,7 +349,10 @@ function setPicking(on) {
   if (on) {
     map.closePopup();
     showTab('map');
+    $('#pickConfirm').focus({ preventScroll: true });
   }
+  syncPickNavigation();
+  if (restoreFocus) $(pickViewport.matches ? '.mtabs button[data-tab="map"]' : '#pickBtn').focus({ preventScroll: true });
 }
 
 /* ───────── 저장 ───────── */
@@ -387,6 +398,7 @@ function render({ fit = false } = {}) {
   renderDays();
   renderMap({ fit });
   renderBadge();
+  renderBackupReminder();
   if (prefs.page === 'budget') renderBudget();
   if (prefs.page === 'check') renderChecks();
   if (prefs.page === 'home') renderHome();
@@ -1498,9 +1510,33 @@ $('#exportPdf').addEventListener('click', openPrint);
 $('.menu-pop').addEventListener('click', (e) => {
   const action = e.target.closest('[data-menu]')?.dataset.menu;
   $('.menu').open = false;
-  if (action === 'backup') downloadJson(trip);
+  if (action === 'backup') saveTripBackup();
+  else if (action === 'calendar' && !downloadCalendar(trip)) toast('캘린더에 내보낼 일정이 없어요');
   else if (action === 'import') $('#importFile').click();
   else if (action === 'delete') deleteTrip(trip.id);
+});
+
+const BACKUP_INTERVAL = 3 * 24 * 60 * 60 * 1000;
+function renderBackupReminder() {
+  const last = prefs.backups?.[trip?.id];
+  const count = trip ? trip.days.reduce((n, day) => n + day.items.length, trip.expenses?.length ?? 0) : 0;
+  const due = Boolean(trip && !ui.readonly && prefs.page !== 'home' &&
+    (last ? Date.now() - last >= BACKUP_INTERVAL : count >= 10 || Date.now() - Date.parse(trip.createdAt) >= BACKUP_INTERVAL));
+  $('#backupDot').hidden = !due;
+  $('.menu summary').setAttribute('aria-label', due ? '더보기 · 백업 파일을 저장할 때예요' : '더보기');
+}
+
+function saveTripBackup() {
+  if (!trip) return;
+  downloadJson(trip);
+  if (ui.readonly) return;
+  prefs.backups ??= {};
+  prefs.backups[trip.id] = Date.now();
+  savePrefs();
+  renderBackupReminder();
+}
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) renderBackupReminder();
 });
 
 $('#importFile').addEventListener('change', async (e) => {
@@ -2091,6 +2127,10 @@ $('#heroFlight').addEventListener('click', (e) => {
 
 // ←→ 날짜 바꾸기 (입력 중이 아닐 때)
 document.addEventListener('keydown', (e) => {
+  if (ui.picking) {
+    if (e.key === 'Escape') setPicking(false);
+    return;
+  }
   if (!trip || prefs.page !== 'plan' || prefs.view === 'board' || e.altKey || e.ctrlKey || e.metaKey) return;
   if (e.target.closest('input, textarea, select, [contenteditable]') || document.querySelector('dialog[open]')) return;
   if (e.key === 'ArrowLeft') selectDay(ui.day - 1);
@@ -2105,6 +2145,7 @@ function showPage(page) {
   document.body.dataset.page = prefs.page;
   document.body.dataset.hasTrip = trip || store.currentId ? 'yes' : 'no';
   $('#inAppBackup').hidden = prefs.page === 'home' || ui.readonly;
+  renderBackupReminder();
   for (const p of PAGES) $(`#page-${p}`).hidden = p !== prefs.page;
   $$('button.pg').forEach((b) => b.classList.toggle('on', b.dataset.page === prefs.page));
   if (prefs.page === 'home') {
@@ -2699,9 +2740,12 @@ async function openSharedFromAddress() {
     ui.target = null;
     setReadonly(true);
     $('#sharedTitle').textContent = shared.title;
-    $('#sharedAt').textContent = shared.sharedAt
-      ? ` · ${new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(shared.sharedAt))} 기준 사본`
-      : '';
+    $('#sharedAt').hidden = !shared.sharedAt;
+    if (shared.sharedAt) {
+      const time = $('#sharedAt time');
+      time.dateTime = shared.sharedAt;
+      time.textContent = new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(shared.sharedAt));
+    }
     return true;
   } catch (err) {
     clearShareAddress();
@@ -2712,9 +2756,9 @@ async function openSharedFromAddress() {
 
 $('#sharedSave').addEventListener('click', () => {
   // 받은 일정은 새 id로 사본을 만들어 내 여행에 넣는다 (보낸 사람 일정과 섞이지 않게).
-  const copy = { ...trip, id: M.uid(), createdAt: new Date().toISOString() };
+  const copy = { ...trip, title: `${trip.title} (공유 사본)`, id: M.uid(), createdAt: new Date().toISOString() };
   switchTrip(copy, { save: true });
-  toast(`"${copy.title}"을(를) 내 여행에 저장했어요. 이제 고칠 수 있어요`, 3000);
+  toast('내 여행으로 저장했어요. 이제 일정을 수정하거나 다시 공유할 수 있어요', 4000);
 });
 $('#sharedLeave').addEventListener('click', () => {
   leaveShared();
@@ -2786,6 +2830,7 @@ closeOnBackdrop(shareDialog);
 const bulkDialog = $('#bulkDialog');
 closeOnBackdrop(bulkDialog);
 ui.bulk = { rows: [], shortLinks: 0, unsupported: 0, finding: false };
+let bulkInputRevision = 0;
 
 function openBulk(text = '') {
   if (!trip || ui.readonly) return;
@@ -2797,21 +2842,39 @@ function openBulk(text = '') {
   if (!text) $('#bulkText').focus();
 }
 
-function readBulk(text) {
+const normalizePlaceName = (name) => String(name ?? '').normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+function bulkDuplicateCheck() {
+  const existing = [...allLists().flatMap((list) => list.items), ...(trip.stays ?? [])];
+  const names = new Set(existing.map((item) => normalizePlaceName(item.name)).filter(Boolean));
+  const hasCoordinates = ({ lat, lng }) => Number.isFinite(lat) && Number.isFinite(lng);
+  const positioned = existing.filter(hasCoordinates);
+  return (place) => names.has(normalizePlaceName(place.name)) ||
+    (hasCoordinates(place) && positioned.some((item) => M.distanceKm(place, item) <= 0.05));
+}
+
+function readBulk(text, fileName = '') {
   const r = parseLocationList(text);
-  const have = new Set(allLists().flatMap((l) => l.items).map((it) => `${(+it.lat).toFixed(5)},${(+it.lng).toFixed(5)}`));
+  const count = r.places.length + r.names.length;
+  const fileFormat = /\.(?:geo)?json$/i.test(fileName) ? /^[\s\uFEFF]*[{\[]/ :
+    /\.csv$/i.test(fileName) ? /^[\s\uFEFF]*"?title"?\s*,/i : null;
+  const error = fileFormat && !fileFormat.test(text)
+    ? '파일 형식을 읽을 수 없어요. Google Takeout의 저장 장소 JSON 또는 Title 열이 있는 CSV를 선택해 주세요.'
+    : r.error;
+  const isDuplicate = bulkDuplicateCheck();
   ui.bulk = {
-    rows: [
+    rows: error ? [] : [
       ...r.places.map((p) => {
-        const dup = have.has(`${p.lat.toFixed(5)},${p.lng.toFixed(5)}`);
+        const dup = isDuplicate(p);
         return { ...p, kind: 'place', on: !dup, dup };
       }),
-      ...r.names.map((n) => ({ ...n, kind: 'name', on: false })),
+      ...r.names.map((n) => ({ ...n, kind: 'name', on: false, dup: isDuplicate(n) })),
     ],
     shortLinks: r.shortLinks,
     unsupported: r.unsupported,
     finding: false,
   };
+  $('#bulkStatus').textContent = error || (count > 200 ? `${count}곳을 찾았어요. 한 번에 200곳 이하로 나눠 담는 것을 권장해요.`
+    : text.trim() && !count && !r.shortLinks && !r.unsupported ? '읽을 수 있는 장소가 없어요. 지도 링크나 내보내기 파일의 내용을 확인해 주세요.' : '');
   renderBulk();
 }
 
@@ -2831,11 +2894,12 @@ function renderBulk() {
   $('#bulkList').innerHTML = rows
     .map((x, i) => {
       if (x.kind === 'name') {
-        return `<li class="bulk-row name"><span class="bulk-check"></span><span class="bulk-text"><b>${esc(x.name)}</b><small>${x.missing ? '찾지 못했어요. 검색창에서 직접 찾아 주세요' : '위치가 없어요. "이름으로 찾기"를 누르면 찾아요'}</small></span></li>`;
+        return `<li class="bulk-row name"><span class="bulk-check"></span><span class="bulk-text"><b>${esc(x.name)}</b>${x.dup ? ' <span class="bulk-duplicate">이미 담긴 장소</span>' : ''}<small>${x.missing ? '찾지 못했어요. 검색창에서 직접 찾아 주세요' : '위치가 없어요. "이름으로 찾기"를 누르면 찾아요'}</small></span></li>`;
       }
       const sub = x.found ? `찾은 곳: ${x.address || `${x.lat.toFixed(4)}, ${x.lng.toFixed(4)}`}` : x.address || `${x.lat.toFixed(5)}, ${x.lng.toFixed(5)}`;
-      return `<li class="bulk-row${x.found ? ' found' : ''}"><label class="bulk-check"><input type="checkbox" data-bulk-i="${i}"${x.on ? ' checked' : ''}></label>
-        <span class="bulk-text"><b>${esc(x.name || '이름 없는 장소 (담은 뒤 주소로 이름을 찾아요)')}</b><small>${esc(sub)}${x.dup ? ' · 이미 일정에 있어요' : ''}${x.memo ? ` · ${esc(x.memo)}` : ''}</small></span></li>`;
+      const name = x.name || '이름 없는 장소';
+      return `<li class="bulk-row${x.found ? ' found' : ''}"><label class="bulk-check"><input type="checkbox" data-bulk-i="${i}" aria-label="${esc(name)}${x.dup ? ' · 이미 담긴 장소' : ''}"${x.on ? ' checked' : ''}></label>
+        <span class="bulk-text"><b>${esc(name)}</b>${x.dup ? ' <span class="bulk-duplicate">이미 담긴 장소</span>' : ''}<small>${esc(sub)}${x.memo ? ` · ${esc(x.memo)}` : ''}</small></span></li>`;
     })
     .join('');
   const btn = $('#bulkAdd');
@@ -2851,16 +2915,22 @@ async function findBulkNames() {
   renderBulk();
   const c = trip.center ?? map.getCenter();
   const near = { lat: c.lat, lng: c.lng, zoom: 12 };
+  const isDuplicate = bulkDuplicateCheck();
+  const revision = bulkInputRevision;
   for (const row of b.rows.filter((x) => x.kind === 'name' && !x.missing)) {
     try {
       const hits = HANGUL.test(row.name) ? await searchPlacesKo(row.name, near) : await searchPlaces(row.name, near);
       const hit = hits[0];
-      if (hit) Object.assign(row, { kind: 'place', lat: hit.lat, lng: hit.lng, address: hit.address, found: true, on: true });
+      if (ui.bulk !== b || !bulkDialog.open || revision !== bulkInputRevision) return;
+      if (hit) {
+        const dup = isDuplicate({ ...row, lat: hit.lat, lng: hit.lng });
+        Object.assign(row, { kind: 'place', lat: hit.lat, lng: hit.lng, address: hit.address, found: true, dup, on: !dup });
+      }
       else row.missing = true;
     } catch {
       row.missing = true;
     }
-    if (ui.bulk !== b) return; // 그사이 내용을 바꿈
+    if (ui.bulk !== b || !bulkDialog.open || revision !== bulkInputRevision) return;
     renderBulk();
   }
   b.finding = false;
@@ -2894,21 +2964,36 @@ async function addBulk() {
 $('#bulkBtn').addEventListener('click', () => openBulk());
 $('#bulkClose').addEventListener('click', () => bulkDialog.close());
 $('#bulkAdd').addEventListener('click', addBulk);
-$('#bulkText').addEventListener('input', debounce((e) => readBulk(e.target.value), 250));
+const readBulkInput = debounce((text, revision) => {
+  if (bulkDialog.open && revision === bulkInputRevision) readBulk(text);
+}, 250);
+$('#bulkText').addEventListener('input', (e) => {
+  $('#bulkAdd').disabled = true;
+  readBulkInput(e.target.value, ++bulkInputRevision);
+});
+bulkDialog.addEventListener('close', () => { bulkInputRevision++; });
 $('#bulkFile').addEventListener('change', async (e) => {
   const f = e.target.files?.[0];
   e.target.value = '';
   if (!f) return;
-  if (f.size > 5 * 1024 * 1024) return toast('파일이 너무 커요 (5MB까지)');
+  const revision = ++bulkInputRevision;
+  readBulk('');
+  $('#bulkText').value = '';
+  if (f.size > 5 * 1024 * 1024) {
+    $('#bulkStatus').textContent = '파일이 5MB를 넘어요. 더 작은 목록을 선택하거나 여러 파일로 나눠 주세요.';
+    return;
+  }
+  $('#bulkStatus').textContent = '파일을 읽는 중이에요…';
   let text;
   try {
     text = await f.text();
   } catch {
-    return toast('파일을 읽지 못했어요. 파일을 다시 선택해 주세요');
+    if (bulkDialog.open && revision === bulkInputRevision) $('#bulkStatus').textContent = '파일을 읽지 못했어요. 다시 선택해 주세요.';
+    return;
   }
-  if (!bulkDialog.open) return;
+  if (!bulkDialog.open || revision !== bulkInputRevision) return;
   $('#bulkText').value = text.length > 20000 ? `${f.name} (${Math.round(f.size / 1024)}KB)를 읽었어요` : text;
-  readBulk(text);
+  readBulk(text, f.name);
 });
 bulkDialog.addEventListener('click', (e) => {
   if (e.target.closest('[data-bulk="find"]')) findBulkNames();
@@ -2951,9 +3036,15 @@ addEventListener('offline', syncOnline);
 syncOnline();
 
 /* ───────── 시작 ───────── */
-$('#inAppBar').hidden = !/KAKAOTALK|Instagram|FBAN|FBAV|Line\//i.test(navigator.userAgent);
-$('#inAppBackup').addEventListener('click', () => {
-  if (trip && !ui.readonly) downloadJson(trip);
+if (/KAKAOTALK|Instagram|FBAN|FBAV|Line\//i.test(navigator.userAgent)) {
+  $('#inAppBar').hidden = false;
+  $('#inAppStatus').textContent = $('#inAppBar span').textContent;
+}
+$('#inAppBackup').addEventListener('click', saveTripBackup);
+$('#inAppClose').addEventListener('click', () => {
+  $('#inAppBar').hidden = true;
+  $('#inAppStatus').textContent = '';
+  $('.menu summary').focus();
 });
 applyView();
 applyTheme();

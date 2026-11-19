@@ -28,10 +28,64 @@ export function exportXlsx(trip) {
 }
 
 export function downloadJson(trip) {
-  const blob = new Blob([JSON.stringify(trip, null, 2)], { type: 'application/json' });
+  download(JSON.stringify(trip, null, 2), 'application/json', `${safeFileName(trip.title)}.xenotravel.json`);
+}
+
+function download(content, type, filename) {
+  const blob = new Blob([content], { type });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `${safeFileName(trip.title)}.xenotravel.json`;
+  a.download = filename;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+const calendarEscape = (value) => String(value ?? '').replace(/\\/g, '\\\\')
+  .replace(/\r\n|\r|\n/g, '\\n').replace(/[,;]/g, '\\$&');
+
+function foldCalendarLine(line) {
+  const encoder = new TextEncoder();
+  let folded = '';
+  let bytes = 0;
+  for (const char of line) {
+    const size = encoder.encode(char).length;
+    if (bytes + size > 75) {
+      folded += '\r\n ';
+      bytes = 1;
+    }
+    folded += char;
+    bytes += size;
+  }
+  return folded;
+}
+
+export function tripToCalendar(trip) {
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+  const events = trip.days.flatMap(({ date, items }) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return [];
+    const day = date.replaceAll('-', '');
+    return items.map((item) => {
+      const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(item.time) ? item.time.replace(':', '') : '';
+      return [
+        'BEGIN:VEVENT',
+        `UID:${calendarEscape(trip.id)}-${calendarEscape(item.id)}@xenotravel`,
+        `DTSTAMP:${stamp}`,
+        time ? `DTSTART:${day}T${time}00` : `DTSTART;VALUE=DATE:${day}`,
+        `SUMMARY:${calendarEscape(item.name || trip.title)}`,
+        ...(item.address ? [`LOCATION:${calendarEscape(item.address)}`] : []),
+        ...(item.memo ? [`DESCRIPTION:${calendarEscape(item.memo)}`] : []),
+        'END:VEVENT',
+      ];
+    });
+  });
+  if (!events.length) return '';
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//XenoTravel//Trip Planner//KO',
+    ...events.flat(), 'END:VCALENDAR', ''].map(foldCalendarLine).join('\r\n');
+}
+
+export function downloadCalendar(trip) {
+  const calendar = tripToCalendar(trip);
+  if (!calendar) return false;
+  download(calendar, 'text/calendar;charset=utf-8', `${safeFileName(trip.title)}.ics`);
+  return true;
 }

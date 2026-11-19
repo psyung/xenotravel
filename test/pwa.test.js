@@ -35,3 +35,14 @@ test('manifest: 설치에 필요한 값', () => {
   assert.ok(m.icons.some((i) => i.sizes === '192x192') && m.icons.some((i) => i.sizes === '512x512'));
   for (const i of m.icons) readFileSync(new URL(i.src, pub));
 });
+
+test('앱 셸과 본문이 하나의 main을 공유하고 설치 리소스가 연결된다', () => {
+  const html = readFileSync(new URL('index.html', pub), 'utf8');
+  assert.equal([...html.matchAll(/<main\b/gi)].length, 1);
+  for (const rel of ['manifest', 'icon', 'apple-touch-icon']) {
+    const href = html.match(new RegExp(`<link\\b[^>]*\\brel="${rel}"[^>]*\\bhref="([^"]+)"`))?.[1];
+    assert.ok(href, rel);
+    assert.ok(list('APP_FILES').includes(href));
+    readFileSync(new URL(href, pub));
+  }
+});
