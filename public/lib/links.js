@@ -1,5 +1,7 @@
 // 붙여넣은 지도 링크나 "위도, 경도" 텍스트에서 위치를 읽는다.
 // 반환: null(링크/좌표 아님) | {lat, lng, name} | {query} (좌표 없이 장소 이름만 있음) | {error}
+//   error: 'short-link'(짧은 링크) | 'unsupported'(위치를 못 읽는 링크) | 'range'(좌표 범위 밖)
+import { t } from './i18n.js';
 
 const NUM = '(-?\\d{1,3}(?:\\.\\d+)?)';
 const COORD_RE = new RegExp(`^${NUM}\\s*,\\s*${NUM}$`);
@@ -50,7 +52,7 @@ export function parseLocationInput(text) {
   if (!s) return null;
 
   const plain = COORD_RE.exec(s);
-  if (plain) return coord(plain[1], plain[2]) ?? { error: 'unsupported' };
+  if (plain) return coord(plain[1], plain[2]) ?? { error: 'range' }; // 위도 ±90, 경도 ±180 밖
 
   if (!/^https?:\/\//i.test(s)) return null;
   let url;
@@ -176,9 +178,9 @@ export function parseLocationList(text) {
       }
     } catch (err) {
       if (!(err instanceof SyntaxError)) throw err;
-      return { ...out, error: 'JSON 형식을 읽을 수 없어요. 파일을 다시 내보내 주세요.' };
+      return { ...out, error: t('JSON 형식을 읽을 수 없어요. 파일을 다시 내보내 주세요.') };
     }
-    return { ...out, error: 'Google Takeout 저장 장소 JSON 또는 GeoJSON 파일을 선택해 주세요.' };
+    return { ...out, error: t('Google Takeout 저장 장소 JSON 또는 GeoJSON 파일을 선택해 주세요.') };
   }
 
   // 2) CSV (테이크아웃 저장 목록: 첫 줄이 Title,Note,URL …)
@@ -189,7 +191,7 @@ export function parseLocationList(text) {
       table = parseCsv(s);
     } catch (err) {
       if (!(err instanceof SyntaxError)) throw err;
-      return { ...out, error: 'CSV 형식을 읽을 수 없어요. 닫히지 않은 따옴표를 확인해 주세요.' };
+      return { ...out, error: t('CSV 형식을 읽을 수 없어요. 닫히지 않은 따옴표를 확인해 주세요.') };
     }
     const [head, ...rows] = table;
     const col = (re) => head.findIndex((h) => re.test(h.trim()));

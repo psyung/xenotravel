@@ -1,17 +1,13 @@
 // 공유 링크: 여행 전체를 압축해서 URL의 # 뒤에 담는다. 서버에 아무것도 저장하지 않는다.
 // # 뒤(fragment)는 브라우저가 서버로 보내지 않으므로 일정 내용이 서버 로그에도 남지 않는다.
 // 링크는 만든 순간의 사본이라, 일정을 고친 뒤에는 링크를 다시 만들어 보내야 한다.
-import { uid, validateTrip, parseDate } from './model.js';
+import { uid, validateTrip } from './model.js';
+import { t, monthDay, tripLength } from './i18n.js';
 
 /** 짧은 링크 id: 영문·숫자 8자 */
 export const SHORT_ID = /^[A-Za-z0-9]{8}$/;
 /** 링크용 코드 형식 (서버에서 받을 때도 검사) */
 export const CODE_RE = /^1\.[A-Za-z0-9_-]+$/;
-
-const md = (s) => {
-  const d = parseDate(s);
-  return d ? `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일` : '';
-};
 
 /**
  * 공유 미리보기 문구. 카톡 미리보기 카드(서버)와 복사되는 메시지(브라우저)가 같이 쓴다.
@@ -20,20 +16,19 @@ const md = (s) => {
 export function shareSummary(trip) {
   const n = trip.days.length;
   const places = trip.days.reduce((s, d) => s + d.items.length, 0);
-  const s = md(trip.startDate);
-  const e = md(trip.endDate);
+  const s = monthDay(trip.startDate);
+  const e = monthDay(trip.endDate);
   const range = s ? (s === e ? s : `${s} ~ ${e}`) : '';
-  const length = n > 1 ? `${n - 1}박 ${n}일` : '당일치기';
   return {
-    title: trip.title || '여행 일정',
-    line: [range, length, places ? `장소 ${places}곳` : ''].filter(Boolean).join(' · '),
+    title: trip.title || t('여행 일정'),
+    line: [range, tripLength(n, '당일치기'), places ? t('장소 {n}곳', { n: places }) : ''].filter(Boolean).join(' · '),
   };
 }
 
 /** 메신저에 붙여넣을 메시지 */
 export function shareMessage(trip, url) {
   const { title, line } = shareSummary(trip);
-  return `${title}\n${line}\n\n일정 보기 (설치 없이 바로 열려요)\n${url}`;
+  return `${title}\n${line}\n\n${t('일정 보기 (설치 없이 바로 열려요)')}\n${url}`;
 }
 
 export const SHARE_PREFIX = '#s=';
@@ -89,6 +84,14 @@ function fromBase64Url(s) {
   return Uint8Array.from(bin, (c) => c.charCodeAt(0));
 }
 
+/**
+ * 공유 링크에 담기는 것과 같은 사본 (메모·예약번호 제외 옵션 그대로). 압축을 못 하는 브라우저에서 파일로 보낼 때 쓴다.
+ * id는 새로 만든다.
+ */
+export function sharedCopy(trip, options) {
+  return fromSnapshot(JSON.parse(JSON.stringify(shareSnapshot(trip, options))));
+}
+
 /** 여행 → 링크용 문자열 ('1.' + base64url(deflate(JSON))) */
 export async function encodeShare(trip, options) {
   const json = new TextEncoder().encode(JSON.stringify(shareSnapshot(trip, options)));
@@ -112,7 +115,7 @@ const str = (v) => (typeof v === 'string' ? v : '');
  */
 export async function decodeShare(code) {
   const fail = () => {
-    throw new Error('공유 링크가 잘렸거나 올바르지 않아요. 링크 전체를 다시 복사해 주세요.');
+    throw new Error(t('공유 링크가 잘렸거나 올바르지 않아요. 링크 전체를 다시 복사해 주세요.'));
   };
   const [format, data] = String(code ?? '').split('.');
   if (format !== FORMAT || !data) fail();
@@ -123,15 +126,19 @@ export async function decodeShare(code) {
   } catch {
     fail();
   }
-  let t;
   try {
-    t = validateTrip(withPlaceholderIds(raw));
+    return fromSnapshot(raw);
   } catch {
     fail();
   }
+}
+
+/** 검증한 뒤 화면에 쓰일 id를 모두 새로 만든다 (형식이 틀리면 Error) */
+function fromSnapshot(raw) {
+  const v = validateTrip(withPlaceholderIds(raw));
   const item = (it) => ({
     id: uid(),
-    name: str(it.name) || '이름 없는 장소',
+    name: str(it.name) || t('이름 없는 장소'),
     address: str(it.address),
     lat: it.lat,
     lng: it.lng,
@@ -144,19 +151,19 @@ export async function decodeShare(code) {
   return {
     version: 1,
     id: uid(),
-    title: str(t.title) || '공유받은 여행',
-    destination: str(t.destination),
-    startDate: str(t.startDate),
-    endDate: str(t.endDate),
-    center: Number.isFinite(t.center?.lat) && Number.isFinite(t.center?.lng) ? { lat: t.center.lat, lng: t.center.lng } : null,
-    trendCity: typeof t.trendCity === 'string' ? t.trendCity : null,
-    days: t.days.map((d) => ({ id: uid(), date: str(d.date), items: d.items.map(item) })),
-    inbox: t.inbox.map(item),
-    stays: t.stays.map((s) => {
+    title: str(v.title) || t('공유받은 여행'),
+    destination: str(v.destination),
+    startDate: str(v.startDate),
+    endDate: str(v.endDate),
+    center: Number.isFinite(v.center?.lat) && Number.isFinite(v.center?.lng) ? { lat: v.center.lat, lng: v.center.lng } : null,
+    trendCity: typeof v.trendCity === 'string' ? v.trendCity : null,
+    days: v.days.map((d) => ({ id: uid(), date: str(d.date), items: d.items.map(item) })),
+    inbox: v.inbox.map(item),
+    stays: v.stays.map((s) => {
       const { id, time, category, ...rest } = item(s);
       return { ...rest, id, startIndex: s.startIndex, nights: s.nights };
     }),
-    flights: t.flights.map((f) => ({
+    flights: v.flights.map((f) => ({
       id: uid(),
       kind: ['out', 'in', 'move'].includes(f.kind) ? f.kind : 'out',
       flightNo: str(f.flightNo),

@@ -201,7 +201,10 @@ test('항공편: 날짜별 배치, 요약, 검사', () => {
   M.removeFlight(t, night.id);
 
   assert.equal(M.flightProblem({ from: 'ICN', to: 'KIX', departAt: '' }), '출발 날짜와 시간을 입력해 주세요');
-  assert.match(M.flightProblem({ from: 'ICN', to: 'KIX', departAt: '2026-12-20T09:00', arriveAt: '2026-12-20T08:00' }), /출발보다 빨라요/);
+  // 날짜 변경선을 넘으면 현지 도착이 출발보다 빠를 수 있어 막지 않고 확인만 한다 (I06)
+  assert.equal(M.flightProblem({ from: 'ICN', to: 'HNL', departAt: '2026-12-20T21:00', arriveAt: '2026-12-20T10:30' }), null);
+  assert.match(M.flightWarning({ from: 'ICN', to: 'HNL', departAt: '2026-12-20T21:00', arriveAt: '2026-12-20T10:30' }), /출발보다 빨라요/);
+  assert.equal(M.flightWarning({ from: 'ICN', to: 'KIX', departAt: '2026-12-20T09:00', arriveAt: '2026-12-20T11:00' }), null);
   assert.equal(M.flightProblem({ from: 'ICN', to: 'KIX', departAt: '2026-12-20T09:00' }), null);
 });
 

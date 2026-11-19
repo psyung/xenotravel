@@ -10,7 +10,7 @@ test('링크·좌표가 아닌 텍스트는 null (일반 검색)', () => {
 test('위도, 경도 텍스트', () => {
   assert.deepEqual(parse('34.6873, 135.5262'), { lat: 34.6873, lng: 135.5262, name: null });
   assert.deepEqual(parse('-33.8568,151.2153'), { lat: -33.8568, lng: 151.2153, name: null });
-  assert.deepEqual(parse('95, 10'), { error: 'unsupported' });
+  assert.deepEqual(parse('95, 10'), { error: 'range' }); // 범위 밖 좌표는 따로 안내한다 (I03)
 });
 
 test('구글맵 장소 링크: !3d!4d 좌표와 장소 이름 우선', () => {

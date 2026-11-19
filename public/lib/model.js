@@ -2,9 +2,10 @@
 // trip = { id, title, destination, startDate, endDate, center, days: [{id, date, items}], inbox: [items] }
 // item = { id, name, address, lat, lng, time, memo, url, category }
 
+import { t, longDate, num, dayName, tripLength } from './i18n.js';
+
 export const INBOX = 'inbox';
 const MAX_DAYS = 60;
-const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
 export function uid() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -40,7 +41,7 @@ export function createTrip({ title, destination = '', startDate, endDate, center
   return {
     version: 1,
     id: uid(),
-    title: title?.trim() || (destination ? `${destination} 여행` : '새 여행'),
+    title: title?.trim() || (destination ? t('{dest} 여행', { dest: destination }) : t('새 여행')),
     destination,
     startDate: dates[0] ?? '',
     endDate: dates.at(-1) ?? '',
@@ -67,10 +68,41 @@ export function overflowCount(trip, start, end) {
   return trip.days.slice(n).reduce((sum, d) => sum + d.items.length, 0);
 }
 
-/** 날짜 변경. 기존 일차는 순서대로 유지하고, 줄어든 날의 장소는 보관함으로 옮긴다. */
+/**
+ * 날짜를 바꾸면 영향받는 것 (바꾸기 전에 보여주는 확인 창용).
+ * { days: 새 일수, removedDays, places: 보관함으로 갈 장소, expenses: '일정 외'로 남을 지출,
+ *   stays: 기간이 줄어 일부 밤이 빠지는 숙소, flights: 새로 기간 밖이 되는 항공편, shifted: 시작일이 바뀌어 일차 날짜가 달라짐 }
+ */
+export function dateChangeImpact(trip, start, end) {
+  const dates = dateRange(start, end);
+  const n = dates.length;
+  if (!n) return null;
+  const removed = trip.days.slice(n);
+  const inside = (d, a, b) => Boolean(a) && d >= a && d <= b;
+  return {
+    days: n,
+    removedDays: removed.length,
+    places: removed.flatMap((d) => d.items),
+    expenses: (trip.expenses ?? []).filter((e) => Number.isInteger(e.day) && e.day >= n && e.day < trip.days.length),
+    stays: n < trip.days.length ? (trip.stays ?? []).filter((s) => s.startIndex + s.nights > n) : [],
+    flights: (trip.flights ?? []).filter((f) => {
+      const d = f.departAt.slice(0, 10);
+      return inside(d, trip.startDate, trip.endDate) && !inside(d, dates[0], dates.at(-1));
+    }),
+    shifted: Boolean(trip.startDate) && dates[0] !== trip.startDate,
+  };
+}
+
+/**
+ * 날짜 변경. 기존 일차는 순서대로 유지하고, 줄어든 날의 장소는 보관함으로 옮긴다.
+ * 줄어든 날의 지출은 지우지 않고 원래 날짜(expense.date)를 적어 둔다 → 가계부에 '일정 외'로 잡힌다.
+ */
 export function setTripDates(trip, start, end) {
   const dates = dateRange(start, end);
   if (!dates.length) return { moved: 0 };
+  for (const e of trip.expenses ?? []) {
+    if (Number.isInteger(e.day) && e.day >= dates.length && trip.days[e.day]?.date && !e.date) e.date = trip.days[e.day].date;
+  }
   const leftover = trip.days.slice(dates.length).flatMap((d) => d.items);
   trip.days = dates.map((date, i) => (trip.days[i] ? { ...trip.days[i], date } : { id: uid(), date, items: [] }));
   trip.inbox.push(...leftover);
@@ -96,6 +128,7 @@ export function findItem(trip, itemId) {
 /* ───────── 장소 종류 ─────────
  * 지도 핀을 "종류" 색으로 볼 때와 카드 아이콘에 쓴다. '' = 정하지 않음.
  */
+/** 라벨은 번역 키다 (화면에서는 t(label)). */
 export const CATEGORIES = {
   sight: { label: '관광', icon: '📸', color: '#8b5cf6' },
   food: { label: '맛집', icon: '🍜', color: '#ef4444' },
@@ -142,7 +175,7 @@ export function itemCategory(place) {
 export function createItem(place) {
   return {
     id: uid(),
-    name: (place.name ?? '').trim() || '이름 없는 장소',
+    name: (place.name ?? '').trim() || t('이름 없는 장소'),
     address: place.address ?? '',
     lat: Number(place.lat),
     lng: Number(place.lng),
@@ -186,15 +219,12 @@ export function sortByTime(items) {
   return items;
 }
 
-export function formatDate(date) {
-  const d = parseDate(date);
-  if (!d) return '';
-  return `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일 (${WEEKDAYS[d.getUTCDay()]})`;
-}
+/** "12월 1일 (화)" (지금 언어) */
+export const formatDate = (date) => longDate(date);
 
 export function dayTitle(day, index) {
   const date = formatDate(day.date);
-  return date ? `Day ${index + 1} · ${date}` : `Day ${index + 1}`;
+  return date ? `${dayName(index)} · ${date}` : dayName(index);
 }
 
 export function googleMapsUrl(item) {
@@ -239,7 +269,7 @@ export function daySteps(trip, dayIndex) {
 }
 
 /** "3,200" */
-export const formatSteps = (n) => Math.round(n).toLocaleString('ko-KR');
+export const formatSteps = (n) => num(Math.round(n));
 
 /** 하루 동선: 출발 숙소 → 장소들 → 귀가 숙소. 지도 선·거리·길찾기가 모두 이 순서를 쓴다. */
 export function dayRoute(trip, dayIndex) {
@@ -413,6 +443,33 @@ export function swapDays(trip, a, b) {
   return true;
 }
 
+/* ───────── 동선 제안 직접 고치기 ─────────
+ * 시간을 정했거나 고정한 장소는 그 자리(몇 번째)에 그대로 두고, 나머지 장소끼리만 순서를 바꾼다 (optimizeDay와 같은 규칙).
+ */
+export const isFixedInRoute = (it) => Boolean(it?.time || it?.pinned);
+
+/** index 자리 장소를 dir(-1 위 / +1 아래) 쪽의 가장 가까운 '옮길 수 있는 자리'로. 못 옮기면 -1. */
+export function routeStepTarget(order, index, dir) {
+  if (!order[index] || isFixedInRoute(order[index])) return -1;
+  for (let j = index + dir; j >= 0 && j < order.length; j += dir) if (!isFixedInRoute(order[j])) return j;
+  return -1;
+}
+
+/** 한 칸 옮긴 새 순서 (못 옮기면 null) */
+export function routeStep(order, index, dir) {
+  const j = routeStepTarget(order, index, dir);
+  if (j === -1) return null;
+  const out = order.slice();
+  [out[index], out[j]] = [out[j], out[index]];
+  return out;
+}
+
+/** 끌어서 바꾼 순서에서 옮길 수 있는 장소의 순서만 받아, 고정 장소는 원래 자리에 둔 새 순서 */
+export function routeReorder(order, draggedOrder) {
+  const free = draggedOrder.filter((it) => !isFixedInRoute(it));
+  return order.map((it) => (isFixedInRoute(it) ? it : free.shift()));
+}
+
 /** 제안받은 순서(장소 id 목록)를 적용한다. 그사이 장소가 바뀌었으면(추가·삭제·이동) 적용하지 않고 false. */
 export function applyDayOrder(trip, dayIndex, ids) {
   const day = trip.days[dayIndex];
@@ -553,6 +610,8 @@ export function duplicateItem(trip, itemId) {
  * departAt / arriveAt: 'YYYY-MM-DDTHH:MM' (현지 시각, 사용자가 입력한 그대로)
  */
 export const FLIGHT_KINDS = { out: '출국', in: '귀국', move: '이동' };
+/** 화면에 보일 항공편 구분 */
+export const flightKind = (kind) => t(FLIGHT_KINDS[kind] ?? FLIGHT_KINDS.out);
 
 export function normalizeFlight(data) {
   const kind = FLIGHT_KINDS[data.kind] ? data.kind : 'out';
@@ -573,10 +632,19 @@ export function normalizeFlight(data) {
 export function flightProblem(data) {
   const f = normalizeFlight(data);
   const DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
-  if (!DATETIME.test(f.departAt)) return '출발 날짜와 시간을 입력해 주세요';
-  if (f.arriveAt && !DATETIME.test(f.arriveAt)) return '도착 시간을 다시 확인해 주세요';
-  if (f.arriveAt && f.arriveAt < f.departAt) return '도착 시간이 출발보다 빨라요. 현지 시각 기준으로 다시 확인해 주세요';
-  if (!f.from || !f.to) return '출발·도착 공항을 입력해 주세요';
+  if (!DATETIME.test(f.departAt)) return t('출발 날짜와 시간을 입력해 주세요');
+  if (f.arriveAt && !DATETIME.test(f.arriveAt)) return t('도착 시간을 다시 확인해 주세요');
+  if (!f.from || !f.to) return t('출발·도착 공항을 입력해 주세요');
+  return null;
+}
+
+/**
+ * 저장은 되지만 한 번 더 확인할 것. 현지 시각이라 날짜 변경선을 동쪽으로 넘으면(예: 인천 → 호놀룰루)
+ * 도착이 출발보다 빠를 수 있어서 막지 않는다.
+ */
+export function flightWarning(data) {
+  const f = normalizeFlight(data);
+  if (f.arriveAt && f.arriveAt < f.departAt) return t('도착 시간이 출발보다 빨라요. 현지 시각 기준으로 다시 확인해 주세요');
   return null;
 }
 
@@ -662,29 +730,30 @@ export function dayShareText(trip, dayIndex) {
   const day = trip.days[dayIndex];
   if (!day) return '';
   const date = formatDate(day.date);
-  const lines = [`[${trip.title}] Day ${dayIndex + 1}${date ? ` · ${date}` : ''}`];
+  const lines = [`[${trip.title}] ${dayName(dayIndex)}${date ? ` · ${date}` : ''}`];
   const { start, end } = dayStays(trip, dayIndex);
   const flights = day.date ? flightsOnDate(trip, day.date) : [];
   const flightLine = ({ flight: f, role }) => {
-    const t = (role === 'arrive' ? f.arriveAt : f.departAt).slice(11, 16);
-    return `${t ? `${t} ` : ''}${FLIGHT_KINDS[f.kind]} ${flightSummary(f)}`;
+    const tm = (role === 'arrive' ? f.arriveAt : f.departAt).slice(11, 16);
+    return `${tm ? `${tm} ` : ''}${flightKind(f.kind)} ${flightSummary(f)}`;
   };
   lines.push(...flights.filter((x) => x.flight.kind !== 'in').map(flightLine));
-  if (start) lines.push(`출발  ${start.name}`);
+  if (start) lines.push(`${t('출발')}  ${start.name}`);
   day.items.forEach((it, i) => {
     const memo = String(it.memo ?? '').split('\n')[0].trim();
     lines.push(`${it.time ? `${it.time}  ` : ''}${i + 1}. ${it.name}${memo ? ` · ${memo}` : ''}`);
   });
-  if (!day.items.length) lines.push('(아직 정한 곳이 없어요)');
-  if (end) lines.push(`귀가  ${end.name}`);
+  if (!day.items.length) lines.push(`(${t('아직 정한 곳이 없어요')})`);
+  if (end) lines.push(`${t('귀가')}  ${end.name}`);
   lines.push(...flights.filter((x) => x.flight.kind === 'in').map(flightLine));
   const url = routeDirectionsUrl(dayRoute(trip, dayIndex));
-  if (url) lines.push(`동선 지도 ${url}`);
-  else if (day.items[0]) lines.push(`지도 ${googleMapsUrl(day.items[0])}`);
+  if (url) lines.push(`${t('동선 지도')} ${url}`);
+  else if (day.items[0]) lines.push(`${t('지도')} ${googleMapsUrl(day.items[0])}`);
   return lines.join('\n');
 }
 
-export const EXPORT_HEADER =['일차', '날짜', '순서', '시간', '종류', '장소', '주소', '메모', '링크', '구글맵', '위도', '경도'];
+/** 엑셀 열 (키는 한국어, 내보낼 때 t()로 바꾼다) */
+export const EXPORT_HEADER = ['일차', '날짜', '순서', '시간', '종류', '장소', '주소', '메모', '링크', '구글맵', '위도', '경도'];
 
 /** 엑셀 내보내기용 행 (헤더 이름을 키로 갖는 객체). */
 export function tripToRows(trip) {
@@ -693,7 +762,7 @@ export function tripToRows(trip) {
     날짜: date,
     순서: order,
     시간: it.time ?? '',
-    종류: CATEGORIES[it.category]?.label ?? (it.stay ? '숙소' : ''),
+    종류: CATEGORIES[it.category] ? t(CATEGORIES[it.category].label) : it.stay ? t('숙소') : '',
     장소: it.name,
     주소: it.address,
     메모: it.memo,
@@ -704,13 +773,13 @@ export function tripToRows(trip) {
   });
   const rows = trip.days.flatMap((d, i) => {
     const { start, end } = dayStays(trip, i);
-    const label = `Day ${i + 1}`;
+    const label = dayName(i);
     const fl = flightsOnDate(trip, d.date);
     const flightRow = ({ flight: f }) =>
-      row(label, d.date, `항공(${FLIGHT_KINDS[f.kind]})`, {
+      row(label, d.date, t('항공({kind})', { kind: flightKind(f.kind) }), {
         name: flightSummary(f),
         address: '',
-        memo: [f.bookingRef && `예약번호 ${f.bookingRef}`, f.memo].filter(Boolean).join(' / '),
+        memo: [f.bookingRef && t('예약번호 {ref}', { ref: f.bookingRef }), f.memo].filter(Boolean).join(' / '),
         url: '',
         time: f.departAt.slice(0, 10) === d.date ? f.departAt.slice(11, 16) : (f.arriveAt || '').slice(11, 16),
         lat: '',
@@ -718,13 +787,13 @@ export function tripToRows(trip) {
       });
     return [
       ...fl.filter((x) => x.flight.kind !== 'in').map(flightRow),
-      ...(start ? [row(label, d.date, '숙소(출발)', { ...start, stay: true })] : []),
+      ...(start ? [row(label, d.date, t('숙소(출발)'), { ...start, stay: true })] : []),
       ...d.items.map((it, j) => row(label, d.date, j + 1, it)),
-      ...(end ? [row(label, d.date, '숙소(귀가)', { ...end, stay: true })] : []),
+      ...(end ? [row(label, d.date, t('숙소(귀가)'), { ...end, stay: true })] : []),
       ...fl.filter((x) => x.flight.kind === 'in').map(flightRow),
     ];
   });
-  rows.push(...trip.inbox.map((it, j) => row('보관함', '', j + 1, it)));
+  rows.push(...trip.inbox.map((it, j) => row(t('보관함'), '', j + 1, it)));
   return rows;
 }
 
@@ -736,12 +805,15 @@ export function touch(trip) {
   trip.updatedAt = new Date().toISOString();
 }
 
-/** 백업 파일 검증. 올바르지 않으면 Error를 던진다. */
+/**
+ * 백업 파일 검증. 올바르지 않으면 Error를 던진다.
+ * 예전 버전 백업(숙소·항공·가계부·체크가 없는 것)도 받는다. 가계부·체크는 형식이 맞는 항목만 남긴다.
+ */
 export function validateTrip(obj) {
-  const fail = (msg) => {
-    throw new Error(`올바른 여행 백업 파일이 아니에요 (${msg})`);
+  const fail = (what) => {
+    throw new Error(t('올바른 여행 백업 파일이 아니에요 ({what})', { what: t(what) }));
   };
-  if (!obj || typeof obj !== 'object') fail('형식');
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) fail('형식');
   if (typeof obj.id !== 'string' || typeof obj.title !== 'string') fail('id/title');
   if (!Array.isArray(obj.days) || !obj.days.length) fail('days');
   const checkItems = (items) => {
@@ -763,7 +835,17 @@ export function validateTrip(obj) {
   for (const fl of obj.flights ?? []) {
     if (typeof fl?.id !== 'string' || typeof fl.departAt !== 'string') fail('항공편');
   }
-  return { ...obj, inbox: obj.inbox ?? [], stays: obj.stays ?? [], flights: obj.flights ?? [] };
+  const out = { ...obj, inbox: obj.inbox ?? [], stays: obj.stays ?? [], flights: obj.flights ?? [] };
+  if (obj.expenses != null) {
+    if (!Array.isArray(obj.expenses)) fail('가계부');
+    out.expenses = obj.expenses.filter((e) => typeof e?.id === 'string' && Number.isFinite(Number(e.amount)));
+  }
+  if (obj.checks != null) {
+    if (!Array.isArray(obj.checks)) fail('체크리스트');
+    out.checks = obj.checks.filter((c) => typeof c?.id === 'string' && typeof c.text === 'string');
+  }
+  if (obj.budget != null && (typeof obj.budget !== 'object' || Array.isArray(obj.budget))) fail('가계부');
+  return out;
 }
 
 /* ───────── 대시보드 (상단 요약) ───────── */
@@ -772,15 +854,18 @@ export function validateTrip(obj) {
 export function ddayInfo(trip, today) {
   const start = parseDate(trip.startDate);
   const end = parseDate(trip.endDate);
-  const t = parseDate(today);
-  if (!start || !t) return { label: '—', sub: '날짜 미정' };
-  const diff = Math.round((start - t) / 86400000);
-  if (diff > 0) return { label: `D-${diff}`, sub: '출발까지' };
-  if (diff === 0) return { label: 'D-DAY', sub: '오늘 출발' };
-  const day = Math.round((t - start) / 86400000);
-  if (end && t <= end) return { label: `Day ${day + 1}`, sub: '여행 중' };
-  return { label: '다녀옴', sub: '여행 끝' };
+  const now = parseDate(today);
+  if (!start || !now) return { label: '—', sub: t('날짜 미정') };
+  const diff = Math.round((start - now) / 86400000);
+  if (diff > 0) return { label: `D-${diff}`, sub: t('출발까지') };
+  if (diff === 0) return { label: 'D-DAY', sub: t('오늘 출발') };
+  const day = Math.round((now - start) / 86400000);
+  if (end && now <= end) return { label: dayName(day), sub: t('여행 중') };
+  return { label: t('다녀옴'), sub: t('여행 끝') };
 }
+
+/** 이미 다녀온 여행인지 (끝난 날 다음부터) */
+export const tripEnded = (trip, today) => Boolean(trip.endDate) && trip.endDate < today;
 
 /** 오늘이 여행 중이면 그날 인덱스, 아니면 0 */
 export function todayIndex(trip, today) {
@@ -802,7 +887,7 @@ export function tripStats(trip, today) {
   const n = trip.days.length;
   return {
     dday: ddayInfo(trip, today),
-    length: n > 1 ? `${n - 1}박 ${n}일` : '당일',
+    length: tripLength(n),
     days: n,
     places,
     km,
@@ -834,9 +919,9 @@ export function tripNotices(trip) {
   for (let i = 0; i < n - 1; i++) if (!nightStay(trip, i)) empty.push(i + 1);
   // 마지막 밤은 귀국편이 없을 때만 (당일 귀국이면 숙소가 필요 없다)
   if (n > 1 && !lastFlightIn && !nightStay(trip, n - 1) && (trip.flights ?? []).some((f) => f.kind === 'in')) empty.push(n);
-  if (empty.length && (trip.stays ?? []).length) out.push(`Day ${empty.join(', ')} 밤 숙소가 아직 비어 있어요`);
-  else if (!(trip.stays ?? []).length && n > 1) out.push('숙소를 아직 정하지 않았어요. 검색할 때 "추가할 곳"을 숙소로 고르세요');
+  if (empty.length && (trip.stays ?? []).length) out.push(t('{days} 밤 숙소가 아직 비어 있어요', { days: empty.map((d) => dayName(d - 1)).join(', ') }));
+  else if (!(trip.stays ?? []).length && n > 1) out.push(t('숙소를 아직 정하지 않았어요. 검색할 때 "추가할 곳"을 숙소로 고르세요'));
   const outside = (trip.flights ?? []).filter((f) => trip.startDate && (f.departAt.slice(0, 10) < trip.startDate || f.departAt.slice(0, 10) > trip.endDate));
-  if (outside.length) out.push(`여행 기간 밖 항공편 ${outside.length}개는 일정에 안 보여요`);
+  if (outside.length) out.push(t('여행 기간 밖 항공편 {n}개는 일정에 안 보여요', { n: outside.length }));
   return out;
 }

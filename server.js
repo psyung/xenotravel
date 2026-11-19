@@ -1,6 +1,7 @@
 // 의존성 없는 서버: node server.js → http://localhost:5173
 // - public/ 정적 파일
-// - 짧은 공유 링크: POST /api/share → /s/<id>, GET /api/share/<id>
+// - 짧은 공유 링크: GET /api/share(서버가 있는지 확인) · POST /api/share → /s/<id> · GET /api/share/<id>
+//   앱은 GET /api/share가 {ok:true}일 때만 일정 사본을 POST한다 (정적 호스팅에서는 서버로 보내지 않고 긴 링크를 만든다)
 //   /s/<id> 페이지에는 여행 제목·요약을 미리보기 태그(og:*)로 넣어 카톡·메신저에 카드로 보이게 한다.
 //   공유 데이터는 SHARE_DIR(기본 data/shares)에 파일 하나씩 저장한다.
 import http from 'node:http';
@@ -154,6 +155,7 @@ http
     }
     try {
       if (pathname === '/api/share' && req.method === 'POST') return await createShare(req, res);
+      if (pathname === '/api/share' && req.method === 'GET') return json(res, 200, { ok: true });
       let m = /^\/api\/share\/([^/]+)$/.exec(pathname);
       if (m && req.method === 'GET') {
         const share = await loadShare(m[1]);

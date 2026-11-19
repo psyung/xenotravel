@@ -4,6 +4,8 @@
 //   가격이 있는 항목은 가계부 "예상"에 잡히고, 체크하면 가계부에 실제 지출로 기록된다 (expense.checkId로 연결).
 import { uid, indexOfDate } from './model.js';
 import { guessCurrency, ensureBudget, toKrw, addExpense } from './budget.js';
+import { t } from './i18n.js';
+// 그룹 이름·기본 항목·추천 품목은 번역 키다. 기본 항목과 추천 품목은 넣는 순간의 언어로 저장된다 (그 뒤로는 사용자 데이터).
 
 export const CHECK_GROUPS = {
   todo: { label: '출발 전 할 일', placeholder: '할 일 추가' },
@@ -11,7 +13,7 @@ export const CHECK_GROUPS = {
   shop: { label: '쇼핑 리스트', placeholder: '사고 싶은 것 추가' },
 };
 
-const DEFAULTS = {
+export const DEFAULTS = {
   todo: ['여권 유효기간 확인 (6개월 이상)', '여행자 보험', 'eSIM / 포켓와이파이', '환전 · 트래블카드 준비', '숙소 주소 현지어로 캡처', '항공 온라인 체크인'],
   pack: ['여권', '충전기 · 보조배터리', '멀티 어댑터', '상비약', '세면도구'],
   shop: [],
@@ -82,7 +84,7 @@ export function shopPickSets(trip) {
  */
 export function ensureChecks(trip) {
   if (!Array.isArray(trip.checks)) {
-    trip.checks = Object.entries(DEFAULTS).flatMap(([group, list]) => list.map((text) => ({ id: uid(), group, text, done: false })));
+    trip.checks = Object.entries(DEFAULTS).flatMap(([group, list]) => list.map((text) => ({ id: uid(), group, text: t(text), done: false })));
     trip.checksV = 2;
   }
   if (trip.checksV !== 2) undoAutoPicks(trip);
@@ -102,18 +104,18 @@ function undoAutoPicks(trip) {
   trip.checks = trip.checks.filter((c) => c.group !== 'shop');
 }
 
-/** 그 목록에서 아직 쇼핑 리스트에 없는 품목 */
+/** 그 목록에서 아직 쇼핑 리스트에 없는 품목 (번역 키). 다른 언어로 담았던 품목도 담은 것으로 본다. */
 export function missingPicks(trip, set) {
   if (!set) return [];
-  const have = new Set(ensureChecks(trip).filter((c) => c.group === 'shop').map((c) => c.text));
-  return set.items.filter((t) => !have.has(t));
+  const have = new Set(ensureChecks(trip).filter((c) => c.group === 'shop').flatMap((c) => [c.text, c.pick]));
+  return set.items.filter((item, i) => !have.has(`${set.id}:${i}`) && !have.has(item) && !have.has(t(item)));
 }
 
-/** 목록(id)에서 빠진 것만 쇼핑 리스트에 넣는다. 넣은 개수를 돌려준다. */
+/** 목록(id)에서 빠진 것만 쇼핑 리스트에 넣는다 (지금 언어로). 넣은 개수를 돌려준다. */
 export function addPicks(trip, setId) {
   const set = shopPickSets(trip).find((x) => x.id === setId);
   const add = missingPicks(trip, set);
-  for (const text of add) trip.checks.push({ id: uid(), group: 'shop', text, done: false });
+  for (const item of add) trip.checks.push({ id: uid(), group: 'shop', text: t(item), done: false, pick: `${set.id}:${set.items.indexOf(item)}` });
   return add.length;
 }
 
@@ -128,17 +130,27 @@ export function addCheck(trip, group, text) {
 /** 체크 그룹 → 가계부 분류 */
 export const GROUP_CAT = { shop: 'shop', todo: 'etc', pack: 'etc' };
 
+/** 체크 항목과 연결된 가계부 지출 (없으면 null) */
+export function linkedExpense(trip, checkId) {
+  return (trip.expenses ?? []).find((e) => e.checkId === checkId) ?? null;
+}
+
 /**
  * 체크/해제. 가격이 있는 항목을 체크하면 가계부에 기록하고, 해제하면 그 기록을 지운다.
+ * keepExpense: 해제하면서 이미 낸 돈은 가계부에 남긴다 (연결만 끊는다).
  * today: 'YYYY-MM-DD' (여행 중이면 그날, 아니면 "출발 전"으로 기록)
  * → { check, expense: 새로 적은 기록 | null, removed: 지운 기록 수 }
  */
-export function toggleCheck(trip, id, today = '') {
+export function toggleCheck(trip, id, today = '', { keepExpense = false } = {}) {
   const c = ensureChecks(trip).find((x) => x.id === id);
   if (!c) return { check: null, expense: null, removed: 0 };
   c.done = !c.done;
   const budget = ensureBudget(trip);
   if (!c.done) {
+    if (keepExpense) {
+      for (const e of trip.expenses) if (e.checkId === c.id) delete e.checkId;
+      return { check: c, expense: null, removed: 0 };
+    }
     const before = trip.expenses.length;
     trip.expenses = trip.expenses.filter((e) => e.checkId !== c.id);
     return { check: c, expense: null, removed: before - trip.expenses.length };

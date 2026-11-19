@@ -19,6 +19,14 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="XenoTravel">
+  <script>
+    // 첫 화면부터 저장된 언어로 (번역은 app.js가 채운다)
+    try {
+      const l = localStorage.getItem('xenotravel:lang');
+      if (l === 'en' || l === 'ja') document.documentElement.lang = l;
+      else if (l === 'zh') document.documentElement.lang = 'zh-Hans';
+    } catch {}
+  </script>
 </head>
 <body data-page="plan">
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -31,65 +39,83 @@
     <symbol id="i-more" viewBox="0 0 24 24"><path d="M5 12h.01 M12 12h.01 M19 12h.01"/></symbol>
     <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></symbol>
     <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21Z M12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z M3.5 9h17 M3.5 15h17 M12 3c2.5 2.6 3.6 5.7 3.6 9s-1.1 6.4-3.6 9c-2.5-2.6-3.6-5.7-3.6-9S9.5 5.6 12 3Z"/></symbol>
   </svg>
   <div id="app">
     <header class="topbar">
-      <button id="tripsBtn" class="brand" title="메인으로">
+      <button id="tripsBtn" class="brand" data-i18n-attr="title=메인으로;aria-label=XenoTravel 메인으로">
         <span class="logo" aria-hidden="true"><svg><use href="#i-plane"/></svg></span>
         <span class="brand-text"><b>XenoTravel</b></span>
       </button>
       <details id="tripSw" class="tripsw page-trip">
-        <summary title="다른 여행으로 바꾸기"><span id="curTrip"></span><svg class="ic chev" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></svg></summary>
+        <summary data-i18n-attr="title=다른 여행으로 바꾸기"><span id="curTrip"></span><svg class="ic chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary>
         <div id="tripSwList" class="menu-pop tripsw-pop"></div>
       </details>
-      <nav class="pnav" aria-label="화면">
-        <button class="pg trip-only" data-page="plan">일정</button>
-        <button class="pg trip-only" data-page="budget">가계부</button>
-        <button class="pg trip-only" data-page="check">체크<b class="check-badge" hidden></b></button>
+      <nav class="pnav" data-i18n-attr="aria-label=화면">
+        <button class="pg trip-only" data-page="plan" data-i18n="일정">일정</button>
+        <button class="pg trip-only" data-page="budget" data-i18n="가계부">가계부</button>
+        <button class="pg trip-only" data-page="check"><span data-i18n="체크">체크</span><b class="check-badge" hidden></b></button>
       </nav>
       <div class="actions">
-        <button id="shareBtn" class="pill page-trip" title="앱 설치 없이 볼 수 있는 링크 만들기"><svg class="ic"><use href="#i-share"/></svg><span class="hide-sm">공유</span></button>
-        <button id="flightsBtn" class="pill page-trip"><svg class="ic"><use href="#i-plane"/></svg><span class="hide-sm">항공편</span></button>
+        <button id="shareBtn" class="pill page-trip" data-i18n-attr="title=앱 설치 없이 볼 수 있는 링크 만들기;aria-label=공유"><svg class="ic" aria-hidden="true"><use href="#i-share"/></svg><span class="hide-sm" data-i18n="공유">공유</span></button>
+        <button id="flightsBtn" class="pill page-trip" data-i18n-attr="aria-label=항공편"><svg class="ic" aria-hidden="true"><use href="#i-plane"/></svg><span class="hide-sm" data-i18n="항공편">항공편</span></button>
         <details class="menu">
-          <summary class="pill round" aria-label="더보기"><svg class="ic"><use href="#i-more"/></svg><span id="backupDot" aria-hidden="true" hidden></span></summary>
+          <summary class="pill round" data-i18n-attr="aria-label=더보기"><svg class="ic" aria-hidden="true"><use href="#i-more"/></svg><span id="backupDot" aria-hidden="true" hidden></span></summary>
           <div class="menu-pop">
-            <button id="exportXlsx" class="page-trip">엑셀로 내보내기</button>
-            <button id="exportPdf" class="page-trip">PDF (인쇄용)</button>
-            <button data-menu="calendar" class="page-trip">캘린더로 내보내기 (.ics)</button>
+            <button id="exportXlsx" class="page-trip" data-i18n="엑셀로 내보내기">엑셀로 내보내기</button>
+            <button id="exportPdf" class="page-trip" data-i18n="PDF (인쇄용)">PDF (인쇄용)</button>
+            <button data-menu="calendar" class="page-trip" data-i18n="캘린더로 내보내기 (.ics)">캘린더로 내보내기 (.ics)</button>
             <hr class="page-trip">
-            <button data-menu="backup" class="page-trip">백업 파일 저장 (JSON)</button>
-            <button data-menu="import" class="edit-only">백업 파일 불러오기</button>
-            <button data-menu="delete" class="danger edit-only page-trip">이 여행 삭제</button>
+            <button data-menu="backup" class="page-trip" data-i18n="백업 파일 저장 (JSON)">백업 파일 저장 (JSON)</button>
+            <button data-menu="import" class="edit-only" data-i18n="백업 파일 불러오기">백업 파일 불러오기</button>
+            <button data-menu="delete" class="danger edit-only page-trip" data-i18n="이 여행 삭제">이 여행 삭제</button>
           </div>
         </details>
-        <button id="themeBtn" class="pill round" title="화면 밝기" aria-label="화면 밝기"><svg class="ic"><use href="#i-moon"/></svg></button>
+        <label class="lang-wrap" for="langSel">
+          <svg class="ic" aria-hidden="true"><use href="#i-globe"/></svg><span id="langShort" class="lang-short" aria-hidden="true">KO</span>
+          <select id="langSel" data-i18n-attr="aria-label=언어 선택">
+            <option value="ko" lang="ko">KO · 한국어</option>
+            <option value="en" lang="en">EN · English</option>
+            <option value="zh" lang="zh-Hans">ZH · 简体中文</option>
+            <option value="ja" lang="ja">JA · 日本語</option>
+          </select>
+        </label>
+        <button id="themeBtn" class="pill round" data-i18n-attr="title=화면 밝기;aria-label=화면 밝기"><svg class="ic" aria-hidden="true"><use href="#i-moon"/></svg></button>
         <input type="file" id="importFile" accept=".json,application/json" hidden>
       </div>
     </header>
-    <div id="offlineBar" class="offline-bar" role="status" hidden>인터넷이 끊겼어요. 저장된 일정·가계부·체크리스트는 그대로 쓸 수 있고, 지도 바탕·검색·길찾기는 연결되면 다시 돼요.</div>
+    <div id="offlineBar" class="offline-bar" role="status" hidden data-i18n="인터넷이 끊겼어요. 저장된 일정·가계부·체크리스트는 그대로 쓸 수 있고, 지도 바탕·검색·길찾기는 연결되면 다시 돼요.">인터넷이 끊겼어요. 저장된 일정·가계부·체크리스트는 그대로 쓸 수 있고, 지도 바탕·검색·길찾기는 연결되면 다시 돼요.</div>
+    <div id="saveBar" class="save-bar" role="alert" hidden>
+      <span id="saveBarText"></span>
+      <span class="save-actions">
+        <button type="button" id="saveRetry" class="btn" data-i18n="다시 저장">다시 저장</button>
+        <button type="button" id="saveBackup" class="btn primary" data-i18n="백업 파일 저장">백업 파일 저장</button>
+        <button type="button" id="saveCorrupt" class="btn" data-i18n="읽지 못한 원본 저장" hidden>읽지 못한 원본 저장</button>
+      </span>
+    </div>
     <div id="inAppBar" class="shared-banner" hidden>
-      <span>인앱 브라우저에 저장한 여행은 다른 브라우저와 공유되지 않아요. 작성한 여행은 백업 파일로 옮길 수 있어요.</span>
-      <button type="button" id="inAppBackup" class="btn" hidden>백업 파일 저장</button>
-      <button type="button" id="inAppClose" class="btn" aria-label="인앱 브라우저 안내 닫기">닫기</button>
+      <span data-i18n="인앱 브라우저에 저장한 여행은 다른 브라우저와 공유되지 않아요. 작성한 여행은 백업 파일로 옮길 수 있어요.">인앱 브라우저에 저장한 여행은 다른 브라우저와 공유되지 않아요. 작성한 여행은 백업 파일로 옮길 수 있어요.</span>
+      <button type="button" id="inAppBackup" class="btn" hidden data-i18n="백업 파일 저장">백업 파일 저장</button>
+      <button type="button" id="inAppClose" class="btn" data-i18n="닫기" data-i18n-attr="aria-label=인앱 브라우저 안내 닫기">닫기</button>
     </div>
     <span id="inAppStatus" class="sr-only" role="status"></span>
 
     <main>
     <div id="appShell" class="home">
       <section class="home-hero">
-        <h1>지도와 일정을 한 화면에.</h1>
-        <p>여행 일정을 짜고 가계부와 체크리스트를 한곳에서 관리하세요.</p>
-        <p id="appLoading" role="status">여행 플래너를 불러오는 중이에요.</p>
+        <h1 data-i18n="지도와 일정을 한 화면에.">지도와 일정을 한 화면에.</h1>
+        <p data-i18n="여행 일정을 짜고 가계부와 체크리스트를 한곳에서 관리하세요.">여행 일정을 짜고 가계부와 체크리스트를 한곳에서 관리하세요.</p>
+        <p id="appLoading" role="status" data-i18n="여행 플래너를 불러오는 중이에요.">여행 플래너를 불러오는 중이에요.</p>
         <p id="appLoadError" role="alert" hidden>여행 플래너를 열지 못했어요. <a href="">다시 열기</a></p>
         <noscript><style>#appLoading { display: none; }</style><p>여행 플래너를 사용하려면 브라우저에서 JavaScript를 켜 주세요.</p></noscript>
       </section>
     </div>
 
     <div id="sharedBanner" class="shared-banner" hidden>
-      <span><b id="sharedTitle"></b> · 공유받은 일정이에요 (보기 전용)<small id="sharedAt" hidden> · <time></time> 기준 사본</small></span>
+      <span><b id="sharedTitle"></b> · <span data-i18n="공유받은 일정이에요 (보기 전용)">공유받은 일정이에요 (보기 전용)</span><small id="sharedAt" hidden> · <time></time> <span data-i18n="기준 사본">기준 사본</span></small></span>
       <span class="shared-actions">
-        <button id="sharedSave" class="btn primary">내 여행으로 저장</button>
-        <button id="sharedLeave" class="btn">닫기</button>
+        <button id="sharedSave" class="btn primary" data-i18n="내 여행으로 저장">내 여행으로 저장</button>
+        <button id="sharedLeave" class="btn" data-i18n="닫기">닫기</button>
       </span>
     </div>
 
@@ -101,7 +127,7 @@
         <div class="hero">
           <div class="hero-l">
             <span id="heroTag" class="eyebrow"></span>
-            <input id="tripTitle" class="trip-title" aria-label="여행 이름" maxlength="60">
+            <input id="tripTitle" class="trip-title" data-i18n-attr="aria-label=여행 이름" maxlength="60">
             <div class="sum-dates" data-dp-pair="여행 날짜">
               <input type="date" id="startDate" data-dp="start" aria-label="시작일">
               <span>–</span>
@@ -113,64 +139,72 @@
           <div id="heroStats" class="bento"></div>
         </div>
         <div id="notice" class="notice" hidden></div>
-        <section id="today" class="today-card" aria-label="오늘 일정" hidden></section>
+        <section id="today" class="today-card" data-i18n-attr="aria-label=오늘 일정" hidden></section>
       </div>
 
       <div class="plan-toolbar">
-        <div class="seg" role="group" aria-label="보기 방식">
-          <button data-view="list" title="날짜별로 위아래로 보기">목록</button>
-          <button data-view="board" title="모든 날을 칸으로 펼쳐 보기">보드</button>
+        <div class="seg" role="group" data-i18n-attr="aria-label=보기 방식">
+          <button data-view="list" data-i18n="목록" data-i18n-attr="title=날짜별로 위아래로 보기">목록</button>
+          <button data-view="board" data-i18n="보드" data-i18n-attr="title=모든 날을 칸으로 펼쳐 보기">보드</button>
         </div>
-        <div class="mtabs" role="group" aria-label="일정 · 지도">
-          <button data-tab="plan" class="active">일정</button>
-          <button data-tab="map">지도</button>
+        <div class="mtabs" role="group" data-i18n-attr="aria-label=일정 · 지도">
+          <button data-tab="plan" class="active" data-i18n="일정">일정</button>
+          <button data-tab="map" data-i18n="지도">지도</button>
         </div>
-        <button id="mapToggle" class="pill board-only">지도 숨기기</button>
+        <button id="mapToggle" class="pill board-only"></button>
       </div>
 
       <div class="layout" data-view="list" data-tab="plan">
         <section class="plan">
           <div class="search card">
             <div class="search-row">
-              <input id="search" type="search" autocomplete="off"
-                     placeholder="장소 검색 (한국어는 Enter) 또는 구글맵 링크">
-              <button id="pickBtn" class="pill" aria-label="지도에서 위치 선택" aria-pressed="false"><svg class="ic"><use href="#i-pin"/></svg><span class="hide-sm">지도에서 찍기</span></button>
+              <input id="search" type="search" autocomplete="off" data-i18n-attr="placeholder=장소 검색 (한국어는 Enter) 또는 구글맵 링크;aria-label=장소 검색">
+              <button id="pickBtn" class="pill" data-i18n-attr="aria-label=지도에서 위치 선택" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-pin"/></svg><span class="hide-sm" data-i18n="지도에서 찍기">지도에서 찍기</span></button>
             </div>
             <div class="target-row">
-              <label class="target">추가할 곳 <select id="target"></select></label>
-              <button type="button" id="bulkBtn" class="linkbtn" title="구글맵 링크 여러 개, 구글 테이크아웃 저장 장소 파일">링크 여러 개 담기</button>
+              <label class="target"><span data-i18n="추가할 곳">추가할 곳</span> <select id="target"></select></label>
+              <button type="button" id="bulkBtn" class="linkbtn" data-i18n="링크 여러 개 담기" data-i18n-attr="title=구글맵 링크 여러 개, 구글 테이크아웃 저장 장소 파일">링크 여러 개 담기</button>
             </div>
             <div id="stayOpts" class="stay-opts" data-dp-pair="숙소 날짜" data-dp-min-nights="1" hidden>
-              <label>체크인 <input type="date" id="stayIn" data-dp="start" aria-label="체크인"></label>
+              <label><span data-i18n="체크인">체크인</span> <input type="date" id="stayIn" data-dp="start" aria-label="체크인"></label>
               <span class="arrow">→</span>
-              <label>체크아웃 <input type="date" id="stayOut" data-dp="end" aria-label="체크아웃"></label>
-              <span id="stayNightsLabel" class="nights-chip">2박</span>
-              <span class="hint">숙소 이름을 검색하거나 ‘지도에서 찍기’로 위치를 골라요.</span>
+              <label><span data-i18n="체크아웃">체크아웃</span> <input type="date" id="stayOut" data-dp="end" aria-label="체크아웃"></label>
+              <span id="stayNightsLabel" class="nights-chip"></span>
+              <span class="hint" data-i18n="숙소 이름을 검색하거나 ‘지도에서 찍기’로 위치를 골라요.">숙소 이름을 검색하거나 ‘지도에서 찍기’로 위치를 골라요.</span>
             </div>
             <ul id="results" class="results" hidden></ul>
           </div>
-          <div id="dayTabs" class="daytabs" role="tablist" aria-label="날짜로 이동"></div>
+          <div id="planEmpty"></div>
+          <div id="dayTabs" class="daytabs" role="tablist" data-i18n-attr="aria-label=날짜로 이동"></div>
           <div id="days" class="days"></div>
           <div id="inboxDock" class="inbox-dock"></div>
         </section>
         <aside class="side">
           <section class="mapwrap">
             <div id="map"></div>
-            <div class="map-ctl">
-              <div class="map-day-switcher" role="group" aria-label="지도 일차 전환">
-                <button type="button" id="dayPrev" aria-label="이전 일차">‹</button>
-                <span id="mapDayLabel" role="status"></span>
-                <button type="button" id="dayNext" aria-label="다음 일차">›</button>
+            <div class="map-top">
+              <div class="map-ctl">
+                <div class="map-day-switcher" role="group" data-i18n-attr="aria-label=지도 일차 전환">
+                  <button type="button" id="dayPrev" data-i18n-attr="aria-label=이전 일차">‹</button>
+                  <span id="mapDayLabel" role="status"></span>
+                  <button type="button" id="dayNext" data-i18n-attr="aria-label=다음 일차">›</button>
+                </div>
+                <button type="button" id="showAll" aria-pressed="false" data-i18n="전체 동선">전체 동선</button>
               </div>
-              <button type="button" id="showAll" aria-pressed="false">전체 동선</button>
+              <div id="pinLegend" class="pin-legend"></div>
             </div>
-            <button type="button" id="mapLocate" class="map-locate" aria-label="현재 위치 보기" title="현재 위치 보기">◎</button>
-            <div id="mapPlace" class="map-place" role="region" aria-label="지도 장소 요약" hidden></div>
+            <button type="button" id="mapLocate" class="map-locate" data-i18n-attr="aria-label=현재 위치 보기;title=현재 위치 보기">◎</button>
+            <div id="mapPlace" class="map-place" role="region" data-i18n-attr="aria-label=지도 장소 요약" hidden></div>
+            <div id="tileError" class="map-error" role="status" hidden>
+              <span data-i18n="지도 바탕을 불러오지 못했어요. 일정과 핀은 그대로 쓸 수 있어요.">지도 바탕을 불러오지 못했어요. 일정과 핀은 그대로 쓸 수 있어요.</span>
+              <button type="button" id="tileRetry" data-i18n="다시 시도">다시 시도</button>
+            </div>
             <div id="pickPin" hidden aria-hidden="true"><svg class="ic"><use href="#i-pin"/></svg></div>
-            <div id="pickHint" class="pick-hint" hidden>지도를 움직여 핀을 맞추세요.
-              <button type="button" id="pickConfirm">이 위치 선택</button><button type="button" id="pickCancel">취소</button>
+            <div id="pickHint" class="pick-hint" role="group" data-i18n-attr="aria-label=지도에서 위치 고르기" hidden>
+              <b class="pick-mode" data-i18n="위치 고르는 중">위치 고르는 중</b>
+              <span id="pickText" data-i18n="지도를 움직여 가운데 핀을 맞춘 뒤 확정하세요.">지도를 움직여 가운데 핀을 맞춘 뒤 확정하세요.</span>
+              <span class="pick-actions"><button type="button" id="pickCancel" data-i18n="취소">취소</button><button type="button" id="pickConfirm" class="primary" data-i18n="이 위치 선택">이 위치 선택</button></span>
             </div>
-            <div id="pinLegend" class="pin-legend"></div>
           </section>
         </aside>
       </div>
@@ -180,103 +214,135 @@
     <section id="page-check" class="page" hidden></section>
     </main>
 
-    <nav class="pagebar" aria-label="화면">
-      <button class="pg" data-page="home"><svg class="ic"><use href="#i-home"/></svg>홈</button>
-      <button class="pg trip-only" data-page="plan"><svg class="ic"><use href="#i-plan"/></svg>일정</button>
-      <button class="pg trip-only" data-page="budget"><svg class="ic"><use href="#i-wallet"/></svg>가계부</button>
-      <button class="pg trip-only" data-page="check"><svg class="ic"><use href="#i-check"/></svg>체크<b class="check-badge" hidden></b></button>
+    <nav class="pagebar" data-i18n-attr="aria-label=화면">
+      <button class="pg" data-page="home"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg><span data-i18n="홈">홈</span></button>
+      <button class="pg trip-only" data-page="plan"><svg class="ic" aria-hidden="true"><use href="#i-plan"/></svg><span data-i18n="일정">일정</span></button>
+      <button class="pg trip-only" data-page="budget"><svg class="ic" aria-hidden="true"><use href="#i-wallet"/></svg><span data-i18n="가계부">가계부</span></button>
+      <button class="pg trip-only" data-page="check"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg><span data-i18n="체크">체크</span><b class="check-badge" hidden></b></button>
     </nav>
   </div>
 
 
   <dialog id="new-trip-modal" aria-labelledby="newTripTitle">
-    <div class="new-trip-head"><h2 id="newTripTitle">새 여행</h2><button type="button" id="newTripClose" class="icon" aria-label="닫기">×</button></div>
+    <div class="new-trip-head"><h2 id="newTripTitle" data-i18n="새 여행">새 여행</h2><button type="button" id="newTripClose" class="icon" data-i18n-attr="aria-label=닫기">×</button></div>
     <div id="newTripFields"></div>
   </dialog>
 
-  <dialog id="flightDialog">
+  <dialog id="flightDialog" aria-labelledby="flightDialogTitle">
     <div class="dialog-body">
-      <h2>항공편</h2>
+      <h2 id="flightDialogTitle" data-i18n="항공편">항공편</h2>
       <ul id="flightList" class="trip-list flight-list"></ul>
       <form id="flightForm" class="new-trip flight-form" novalidate>
-        <h3 id="flightFormTitle">항공편 추가</h3>
-        <div class="kind-seg" role="radiogroup" aria-label="구분">
-          <label><input type="radio" name="kind" value="out" checked><span>출국</span></label>
-          <label><input type="radio" name="kind" value="move"><span>여행 중 이동</span></label>
-          <label><input type="radio" name="kind" value="in"><span>귀국</span></label>
+        <h3 id="flightFormTitle"></h3>
+        <div class="kind-seg" role="radiogroup" data-i18n-attr="aria-label=구분">
+          <label><input type="radio" name="kind" value="out" checked><span data-i18n="출국">출국</span></label>
+          <label><input type="radio" name="kind" value="move"><span data-i18n="여행 중 이동">여행 중 이동</span></label>
+          <label><input type="radio" name="kind" value="in"><span data-i18n="귀국">귀국</span></label>
         </div>
-        <label>편명 <input name="flightNo" placeholder="예: KE723" autocomplete="off"></label>
+        <label><span data-i18n="편명">편명</span> <input name="flightNo" data-i18n-attr="placeholder=예: KE723" autocomplete="off"></label>
         <div class="row">
-          <label class="suggest-field">출발 공항 <input name="from" id="flightFrom" placeholder="ICN" autocomplete="off"></label>
-          <label class="suggest-field">도착 공항 <input name="to" id="flightTo" placeholder="KIX" autocomplete="off"></label>
-        </div>
-        <div class="row">
-          <label>출발 (현지 시각) <input type="datetime-local" name="departAt"></label>
-          <label>도착 (현지 시각) <input type="datetime-local" name="arriveAt"></label>
+          <label class="suggest-field"><span data-i18n="출발 공항">출발 공항</span> <input name="from" id="flightFrom" placeholder="ICN" autocomplete="off"></label>
+          <label class="suggest-field"><span data-i18n="도착 공항">도착 공항</span> <input name="to" id="flightTo" placeholder="KIX" autocomplete="off"></label>
         </div>
         <div class="row">
-          <label>예약번호 <input name="bookingRef" autocomplete="off"></label>
-          <label>메모 <input name="memo" placeholder="터미널, 수하물 등"></label>
+          <label><span data-i18n="출발 (현지 시각)">출발 (현지 시각)</span> <input type="datetime-local" name="departAt" aria-label="출발 (현지 시각)"></label>
+          <label><span data-i18n="도착 (현지 시각)">도착 (현지 시각)</span> <input type="datetime-local" name="arriveAt" aria-label="도착 (현지 시각)"></label>
         </div>
-        <p id="flightError" class="form-error" hidden></p>
+        <div class="row">
+          <label><span data-i18n="예약번호">예약번호</span> <input name="bookingRef" autocomplete="off"></label>
+          <label><span data-i18n="메모">메모</span> <input name="memo" data-i18n-attr="placeholder=터미널, 수하물 등"></label>
+        </div>
+        <p id="flightError" class="form-error" role="alert" hidden></p>
         <div class="dialog-actions">
-          <button type="button" id="flightNew" class="btn ghost" hidden>새로 입력</button>
-          <button type="button" id="flightClose" class="btn ghost">닫기</button>
-          <button type="submit" id="flightSubmit" class="btn primary">추가</button>
+          <button type="button" id="flightNew" class="btn ghost" hidden data-i18n="새로 입력">새로 입력</button>
+          <button type="button" id="flightClose" class="btn ghost" data-i18n="닫기">닫기</button>
+          <button type="submit" id="flightSubmit" class="btn primary"></button>
         </div>
       </form>
     </div>
   </dialog>
-  <dialog id="bulkDialog" class="bulk-dialog">
+  <dialog id="bulkDialog" class="bulk-dialog" aria-labelledby="bulkTitle">
     <div class="dialog-body">
-      <h2>장소 여러 개 한 번에 담기</h2>
-      <p class="fine">구글맵·애플맵 링크 여러 개, "위도, 경도" 줄, 구글 테이크아웃의 저장 장소 파일(Saved Places.json, 저장 목록 .csv)을 넣으면 미리 보여줘요. 고른 것만 담아요.</p>
-      <textarea id="bulkText" rows="5" placeholder="여기에 붙여넣기&#10;예) https://www.google.com/maps/place/…&#10;     34.6687, 135.5013"></textarea>
+      <h2 id="bulkTitle" data-i18n="장소 여러 개 한 번에 담기">장소 여러 개 한 번에 담기</h2>
+      <p class="fine" data-i18n='구글맵·애플맵 링크 여러 개, "위도, 경도" 줄, 구글 테이크아웃의 저장 장소 파일(Saved Places.json, 저장 목록 .csv)을 넣으면 미리 보여줘요. 고른 것만 담아요.'>구글맵·애플맵 링크 여러 개, "위도, 경도" 줄, 구글 테이크아웃의 저장 장소 파일(Saved Places.json, 저장 목록 .csv)을 넣으면 미리 보여줘요. 고른 것만 담아요.</p>
+      <textarea id="bulkText" rows="5" data-i18n-attr="aria-label=붙여넣을 링크·좌표;placeholder=여기에 붙여넣기&#10;예) https://www.google.com/maps/place/…&#10;     34.6687, 135.5013"></textarea>
       <div class="bulk-tools">
-        <label class="linkbtn bulk-file">파일 고르기 (.json, .csv)<input type="file" id="bulkFile" accept=".json,.csv,.geojson,.txt,application/json,text/csv" hidden></label>
+        <label class="linkbtn bulk-file"><span data-i18n="파일 고르기 (.json, .csv)">파일 고르기 (.json, .csv)</span><input type="file" id="bulkFile" accept=".json,.csv,.geojson,.txt,application/json,text/csv" hidden></label>
         <span id="bulkSummary" class="fine"></span>
       </div>
-      <p class="fine">파일은 최대 5MB까지 읽어요. 장소가 200개를 넘으면 여러 파일로 나눠 가져오세요.</p>
+      <p class="fine" data-i18n="파일은 최대 5MB까지 읽어요. 장소가 200개를 넘으면 여러 파일로 나눠 가져오세요.">파일은 최대 5MB까지 읽어요. 장소가 200개를 넘으면 여러 파일로 나눠 가져오세요.</p>
       <p id="bulkStatus" class="form-error" role="status"></p>
       <ul id="bulkList" class="bulk-list"></ul>
       <div class="dialog-actions">
-        <label class="bulk-dest">담을 곳 <select id="bulkDest"></select></label>
-        <button type="button" id="bulkClose" class="btn ghost">닫기</button>
-        <button type="button" id="bulkAdd" class="btn primary" disabled>담기</button>
+        <label class="bulk-dest"><span data-i18n="담을 곳">담을 곳</span> <select id="bulkDest"></select></label>
+        <button type="button" id="bulkClose" class="btn ghost" data-i18n="닫기">닫기</button>
+        <button type="button" id="bulkAdd" class="btn primary" disabled data-i18n="담기">담기</button>
       </div>
     </div>
   </dialog>
 
-  <dialog id="shareDialog" class="share-dialog">
+  <dialog id="shareDialog" class="share-dialog" aria-labelledby="shareDialogTitle">
     <div class="dialog-body">
-      <h2>일정 공유하기</h2>
-      <p class="fine">받는 사람은 <b>앱 설치나 가입 없이</b> 링크만 누르면 바로 봐요.</p>
-      <label><input id="shareExcludePrivate" type="checkbox" checked> 메모·항공편 예약번호 제외하고 공유하기</label>
-      <div class="share-card" aria-label="공유 메시지 요약">
-        <div class="share-card-top"><svg class="ic"><use href="#i-plane"/></svg></div>
+      <h2 id="shareDialogTitle" data-i18n="일정 공유하기">일정 공유하기</h2>
+      <p class="fine" data-i18n="받는 사람은 앱 설치나 가입 없이 링크만 누르면 바로 봐요.">받는 사람은 앱 설치나 가입 없이 링크만 누르면 바로 봐요.</p>
+      <label><input id="shareExcludePrivate" type="checkbox" checked> <span data-i18n="메모·항공편 예약번호 제외하고 공유하기">메모·항공편 예약번호 제외하고 공유하기</span></label>
+      <div class="share-card" data-i18n-attr="aria-label=공유 메시지 요약">
+        <div class="share-card-top"><svg class="ic" aria-hidden="true"><use href="#i-plane"/></svg></div>
         <div class="share-card-body">
           <strong id="shareTitle"></strong>
           <span id="shareLine"></span>
           <span id="shareLink" class="share-link"></span>
         </div>
       </div>
-      <p id="shareLong" class="fine" hidden>긴 링크로 만들었어요. 메신저에는 기본 XenoTravel 미리보기가 표시될 수 있어요.</p>
-      <p id="shareTooLong" class="fine warn" hidden>링크가 2,000자를 넘어서 메신저에서 잘릴 수 있어요. 일정 파일을 보내고, 받는 사람에게 ‘백업 파일 불러오기’를 안내하세요.</p>
-      <button type="button" id="shareFile" class="btn" hidden>공유 일정 파일 저장 (JSON)</button>
+      <p id="shareLong" class="fine" hidden data-i18n="긴 링크로 만들었어요. 메신저에는 기본 XenoTravel 미리보기가 표시될 수 있어요.">긴 링크로 만들었어요. 메신저에는 기본 XenoTravel 미리보기가 표시될 수 있어요.</p>
+      <p id="shareTooLong" class="fine warn" hidden data-i18n="링크가 2,000자를 넘어서 메신저에서 잘릴 수 있어요. 일정 파일을 보내고, 받는 사람에게 ‘백업 파일 불러오기’를 안내하세요.">링크가 2,000자를 넘어서 메신저에서 잘릴 수 있어요. 일정 파일을 보내고, 받는 사람에게 ‘백업 파일 불러오기’를 안내하세요.</p>
+      <p id="shareError" class="form-error" role="alert" hidden></p>
+      <button type="button" id="shareFile" class="btn" hidden data-i18n="공유 일정 파일 저장 (JSON)">공유 일정 파일 저장 (JSON)</button>
       <div class="share-buttons">
-        <button type="button" id="shareCopy" class="btn primary share-main">메시지 복사</button>
-        <button type="button" id="shareNative" class="btn" hidden>다른 앱으로 보내기</button>
-        <button type="button" id="shareCopyLink" class="btn ghost">링크만 복사</button>
+        <button type="button" id="shareCopy" class="btn primary share-main" data-i18n="메시지 복사">메시지 복사</button>
+        <button type="button" id="shareNative" class="btn" hidden data-i18n="다른 앱으로 보내기">다른 앱으로 보내기</button>
+        <button type="button" id="shareCopyLink" class="btn ghost" data-i18n="링크만 복사">링크만 복사</button>
       </div>
       <ul class="share-notes">
-        <li>보기 전용이에요. 받은 사람이 원하면 자기 여행으로 저장해서 고칠 수 있어요.</li>
-        <li>링크는 <b>지금 일정의 사본</b>이에요. 일정을 고쳤다면 링크를 다시 보내 주세요.</li>
-        <li>링크를 가진 사람은 누구나 볼 수 있어요. 메모 속 예약번호에 주의하세요.</li>
+        <li data-i18n="보기 전용이에요. 받은 사람이 원하면 자기 여행으로 저장해서 고칠 수 있어요.">보기 전용이에요. 받은 사람이 원하면 자기 여행으로 저장해서 고칠 수 있어요.</li>
+        <li data-i18n="링크는 지금 일정의 사본이에요. 일정을 고쳤다면 링크를 다시 보내 주세요.">링크는 지금 일정의 사본이에요. 일정을 고쳤다면 링크를 다시 보내 주세요.</li>
+        <li data-i18n="링크를 가진 사람은 누구나 볼 수 있어요. 메모 속 예약번호에 주의하세요.">링크를 가진 사람은 누구나 볼 수 있어요. 메모 속 예약번호에 주의하세요.</li>
+        <li data-i18n="가계부와 체크리스트는 공유 링크에 들어가지 않아요.">가계부와 체크리스트는 공유 링크에 들어가지 않아요.</li>
       </ul>
       <div class="dialog-actions">
-        <button type="button" id="shareClose" class="btn ghost">닫기</button>
+        <button type="button" id="shareClose" class="btn ghost" data-i18n="닫기">닫기</button>
       </div>
     </div>
+  </dialog>
+
+  <!-- 확인 창 (날짜 변경 영향, 저장 충돌, 백업 중복 등). 내용은 app.js의 ask()가 채운다 -->
+  <dialog id="askDialog" class="ask-dialog" aria-labelledby="askTitle" aria-describedby="askBody">
+    <form method="dialog" class="dialog-body">
+      <h2 id="askTitle"></h2>
+      <div id="askBody" class="ask-body"></div>
+      <div id="askActions" class="dialog-actions"></div>
+    </form>
+  </dialog>
+
+  <!-- 클립보드 복사가 안 될 때: 직접 복사 -->
+  <dialog id="copyDialog" aria-labelledby="copyTitle">
+    <div class="dialog-body">
+      <h2 id="copyTitle" data-i18n="직접 복사해 주세요">직접 복사해 주세요</h2>
+      <p class="fine" id="copyHint" data-i18n="이 브라우저에서는 자동 복사가 막혀 있어요. 아래 글이 선택되어 있으니 길게 누르거나 Ctrl+C(⌘C)로 복사하세요.">이 브라우저에서는 자동 복사가 막혀 있어요. 아래 글이 선택되어 있으니 길게 누르거나 Ctrl+C(⌘C)로 복사하세요.</p>
+      <textarea id="copyText" rows="6" readonly data-i18n-attr="aria-label=복사할 내용"></textarea>
+      <div class="dialog-actions">
+        <button type="button" id="copyBackup" class="btn" hidden data-i18n="공유 일정 파일 저장 (JSON)">공유 일정 파일 저장 (JSON)</button>
+        <button type="button" id="copyClose" class="btn primary" data-i18n="닫기">닫기</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="privacyDialog" class="privacy-dialog" aria-labelledby="privacyTitle">
+    <div class="privacy-head">
+      <h2 id="privacyTitle" data-i18n="개인정보처리방침">개인정보처리방침</h2>
+      <button type="button" id="privacyClose" class="icon" data-i18n-attr="aria-label=닫기">×</button>
+    </div>
+    <div id="privacyBody" class="privacy-body" tabindex="0" data-i18n-attr="aria-label=개인정보처리방침 본문"></div>
   </dialog>
 
   <template id="airports">

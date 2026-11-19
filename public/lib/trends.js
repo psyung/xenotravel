@@ -1,6 +1,7 @@
 // 트렌드(요즘 뜨는 곳) 데이터 처리. 순수 함수만 둔다.
 
 import { distanceKm, categoryFromText } from './model.js';
+import { t, monthName } from './i18n.js';
 
 export { distanceKm };
 
@@ -41,17 +42,17 @@ export function activePlaces(city, today) {
 const md = (s) => {
   const m = /^\d{4}-(\d{2})(?:-(\d{2}))?$/.exec(s ?? '');
   if (!m) return s ?? '';
-  return m[2] ? `${+m[1]}/${+m[2]}` : `${+m[1]}월`;
+  return m[2] ? `${+m[1]}/${+m[2]}` : monthName(+m[1]);
 };
 
 export function statusLabel(p, today) {
   if (p.status === 'event') {
-    if (p.since && p.since > today) return `${md(p.since)}~${md(p.until)} 기간 한정`;
-    return p.until ? `~${md(p.until)} 기간 한정` : '기간 한정';
+    if (p.since && p.since > today) return t('{range} 기간 한정', { range: `${md(p.since)}~${md(p.until)}` });
+    return p.until ? t('{range} 기간 한정', { range: `~${md(p.until)}` }) : t('기간 한정');
   }
-  if (p.status === 'upcoming') return p.since ? `${md(p.since)} 오픈 예정` : '오픈 예정';
-  if (p.status === 'new') return '새로 오픈';
-  return '꾸준한 인기';
+  if (p.status === 'upcoming') return p.since ? t('{when} 오픈 예정', { when: md(p.since) }) : t('오픈 예정');
+  if (p.status === 'new') return t('새로 오픈');
+  return t('꾸준한 인기');
 }
 
 /** 트렌드 장소를 일정 항목용 장소로 바꾼다. */

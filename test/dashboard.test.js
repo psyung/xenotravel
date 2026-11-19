@@ -48,7 +48,13 @@ test('budget: 통화 추측, 환율, 기록, 합계', () => {
   const b = B.ensureBudget(t);
   assert.equal(b.currency, 'JPY');
   assert.equal(B.expenseProblem({ amount: 1000, cur: 'local' }, b), null); // 환율이 없어도 현지 돈으로 적을 수 있다
-  assert.equal(B.expenseProblem({ amount: 0, cur: 'KRW' }, b), '금액을 입력해 주세요');
+  // 금액 칸 안내 (I04): 비었을 때·숫자가 아닐 때·0 이하·너무 클 때 각각 다르게
+  assert.equal(B.expenseProblem({ amount: '', cur: 'KRW' }, b), '금액을 입력해 주세요');
+  assert.equal(B.expenseProblem({ amount: 0, cur: 'KRW' }, b), '0보다 큰 금액을 입력해 주세요');
+  assert.equal(B.expenseProblem({ amount: '-500', cur: 'KRW' }, b), '0보다 큰 금액을 입력해 주세요');
+  assert.match(B.expenseProblem({ amount: '12a', cur: 'KRW' }, b), /숫자만/);
+  assert.match(B.expenseProblem({ amount: '2000000000', cur: 'KRW' }, b), /너무 커요/);
+  assert.equal(B.expenseProblem({ amount: '1,200.5', cur: 'KRW' }, b), null);
   b.krwPerUnit = 9.12;
   b.total = 500000;
   assert.equal(B.rateLabel(b), '100엔 = 912원');

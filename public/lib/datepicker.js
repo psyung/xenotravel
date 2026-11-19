@@ -6,7 +6,8 @@
 //    data-dp-pair="여행 날짜"처럼 값에 제목을, data-dp-min-nights="1"로 최소 박 수를 줄 수 있다.
 //    고른 뒤 "적용"을 누르면 end input에 change(버블링)를 한 번만 보낸다.
 //  - 날짜+시간: input[type="datetime-local"] → 날짜 버튼 + 시간 칸.
-import { formatDate, parseDate, selectRangeDate } from './model.js';
+import { parseDate, selectRangeDate } from './model.js';
+import { t, getLang, locale, longDateYear, shortDate, weekday, tripLength } from './i18n.js';
 
 const ICON_CAL = '<svg class="dp-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5h16V20H4z M4 10.5h16 M8.5 3.5v4 M15.5 3.5v4"/></svg>';
 const CHEV = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;
@@ -14,18 +15,12 @@ const mobile = () => matchMedia('(max-width: 640px)').matches;
 const nights = (a, b) => Math.round((parseDate(b) - parseDate(a)) / 86400000);
 
 /** "12월 1일 (화)" — 올해가 아니면 앞에 연도 */
-function label(date) {
-  const d = parseDate(date);
-  if (!d) return '';
-  const y = d.getUTCFullYear() !== new Date().getFullYear() ? `${d.getUTCFullYear()}년 ` : '';
-  return y + formatDate(date);
-}
+const label = (date) => longDateYear(date);
 
 function rangeText(a, b) {
-  if (!a) return '날짜를 골라 주세요';
-  if (!b) return `${label(a)} → 끝나는 날을 골라 주세요`;
-  const n = nights(a, b);
-  return `${label(a)} – ${label(b)} · ${n ? `${n}박 ${n + 1}일` : '당일'}`;
+  if (!a) return t('날짜를 골라 주세요');
+  if (!b) return `${label(a)} → ${t('끝나는 날을 골라 주세요')}`;
+  return `${label(a)} – ${label(b)} · ${tripLength(nights(a, b) + 1)}`;
 }
 
 /* ───────── 팝오버 (화면에 하나만) ───────── */
@@ -45,13 +40,13 @@ function ensurePop() {
       <div class="dp-grip" aria-hidden="true"></div>
       <div class="dp-head">
         <div><h2 class="dp-title" id="datePickerTitle"></h2><p class="dp-sum" role="status"></p></div>
-        <button type="button" class="dp-dismiss" data-dp-close aria-label="달력 닫기">×</button>
+        <button type="button" class="dp-dismiss" data-dp-close aria-label="${t('달력 닫기')}">×</button>
       </div>
       <div class="dp-cal"></div>
       <p class="dp-err" role="status" hidden></p>
       <div class="dp-foot">
-        <button type="button" class="dp-btn ghost" data-dp-close>취소</button>
-        <button type="button" class="dp-btn primary" data-dp-apply>적용</button>
+        <button type="button" class="dp-btn ghost" data-dp-close>${t('취소')}</button>
+        <button type="button" class="dp-btn primary" data-dp-apply>${t('적용')}</button>
       </div>
       <span class="dp-focus-end" tabindex="0"></span>
     </div>`;
@@ -95,9 +90,9 @@ function ensurePop() {
 function calendarHtml(kind, months) {
   const tag = kind === 'range' ? 'calendar-range' : 'calendar-date';
   const monthsHtml = Array.from({ length: months }, (_, i) => `<calendar-month${i ? ` offset="${i}"` : ''}></calendar-month>`).join('');
-  return `<${tag} class="dp-c" months="${months}" locale="ko-KR" first-day-of-week="0" show-outside-days="false">
-      <span slot="previous" aria-label="이전 달">${CHEV('m14.5 6-6 6 6 6')}</span>
-      <span slot="next" aria-label="다음 달">${CHEV('m9.5 6 6 6-6 6')}</span>
+  return `<${tag} class="dp-c" months="${months}" locale="${locale()}" first-day-of-week="${getLang() === 'zh' ? 1 : 0}" show-outside-days="false">
+      <span slot="previous" aria-label="${t('이전 달')}">${CHEV('m14.5 6-6 6 6 6')}</span>
+      <span slot="next" aria-label="${t('다음 달')}">${CHEV('m9.5 6 6 6-6 6')}</span>
       <div class="dp-months">${monthsHtml}</div>
     </${tag}>`;
 }
@@ -107,6 +102,10 @@ function open(opts) {
   if (state?.anchor === opts.anchor) return close();
   if (state) close(false);
   state = { ...opts };
+  // 언어를 바꾼 뒤 처음 열 때 버튼 글자도 지금 언어로
+  $q('.dp-dismiss').setAttribute('aria-label', t('달력 닫기'));
+  $q('.dp-foot [data-dp-close]').textContent = t('취소');
+  $q('[data-dp-apply]').textContent = t('적용');
   opts.anchor.setAttribute('aria-expanded', 'true');
   const months = opts.kind === 'range' && !mobile() ? 2 : 1;
   $q('.dp-title').textContent = opts.title;
@@ -189,10 +188,10 @@ function update() {
     const short = state.end && state.minNights && nights(state.start, state.end) < state.minNights;
     const err = $q('.dp-err');
     err.hidden = !short;
-    err.textContent = short ? `${state.minNights}박 이상 골라 주세요` : '';
+    err.textContent = short ? t('{n}박 이상 골라 주세요', { n: state.minNights }) : '';
     $q('[data-dp-apply]').disabled = !state.end || short;
   } else {
-    $q('.dp-sum').textContent = state.value ? label(state.value) : '날짜를 골라 주세요';
+    $q('.dp-sum').textContent = state.value ? label(state.value) : t('날짜를 골라 주세요');
   }
 }
 
@@ -256,6 +255,9 @@ function watch(input, onChange) {
   input.form?.addEventListener('reset', () => setTimeout(onChange));
 }
 
+// 버튼 이름은 그릴 때마다 지금 언어로 다시 읽는다 (언어를 바꾸면 refreshDates로 다시 그린다)
+const fieldLabel = (input, placeholder) => t(input.getAttribute('aria-label') || input.closest('label')?.firstChild?.textContent.trim() || placeholder);
+
 function fieldButton(input, placeholder) {
   const btn = document.createElement('button');
   btn.type = 'button';
@@ -263,9 +265,9 @@ function fieldButton(input, placeholder) {
   btn.setAttribute('aria-haspopup', 'dialog');
   btn.setAttribute('aria-controls', 'datePicker');
   btn.setAttribute('aria-expanded', 'false');
-  btn.dataset.label = input.getAttribute('aria-label') || input.closest('label')?.firstChild?.textContent.trim() || placeholder;
   btn.innerHTML = `${ICON_CAL}<span class="dp-val"></span>`;
   btn.dataset.placeholder = placeholder;
+  btn.dpLabel = () => fieldLabel(input, placeholder);
   input.classList.add('dp-native');
   input.tabIndex = -1;
   input.setAttribute('aria-hidden', 'true');
@@ -273,15 +275,12 @@ function fieldButton(input, placeholder) {
   return btn;
 }
 
-function shortLabel(date) {
-  const d = parseDate(date);
-  return d ? `${d.getUTCMonth() + 1}/${d.getUTCDate()} (${formatDate(date).slice(-2, -1)})` : '';
-}
+const shortLabel = (date) => (parseDate(date) ? `${shortDate(date)} (${weekday(date)})` : '');
 
 function paint(btn, value, disabled, short = false) {
   const v = btn.querySelector('.dp-val');
-  v.textContent = value ? (short ? shortLabel(value) : label(value)) : btn.dataset.placeholder;
-  btn.setAttribute('aria-label', `${btn.dataset.label} · ${value ? label(value) : '날짜 선택'}`);
+  v.textContent = value ? (short ? shortLabel(value) : label(value)) : t(btn.dataset.placeholder);
+  btn.setAttribute('aria-label', `${btn.dpLabel()} · ${value ? label(value) : t('날짜 선택')}`);
   btn.classList.toggle('empty', !value);
   btn.disabled = disabled;
 }
@@ -300,6 +299,8 @@ function enhancePair(scope) {
   };
   watch(start, sync);
   watch(end, sync);
+  sync.el = bs;
+  repaints.add(sync);
   sync();
   const show = (anchor) =>
     open({
@@ -308,7 +309,7 @@ function enhancePair(scope) {
       startButton: bs,
       endButton: be,
       activeField: anchor === bs ? 'start' : 'end',
-      title: scope.dataset.dpPair || '날짜',
+      title: t(scope.dataset.dpPair || '날짜'),
       minNights: Number(scope.dataset.dpMinNights) || 0,
       start: start.value,
       end: end.value,
@@ -337,7 +338,7 @@ function enhanceDateTime(input) {
   const time = document.createElement('input');
   time.type = 'time';
   time.className = 'dp-time';
-  time.setAttribute('aria-label', '시간');
+  time.setAttribute('aria-label', t('시간'));
   wrap.append(time);
   const parts = () => {
     const [d = '', t = ''] = VALUE.get.call(input).split('T');
@@ -356,6 +357,12 @@ function enhanceDateTime(input) {
     input.dispatchEvent(new Event('change', { bubbles: true }));
   };
   watch(input, sync);
+  const repaint = () => {
+    time.setAttribute('aria-label', t('시간'));
+    sync();
+  };
+  repaint.el = btn;
+  repaints.add(repaint);
   sync();
   time.addEventListener('change', () => {
     const { d } = parts();
@@ -367,7 +374,7 @@ function enhanceDateTime(input) {
     open({
       kind: 'date',
       anchor: btn,
-      title: input.closest('label')?.firstChild?.textContent.trim() || '날짜',
+      title: t(input.closest('label')?.firstChild?.textContent.trim() || '날짜'),
       value: parts().d,
       near,
       onApply: ({ value }) => write(value, time.value || parts().t),
@@ -388,4 +395,14 @@ export function enhanceDates(root = document) {
 
 export function closeDatePicker() {
   close();
+}
+
+/** 언어를 바꾸면 날짜 버튼 글자를 다시 그린다. 화면에서 사라진 칸은 정리한다. */
+const repaints = new Set();
+export function refreshDates() {
+  close(false);
+  for (const fn of repaints) {
+    if (!fn.el?.isConnected) repaints.delete(fn);
+    else fn();
+  }
 }

@@ -11,7 +11,8 @@ const FORECAST_DAYS = 15; // 오늘 + 15일 = 16일치
 const PAST_FORECAST_DAYS = 60; // 이보다 최근 지난 날은 예보 API가 그대로 돌려준다
 
 /* WMO 날씨 코드 → 한국어 + 아이콘 종류 */
-const CODES = [
+/** 날씨 문구는 번역 키다 (화면에서 t(text)) */
+export const CODES = [
   [[0], '맑음', 'sun'],
   [[1], '대체로 맑음', 'sun'],
   [[2], '구름 조금', 'partly'],

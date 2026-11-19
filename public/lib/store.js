@@ -1,6 +1,16 @@
 // 브라우저 저장소. 이 버전은 서버 없이 이 브라우저에만 저장한다.
-const KEY = 'xenotravel:v1';
+// 같은 여행을 여러 탭에서 열어도 서로의 변경을 지우지 않게, 저장할 때마다 저장소의 최신 내용과 합친다 (sync.js).
+//
+//   const db = openStore(localStorage);   탭마다 하나
+//   const store = db.load();               { trips, currentId, problem }
+//   db.save(store)  → { ok: true, changed: 다른 탭 변경이 들어와 바뀐 여행 id들 }
+//                   | { ok: false, conflicts }   같은 항목을 양쪽에서 다르게 바꿈 → 고른 뒤 { choices }로 다시 저장
+//                   | { ok: false, error: 'quota' | 'denied' | 'unavailable' }  쓰지 못함 (메모리의 데이터는 그대로)
+import { mergeStore, stable } from './sync.js';
+
+export const KEY = 'xenotravel:v1';
 const LEGACY_KEYS = ['tripnote:v1']; // 이름 변경 전 저장분을 이어받는다
+export const CORRUPT_KEY = 'xenotravel:corrupt'; // 읽지 못한 저장분을 지우지 않고 옮겨 둔다
 
 function removeSampleExpense(trip) {
   if (trip?.title !== '도쿄 3박 4일 샘플' || trip.destination !== '도쿄' || !Array.isArray(trip.expenses)) return;
@@ -12,29 +22,132 @@ function removeSampleExpense(trip) {
   }
 }
 
-export function loadStore() {
+const validTrip = (t) => t && typeof t === 'object' && typeof t.id === 'string' && Array.isArray(t.days) && t.days.length > 0;
+
+/** 저장 문자열 → { trips, currentId, dropped } (형식이 틀리면 null) */
+function parse(raw) {
   try {
-    for (const key of [KEY, ...LEGACY_KEYS]) {
-      const raw = localStorage.getItem(key);
-      if (!raw) continue;
-      const s = JSON.parse(raw);
-      if (s && typeof s.trips === 'object' && s.trips) {
-        Object.values(s.trips).forEach(removeSampleExpense);
-        return { trips: s.trips, currentId: s.currentId ?? null };
-      }
-    }
+    const s = JSON.parse(raw);
+    if (!s || typeof s.trips !== 'object' || !s.trips || Array.isArray(s.trips)) return null;
+    // 하나가 망가져도 나머지 여행은 연다
+    const trips = Object.fromEntries(Object.entries(s.trips).filter(([, t]) => validTrip(t)));
+    return { trips, currentId: s.currentId ?? null, dropped: Object.keys(s.trips).length - Object.keys(trips).length };
   } catch {
-    /* 저장소를 쓸 수 없는 환경: 빈 상태로 시작 */
+    return null;
   }
-  return { trips: {}, currentId: null };
 }
 
-/** 성공하면 true. 시크릿 모드·용량 초과 등으로 실패하면 false. */
-export function saveStore(store) {
-  try {
-    localStorage.setItem(KEY, JSON.stringify({ trips: store.trips, currentId: store.currentId }));
-    return true;
-  } catch {
-    return false;
+const errorKind = (err) => (err?.name === 'QuotaExceededError' || err?.code === 22 || /quota/i.test(String(err?.message)) ? 'quota' : 'denied');
+
+export function openStore(storage = globalThis.localStorage) {
+  let base = {}; // 이 탭이 마지막으로 읽거나 쓴 여행들 (깊은 복사)
+  let baseRaw = null; // 그때의 저장 문자열
+  let corruptRaw = null; // 읽지 못한 원본 (백업 파일로 내려받을 수 있게)
+
+  function keepCorrupt(raw) {
+    corruptRaw = raw;
+    try {
+      if (storage.getItem(CORRUPT_KEY) !== raw) storage.setItem(CORRUPT_KEY, raw);
+    } catch {
+      /* 공간이 없으면 메모리에만 (화면에서 파일로 내려받을 수 있다) */
+    }
   }
+
+  /**
+   * → { trips, currentId, problem: null | 'corrupt' | 'partial' | 'unavailable' }
+   *   corrupt: 저장분을 읽지 못했다 (원본은 xenotravel:corrupt에 옮겨 두고 빈 상태로 시작)
+   *   partial: 일부 여행이 망가져 빼고 열었다 (원본은 같은 곳에)
+   */
+  function load() {
+    let problem = null;
+    try {
+      for (const key of [KEY, ...LEGACY_KEYS]) {
+        const raw = storage.getItem(key);
+        if (!raw) continue;
+        const s = parse(raw);
+        if (!s) {
+          keepCorrupt(raw);
+          problem = 'corrupt';
+          continue;
+        }
+        if (s.dropped) {
+          keepCorrupt(raw);
+          problem = 'partial';
+        }
+        Object.values(s.trips).forEach(removeSampleExpense);
+        if (key === KEY) {
+          baseRaw = raw;
+          base = parse(raw).trips;
+        }
+        return { trips: s.trips, currentId: s.currentId, problem };
+      }
+    } catch {
+      problem = 'unavailable';
+    }
+    return { trips: {}, currentId: null, problem };
+  }
+
+  function apply(store, trips, changed) {
+    for (const id of changed) {
+      if (trips[id]) store.trips[id] = trips[id];
+      else delete store.trips[id];
+    }
+  }
+
+  /** 저장. 그사이 다른 탭이 저장했으면 합친 결과를 쓰고 store.trips도 그 결과로 바꾼다. */
+  function save(store, { choices = {} } = {}) {
+    let raw;
+    try {
+      raw = storage.getItem(KEY);
+    } catch {
+      return { ok: false, error: 'unavailable' };
+    }
+    let trips = store.trips;
+    const changed = [];
+    if (raw !== baseRaw) {
+      // 다른 탭이 저장했다
+      let remote = raw ? parse(raw) : { trips: {}, currentId: null };
+      if (!remote) {
+        keepCorrupt(raw);
+        remote = { trips: {}, currentId: null };
+      }
+      const merged = mergeStore(base, store.trips, remote.trips, choices);
+      if (merged.conflicts.length) return { ok: false, conflicts: merged.conflicts };
+      trips = merged.trips;
+      for (const id of new Set([...Object.keys(store.trips), ...Object.keys(trips)])) {
+        if (store.trips[id] !== trips[id]) changed.push(id);
+      }
+      // 합친 결과가 저장소와 같으면 다시 쓰지 않는다 (탭끼리 서로 깨우며 계속 쓰는 것을 막는다)
+      if (raw && stable(trips) === stable(remote.trips)) {
+        apply(store, trips, changed);
+        baseRaw = raw;
+        base = parse(raw).trips;
+        return { ok: true, changed };
+      }
+    }
+    const out = JSON.stringify({ trips, currentId: store.currentId });
+    try {
+      if (out !== raw) storage.setItem(KEY, out);
+    } catch (err) {
+      return { ok: false, error: errorKind(err) };
+    }
+    apply(store, trips, changed);
+    baseRaw = out;
+    base = JSON.parse(out).trips;
+    return { ok: true, changed };
+  }
+
+  /** 저장소가 마지막으로 읽은 뒤 바뀌었는지 */
+  function stale() {
+    try {
+      return storage.getItem(KEY) !== baseRaw;
+    } catch {
+      return false;
+    }
+  }
+
+  return { load, save, stale, corruptBackup: () => corruptRaw };
 }
+
+/** 예전 방식 호환: 한 번 읽기 (테스트·간단한 도구용) */
+export const loadStore = (storage = globalThis.localStorage) => openStore(storage).load();
