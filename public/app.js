@@ -539,18 +539,49 @@ function detailHtml(x, { stay = false } = {}) {
     </div>`;
 }
 
+/* ───────── 장소 비용 ─────────
+ * 예정 비용("¥1,200")은 카드 이름 옆에, 결제하면 "결제 ₩10,800"으로 바뀐다. 결제·취소는 편집 창과 오늘 카드에서.
+ */
+function costTagHtml(it) {
+  const paid = trip.expenses?.length ? B.placeExpense(trip, it.id) : null;
+  if (paid) return `<span class="cost-tag paid" title="가계부에 기록됨">결제 ${paid.krw == null ? esc(B.money(paid.amount, trip.budget.currency)) : B.won(paid.krw)}</span>`;
+  if (!(it.cost?.price > 0)) return '';
+  const code = it.cost.cur === 'KRW' ? 'KRW' : trip.budget?.currency ?? B.guessCurrency(trip.destination);
+  return `<span class="cost-tag" title="예정 비용">${esc(B.money(it.cost.price, code))}</span>`;
+}
+const nameHtml = (it) => `<span class="nm">${esc(it.name)}</span>${catIcon(it)}${costTagHtml(it)}`;
+
+function costEditorHtml(it) {
+  const b = trip.budget ?? { currency: B.guessCurrency(trip.destination) };
+  const local = b.currency !== 'KRW';
+  const paid = B.placeExpense(trip, it.id);
+  const cur = it.cost?.cur ?? 'local';
+  return `<div class="cost-row">
+      <label>예상 비용<span class="cost-in"><input data-cost="price" inputmode="decimal" value="${it.cost?.price ?? ''}" placeholder="입장료·식사 등">${
+        local
+          ? `<select data-cost="cur" aria-label="통화"><option value="local"${cur === 'local' ? ' selected' : ''}>${esc(B.CURRENCIES[b.currency]?.symbol ?? '')} ${esc(b.currency)}</option><option value="KRW"${cur === 'KRW' ? ' selected' : ''}>₩ 원</option></select>`
+          : ''
+      }</span></label>
+      ${
+        paid
+          ? `<span class="paid-note">가계부에 ${paid.krw == null ? esc(B.money(paid.amount, b.currency)) : B.won(paid.krw)} 기록됨 <button type="button" data-action="unpay">결제 취소</button></span>`
+          : `<button type="button" class="pay-btn" data-action="pay">결제 완료로 기록</button>`
+      }
+    </div>`;
+}
+
 function itemHtml(it, i, isDay, leg = null) {
   const open = ui.openItem === it.id;
   const sub = esc(it.memo.split('\n')[0] || it.address); // 시간은 타임라인 왼쪽에 따로 보인다
-  return `<li class="item${open ? ' open' : ''}" data-id="${it.id}">
+  return `<li class="item${open ? ' open' : ''}${it.visited ? ' visited' : ''}" data-id="${it.id}">
     ${legHtml(leg)}
     <div class="tl-time">${esc(it.time)}</div>
     <div class="tl-box">
     <div class="item-row">
       <span class="drag" title="끌어서 순서·날짜 바꾸기">⋮⋮</span>
-      <span class="num">${isDay ? i + 1 : '•'}</span>
+      <span class="num"${it.visited ? ' title="다녀왔어요"' : ''}>${it.visited ? '✓' : isDay ? i + 1 : '•'}</span>
       <button class="item-main" data-action="toggle">
-        <span class="item-name"><span class="nm">${esc(it.name)}</span>${catIcon(it)}</span>
+        <span class="item-name">${nameHtml(it)}</span>
         <span class="item-sub">${sub}</span>
       </button>
       <button class="icon" data-action="duplicate" title="복제">⧉</button>
@@ -566,6 +597,7 @@ function itemHtml(it, i, isDay, leg = null) {
         .map(([k, c]) => `<button type="button" data-action="set-cat" data-cat="${k}" class="${it.category === k ? 'on' : ''}" style="--c:${c.color}">${c.label}</button>`)
         .join('')}</div>
       <label>시간<input type="time" data-field="time" value="${esc(it.time)}"></label>
+      ${isDay ? costEditorHtml(it) : ''}
       <label>메모<textarea data-field="memo" placeholder="영업시간, 예약번호, 꼭 먹을 것…">${esc(it.memo)}</textarea></label>
       <label>링크<input type="url" data-field="url" value="${esc(it.url)}" placeholder="예약 페이지, 블로그 등"></label>
       <label>다른 날로 옮기기<select class="move-to">${moveOptions(listIdOf(it.id), '옮길 날 고르기')}</select></label>
@@ -1079,6 +1111,27 @@ $('#days').addEventListener('click', (e) => {
   } else if (action === 'sort-time') {
     M.sortByTime(M.getList(trip, btn.dataset.list));
     commit();
+  } else if (action === 'pay' || action === 'unpay') {
+    const found = M.findItem(trip, id);
+    if (!found) return;
+    if (action === 'unpay') {
+      B.unpayPlace(trip, id);
+      commit();
+      return toast('결제 기록을 지웠어요');
+    }
+    // 칸에 적은 금액으로 기록 (예정 비용이 비어 있으면 그 금액을 예정 비용으로도 둔다)
+    const row = btn.closest('.cost-row');
+    const amount = $('[data-cost="price"]', row)?.value;
+    const cur = $('[data-cost="cur"]', row)?.value ?? 'local';
+    if (!found.item.cost) B.setPlaceCost(found.item, amount, cur);
+    B.ensureBudget(trip);
+    const r = B.payPlace(trip, id, { amount, cur, today: TODAY });
+    if (!r) {
+      $('[data-cost="price"]', row)?.focus();
+      return toast('얼마였는지 금액을 먼저 적어 주세요');
+    }
+    commit();
+    toast(r.expense.krw == null ? '가계부에 기록했어요. 원화는 환율을 받으면 계산해요' : `가계부에 ${B.won(r.expense.krw)} 기록했어요`);
   } else if (action === 'wx-ref') {
     ui.wxRefOpen ??= new Set();
     const id = btn.dataset.dayId;
@@ -1176,11 +1229,22 @@ $('#days').addEventListener('input', (e) => {
   persist();
   const li = e.target.closest('.item');
   const it = found.item;
-  $('.item-name', li).innerHTML = `<span class="nm">${esc(it.name)}</span>${catIcon(it)}`;
+  $('.item-name', li).innerHTML = nameHtml(it);
   $('.item-sub', li).textContent = it.memo.split('\n')[0] || it.address;
   const timeEl = $('.tl-time', li);
   if (timeEl) timeEl.textContent = it.time;
   refreshMapSoon();
+});
+
+// 장소 예상 비용: 칸을 벗어나거나 통화를 바꾸면 저장 (가계부 "예상"에 바로 잡힌다)
+$('#days').addEventListener('change', (e) => {
+  const key = e.target.dataset.cost;
+  const li = key && e.target.closest('.item');
+  const found = li && M.findItem(trip, li.dataset.id);
+  if (!found) return;
+  const row = e.target.closest('.cost-row');
+  B.setPlaceCost(found.item, $('[data-cost="price"]', row).value, $('[data-cost="cur"]', row)?.value ?? 'local');
+  commit();
 });
 
 $('#days').addEventListener('change', (e) => {
@@ -1866,15 +1930,22 @@ const nowHHMM = () => {
 function todayRowHtml(it, n, isNext) {
   const addr = it.address || `${(+it.lat).toFixed(5)}, ${(+it.lng).toFixed(5)}`;
   const memo = String(it.memo ?? '').split('\n')[0];
-  return `<li class="td-row${isNext ? ' next' : ''}">
+  const paid = B.placeExpense(trip, it.id);
+  const canPay = !ui.readonly && !paid && it.cost?.price > 0;
+  return `<li class="td-row${isNext ? ' next' : ''}${it.visited ? ' visited' : ''}">
       <span class="td-time">${esc(it.time) || ''}</span>
-      <span class="td-num">${n}</span>
+      ${
+        ui.readonly
+          ? `<span class="td-num">${it.visited ? '✓' : n}</span>`
+          : `<button type="button" class="td-num" data-today="visit" data-id="${it.id}" aria-pressed="${!!it.visited}" title="${it.visited ? '다녀온 표시 지우기' : '다녀왔어요'}">${it.visited ? '✓' : n}</button>`
+      }
       <div class="td-body">
-        <b>${esc(it.name)}${isNext ? '<span class="td-next">다음</span>' : ''}</b>
+        <b>${esc(it.name)}${isNext ? '<span class="td-next">다음</span>' : ''}${costTagHtml(it)}</b>
         <small>${esc(addr)}</small>
         ${memo ? `<small class="td-memo">${esc(memo)}</small>` : ''}
       </div>
       <div class="td-acts">
+        ${canPay ? `<button type="button" data-today="pay" data-id="${it.id}" title="예정 비용 그대로 가계부에 기록">결제</button>` : ''}
         <button type="button" data-today="copy" data-text="${esc(addr)}" title="주소 복사 (택시 기사에게 보여주기)">주소</button>
         <a href="${M.directionsFromHereUrl(it)}" target="_blank" rel="noopener" title="지금 위치에서 길찾기">길찾기</a>
       </div>
@@ -1915,6 +1986,18 @@ $('#today').addEventListener('click', (e) => {
   if (!b) return;
   const act = b.dataset.today;
   if (act === 'copy') copyText(b.dataset.text, '주소를 복사했어요');
+  else if (act === 'visit') {
+    const found = M.findItem(trip, b.dataset.id);
+    if (!found) return;
+    found.item.visited = !found.item.visited;
+    commit();
+  } else if (act === 'pay') {
+    B.ensureBudget(trip);
+    const r = B.payPlace(trip, b.dataset.id, { today: TODAY });
+    if (!r) return;
+    commit();
+    toast(r.expense.krw == null ? '가계부에 기록했어요. 원화는 환율을 받으면 계산해요' : `가계부에 ${B.won(r.expense.krw)} 기록했어요`);
+  }
   else if (act === 'share') copyText(M.dayShareText(trip, Number(b.dataset.day)), '오늘 일정을 복사했어요. 카톡에 붙여넣으세요');
   else if (act === 'expense') {
     showPage('budget');
@@ -1927,8 +2010,8 @@ setInterval(() => !$('#today').hidden && prefs.page === 'plan' && renderToday(),
 function renderNotice() {
   const list = ui.readonly ? [] : M.tripNotices(trip);
   const total = trip.budget?.total;
-  const plan = total ? C.planned(trip).total : 0;
-  if (!ui.readonly && total && plan > total) list.push(`체크리스트 예상(${B.won(plan)})이 예산(${B.won(total)})보다 ${B.won(plan - total)} 많아요`);
+  const plan = total ? B.combinePlans(C.planned(trip), B.placePlanned(trip)).total : 0;
+  if (!ui.readonly && total && plan > total) list.push(`예상 비용(${B.won(plan)})이 예산(${B.won(total)})보다 ${B.won(plan - total)} 많아요`);
   const el = $('#notice');
   el.hidden = !list.length;
   el.innerHTML = list.length ? `<b>확인</b><ul>${list.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
@@ -2061,7 +2144,7 @@ function renderBudget() {
   const local = b.currency !== 'KRW';
   const useLocal = local && f.cur === 'local';
   const s = B.summarize(trip);
-  const plan = C.planned(trip);
+  const plan = B.combinePlans(C.planned(trip), B.placePlanned(trip));
   const dayKeys = [-1, ...trip.days.map((_, i) => i)];
   const dayMax = Math.max(1, ...dayKeys.map((k) => s.byDay[k] ?? 0));
   const recs = [...trip.expenses].reverse();
@@ -2071,9 +2154,9 @@ function renderBudget() {
     <p class="page-sub">금액만 넣고 기록하면 돼요. 현지 돈으로 적으면 그때 환율로 원화도 같이 저장돼요.</p>
     <div class="grid3 kpis kpis4">
       <label class="kpi"><span>1인 예산 (원)</span><input id="bTotal" inputmode="numeric" value="${b.total ? b.total.toLocaleString('ko-KR') : ''}" placeholder="예: 800,000"></label>
-      <button class="kpi plan${b.total && plan.total > b.total ? ' hot' : ''}" data-b="to-check" title="체크리스트에서 가격을 넣으면 여기에 잡혀요">
-        <span>예상 (체크리스트)</span><b>${plan.priced ? B.won(plan.total) : '—'}</b>
-        <small>${plan.priced ? (b.total && plan.total > b.total ? `예산보다 ${B.won(plan.total - b.total)} 많아요` : `${plan.priced}개 품목 · 가격 고치기 →`) : '체크리스트에 가격 넣기 →'}</small>
+      <button class="kpi plan${b.total && plan.total > b.total ? ' hot' : ''}" data-b="to-check" title="장소의 예상 비용과 체크리스트 가격이 여기에 잡혀요">
+        <span>예상 (장소·체크리스트)</span><b>${plan.priced ? B.won(plan.total) : '—'}</b>
+        <small>${plan.priced ? (b.total && plan.total > b.total ? `예산보다 ${B.won(plan.total - b.total)} 많아요` : `${plan.priced}개 항목${plan.noRate ? ` · 환율 미정 ${plan.noRate}개` : ''}`) : '장소나 체크리스트에 가격 넣기 →'}</small>
       </button>
       <div class="kpi"><span>쓴 돈</span><b>${B.won(s.spent)}</b><small>${trip.expenses.length}건${s.pending.count ? ` · <span class="pend">환율 미정 ${s.pending.count}건 (${esc(B.money(s.pending.amount, b.currency))})</span>` : ''}</small></div>
       <div class="kpi ${s.left < 0 ? 'hot' : 'ok'}"><span>${s.left < 0 ? '예산 초과' : '남은 예산'}</span><b>${b.total ? B.won(Math.abs(s.left)) : '—'}</b><small>${b.total ? `${Math.min(999, Math.round((s.spent / b.total) * 100))}% 사용` : '예산을 넣으면 계산해요'}</small></div>

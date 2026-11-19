@@ -4,7 +4,7 @@
 // trip.expenses = [{ id, amount, cur: 'local'|'KRW', krw, cat, pay, day, memo, at }]
 //   day: -1 = 출발 전, 0.. = Day n,  krw: 기록한 순간의 환율로 바꾼 원화 (나중에 환율이 바뀌어도 그대로)
 //   krw: null = 환율을 모를 때(오프라인 등) 현지 돈으로만 적은 것. 환율이 정해지면 fillPendingKrw가 채운다.
-import { uid } from './model.js';
+import { uid, findItem, indexOfDate } from './model.js';
 
 export const CURRENCIES = {
   JPY: { name: '엔', symbol: '¥', unit: 100 },
@@ -184,4 +184,95 @@ export function expensesCsv(trip) {
     e.at,
   ]);
   return '﻿' + [head, ...rows].map((r) => r.map(q).join(',')).join('\r\n');
+}
+
+/* ───────── 장소 비용 ─────────
+ * item.cost = { price, cur: 'local'|'KRW' }  예정 비용 (입장료, 식사 등). 가계부 "예상"에 잡힌다.
+ * 결제 완료 = 가계부 지출 하나가 그 장소와 연결된다 (expense.placeId = item.id).
+ *   여러 번 눌러도, 장소를 다른 날로 옮겨도 지출은 하나뿐이다. 취소하면 그 지출을 지운다.
+ * item.visited = 다녀왔는지 (결제와 따로. 무료 관광지는 다녀오기만, 선결제 숙소·티켓은 결제만 한다)
+ */
+export const PLACE_CAT = { food: 'food', cafe: 'food', sight: 'ticket', shop: 'shop', etc: 'etc' };
+
+/** 예정 비용 정하기 (0이나 빈 값이면 지운다) */
+export function setPlaceCost(item, price, cur = 'local') {
+  const n = Number(String(price ?? '').replace(/,/g, ''));
+  if (n > 0) item.cost = { price: n, cur: cur === 'KRW' ? 'KRW' : 'local' };
+  else delete item.cost;
+  return item;
+}
+
+/** 그 장소와 연결된 지출 (없으면 null) */
+export function placeExpense(trip, itemId) {
+  return (trip.expenses ?? []).find((e) => e.placeId === itemId) ?? null;
+}
+
+/**
+ * 결제 완료로 기록. amount/cur를 안 주면 예정 비용으로 적는다.
+ * 이미 기록돼 있으면 새로 만들지 않고 금액만 고친다. today가 여행 중이면 그날, 아니면 "출발 전"(선결제)으로 적는다.
+ * → { expense, created } | null (장소가 없거나 금액이 없음)
+ */
+export function payPlace(trip, itemId, { amount, cur, today = '' } = {}) {
+  const found = findItem(trip, itemId);
+  if (!found) return null;
+  const it = found.item;
+  const price = Number(String(amount ?? it.cost?.price ?? '').replace(/,/g, ''));
+  if (!(price > 0)) return null;
+  const c = (cur ?? it.cost?.cur) === 'KRW' ? 'KRW' : 'local';
+  const budget = ensureBudget(trip);
+  const old = placeExpense(trip, itemId);
+  if (old) {
+    old.amount = price;
+    old.cur = c;
+    old.krw = toKrw(price, c, budget);
+    return { expense: old, created: false };
+  }
+  const i = indexOfDate(trip, today);
+  const day = i != null && i >= 0 && i < trip.days.length ? i : -1;
+  const e = addExpense(trip, { amount: price, cur: c, cat: PLACE_CAT[it.category] ?? 'etc', pay: 'card', day, memo: it.name });
+  e.placeId = it.id;
+  return { expense: e, created: true };
+}
+
+/** 결제 취소: 연결된 지출을 지운다. 지운 개수. */
+export function unpayPlace(trip, itemId) {
+  const before = (trip.expenses ?? []).length;
+  trip.expenses = (trip.expenses ?? []).filter((e) => e.placeId !== itemId);
+  return before - trip.expenses.length;
+}
+
+/**
+ * 일정에 넣은 장소의 예정 비용 (보관함 제외, 원). { total, byCat, priced, noRate }
+ * 결제한 장소도 계획에는 그대로 넣는다 (계획 대비 실제를 보려고).
+ */
+export function placePlanned(trip) {
+  const budget = ensureBudget(trip);
+  const out = { total: 0, byCat: {}, priced: 0, noRate: 0 };
+  for (const d of trip.days) {
+    for (const it of d.items) {
+      if (!(it.cost?.price > 0)) continue;
+      out.priced++;
+      const krw = toKrw(it.cost.price, it.cost.cur, budget);
+      if (krw == null) {
+        out.noRate++;
+        continue;
+      }
+      const cat = PLACE_CAT[it.category] ?? 'etc';
+      out.total += krw;
+      out.byCat[cat] = (out.byCat[cat] ?? 0) + krw;
+    }
+  }
+  return out;
+}
+
+/** 예상 합치기 (체크리스트 + 장소) */
+export function combinePlans(...plans) {
+  const out = { total: 0, byCat: {}, priced: 0, noRate: 0 };
+  for (const p of plans) {
+    out.total += p.total;
+    out.priced += p.priced;
+    out.noRate += p.noRate;
+    for (const [k, v] of Object.entries(p.byCat)) out.byCat[k] = (out.byCat[k] ?? 0) + v;
+  }
+  return out;
 }

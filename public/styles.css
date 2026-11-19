@@ -1044,7 +1044,7 @@ button.chip.wx-ref:hover:not(:disabled) { color: var(--ink); border-color: var(-
 .wx-last b { font-weight: 600; }
 
 /* ───────── 여행 당일: 오늘 카드 ───────── */
-.today { margin-top: 12px; padding: 16px; border-radius: var(--r); background: var(--paper); border: 1.5px solid var(--accent); box-shadow: var(--shadow); }
+.today-card { margin-top: 12px; padding: 16px; border-radius: var(--r); background: var(--paper); border: 1.5px solid var(--accent); box-shadow: var(--shadow); }
 .td-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
 .td-head h2 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.03em; }
 .td-eyebrow { font-size: 12px; font-weight: 700; color: var(--accent); }
@@ -1074,7 +1074,7 @@ button.chip.wx-ref:hover:not(:disabled) { color: var(--ink); border-color: var(-
 .td-foot { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
 .td-foot .btn { flex: 1; height: 40px; font-size: 13px; }
 @media (max-width: 640px) {
-  .today { padding: 12px; }
+  .today-card { padding: 12px; }
   .td-row { grid-template-columns: 34px 20px minmax(0, 1fr); row-gap: 6px; }
   .td-row .td-acts { grid-column: 3; }
   .td-time { font-size: 11px; }
@@ -1089,3 +1089,28 @@ button.chip.wx-ref:hover:not(:disabled) { color: var(--ink); border-color: var(-
   .dc-head .dc-title-btn { flex: 1 1 100%; min-width: 0; }
   .dc-head .day-tools { flex: 1 1 100%; justify-content: flex-start; margin-left: -8px; }
 }
+
+/* ───────── 장소 비용 · 다녀옴 ───────── */
+.cost-tag { flex: none; margin-left: 6px; padding: 0 6px; border-radius: 5px; background: var(--soft); color: var(--sub); font-size: 11px; font-weight: 600; line-height: 18px; font-variant-numeric: tabular-nums; vertical-align: 1px; }
+.cost-tag.paid { background: var(--ok-soft); color: var(--ok); }
+.cost-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.cost-row > label { flex: 1 1 180px; }
+.cost-in { display: flex; gap: 6px; min-width: 0; }
+.cost-in input { flex: 1; width: 100%; min-width: 0; font-variant-numeric: tabular-nums; }
+.cost-in select { flex: none; }
+.pay-btn, .paid-note button { height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.pay-btn:hover { border-color: var(--ok); color: var(--ok); }
+.paid-note { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; color: var(--ok); font-size: 12.5px; font-weight: 600; }
+.paid-note button { height: 28px; padding: 0 8px; color: var(--sub); }
+.item.visited .num { background: var(--ok); color: #fff; }
+.item.visited .nm { color: var(--sub); }
+button.td-num { border: 0; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; padding: 0; }
+button.td-num:hover { box-shadow: 0 0 0 2px var(--ok-soft); }
+.td-row.visited .td-num, .td-row.visited.next .td-num { background: var(--ok); color: #fff; }
+.td-row.visited .td-body b { color: var(--sub); }
+.td-body b .cost-tag { font-size: 10.5px; }
+/* 편집 창 칸이 카드 밖으로 밀리지 않게 */
+.editor > * { min-width: 0; }
+.cost-row { min-width: 0; }
+.cost-row > label { min-width: 0; }
+.cost-in select { max-width: 110px; }

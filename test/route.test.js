@@ -104,7 +104,7 @@ test('dayShareText: 카톡용 하루 일정 (항공·숙소·시간·메모·동
   assert.equal(M.dayShareText(t, 9), '');
 });
 
-test('todayPlan: 여행 중일 때만, 다음 장소는 지금 이후 첫 시간', () => {
+test('todayPlan: 여행 중일 때만, 다음 장소는 안 다녀온 곳 중 시간이 안 지난 첫 장소', () => {
   const t = M.createTrip({ title: 't', startDate: '2026-12-01', endDate: '2026-12-03' });
   M.addStay(t, HOTEL, 0, 2);
   const a = M.addItem(t, t.days[1].id, NAMBA);
@@ -114,13 +114,19 @@ test('todayPlan: 여행 중일 때만, 다음 장소는 지금 이후 첫 시간
   c.time = '18:30';
   assert.equal(M.todayPlan(t, '2026-11-30', '10:00'), null);
   assert.equal(M.todayPlan(t, '2026-12-04', '10:00'), null);
-  const p = M.todayPlan(t, '2026-12-02', '14:05');
+  let p = M.todayPlan(t, '2026-12-02', '14:05');
   assert.equal(p.dayIndex, 1);
-  assert.equal(p.nextId, c.id);
+  assert.equal(p.nextId, a.id); // 시간 없는 첫 장소부터
+  a.visited = true;
+  p = M.todayPlan(t, '2026-12-02', '14:05');
+  assert.equal(p.nextId, c.id); // 13:00(b)은 지났다
   assert.equal(p.stay.name, '호텔');
   assert.equal(M.todayPlan(t, '2026-12-02', '20:00').nextId, null);
   assert.equal(M.todayPlan(t, '2026-12-02', '09:00').nextId, b.id);
-  assert.equal(a.time, '');
+  b.visited = true;
+  assert.equal(M.todayPlan(t, '2026-12-02', '09:00').nextId, c.id);
+  // 복제하면 다녀온 표시는 따라가지 않는다
+  assert.equal(M.duplicateItem(t, b.id).visited, undefined);
   // 마지막 날: 오늘 밤 숙소가 없으면 출발 숙소
   assert.equal(M.todayPlan(t, '2026-12-03', '09:00').stay.name, '호텔');
   assert.match(M.directionsFromHereUrl(NAMBA), /dir\/\?api=1&destination=34\.6656,135\.5013&travelmode=transit$/);

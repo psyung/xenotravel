@@ -213,3 +213,48 @@ test('budget: 환율을 모를 때(오프라인) 현지 돈으로 적고, 환율
   assert.equal(s.spent, 21380);
   assert.deepEqual(s.pending, { count: 0, amount: 0 });
 });
+
+test('장소 비용: 예상에 잡히고, 결제 완료는 지출 하나로만, 취소하면 지운다', () => {
+  const t = M.createTrip({ title: '오사카', destination: '오사카', startDate: '2026-12-01', endDate: '2026-12-03' });
+  const b = B.ensureBudget(t);
+  b.krwPerUnit = 9;
+  const castle = M.addItem(t, t.days[1].id, { name: '오사카성 천수각', lat: 34.68, lng: 135.52, category: 'sight' });
+  const ramen = M.addItem(t, t.days[1].id, { name: '이치란', lat: 34.66, lng: 135.5, category: 'food' });
+  const idea = M.addItem(t, M.INBOX, { name: '보관함 카페', lat: 34.6, lng: 135.5, category: 'cafe' });
+  B.setPlaceCost(castle, '1,200');
+  B.setPlaceCost(ramen, 15000, 'KRW');
+  B.setPlaceCost(idea, 800);
+  assert.deepEqual(castle.cost, { price: 1200, cur: 'local' });
+  const plan = B.placePlanned(t);
+  assert.equal(plan.priced, 2); // 보관함은 빼고
+  assert.equal(plan.total, 1200 * 9 + 15000);
+  assert.deepEqual(plan.byCat, { ticket: 10800, food: 15000 });
+
+  // 결제 완료: 여행 중이면 그날, 두 번 눌러도 하나
+  const r1 = B.payPlace(t, castle.id, { today: '2026-12-02' });
+  assert.equal(r1.created, true);
+  assert.equal(r1.expense.day, 1);
+  assert.equal(r1.expense.cat, 'ticket');
+  assert.equal(r1.expense.krw, 10800);
+  const r2 = B.payPlace(t, castle.id, { amount: 1000, today: '2026-12-02' });
+  assert.equal(r2.created, false);
+  assert.equal(t.expenses.length, 1);
+  assert.equal(t.expenses[0].amount, 1000);
+  // 다른 날로 옮겨도 지출은 그대로 하나
+  M.moveItem(t, castle.id, t.days[2].id, 0);
+  B.payPlace(t, castle.id, { today: '2026-12-03' });
+  assert.equal(t.expenses.length, 1);
+  assert.equal(B.placeExpense(t, castle.id).id, r1.expense.id);
+  // 출발 전에 결제(선결제)는 "출발 전"
+  assert.equal(B.payPlace(t, ramen.id, { today: '2026-11-20' }).expense.day, -1);
+  // 금액이 없으면 기록하지 않는다
+  const free = M.addItem(t, t.days[0].id, { name: '무료 공원', lat: 34.6, lng: 135.5 });
+  assert.equal(B.payPlace(t, free.id, {}), null);
+  // 취소
+  assert.equal(B.unpayPlace(t, castle.id), 1);
+  assert.equal(B.placeExpense(t, castle.id), null);
+  assert.equal(B.combinePlans(plan, { total: 500, byCat: { shop: 500 }, priced: 1, noRate: 0 }).total, plan.total + 500);
+  // 0이나 빈 값이면 비용을 지운다
+  B.setPlaceCost(castle, '');
+  assert.equal(castle.cost, undefined);
+});

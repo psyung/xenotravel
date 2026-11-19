@@ -527,7 +527,8 @@ export function stayDates(trip, stay) {
 export function duplicateItem(trip, itemId) {
   const found = findItem(trip, itemId);
   if (!found) return null;
-  const copy = { ...found.item, id: uid() };
+  const { visited, ...rest } = found.item; // 다녀온 표시는 복사하지 않는다 (결제 기록은 원본 id에 묶여 있다)
+  const copy = { ...rest, id: uid() };
   found.list.splice(found.index + 1, 0, copy);
   return copy;
 }
@@ -620,14 +621,14 @@ export function directionsFromHereUrl(to, mode = 'transit') {
 
 /**
  * 여행 당일 화면에 쓸 오늘 계획. 여행 기간이 아니면 null.
- * now = 'HH:MM' (기기 시각). 다음 장소 = 시간이 지금 이후인 첫 장소 (시간을 정한 곳이 없으면 없음).
+ * now = 'HH:MM' (기기 시각). 다음 장소 = 일정 순서대로 아직 안 다녀온 곳 중 첫 번째 (시간이 이미 지난 곳은 건너뛴다).
  * { dayIndex, items, nextId, stay: 오늘 밤 숙소(없으면 출발 숙소) }
  */
 export function todayPlan(trip, today, now) {
   const i = indexOfDate(trip, today);
   if (i == null || i < 0 || i >= trip.days.length) return null;
   const items = trip.days[i].items;
-  const next = items.find((it) => it.time && it.time >= now);
+  const next = items.find((it) => !it.visited && (!it.time || it.time >= now));
   const { start, end } = dayStays(trip, i);
   return { dayIndex: i, items, nextId: next?.id ?? null, stay: end ?? start ?? null };
 }
