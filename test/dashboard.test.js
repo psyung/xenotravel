@@ -264,3 +264,25 @@ test('장소 비용: 예상에 잡히고, 결제 완료는 지출 하나로만, 
   B.setPlaceCost(castle, '');
   assert.equal(castle.cost, undefined);
 });
+
+test('3-2: 저장한 지출 고치기 — id 유지, 메모·날짜만 바꾸면 원화 그대로, 금액을 바꾸면 기록 당시 환율', () => {
+  const t = M.createTrip({ title: '오사카', destination: '오사카', startDate: '2026-12-01', endDate: '2026-12-03' });
+  const b = B.ensureBudget(t);
+  b.krwPerUnit = 9; // 100엔 = 900원
+  const e = B.addExpense(t, { amount: 1000, cat: 'food', day: 1, memo: '라멘' });
+  assert.equal(e.krw, 9000);
+  b.krwPerUnit = 10; // 그 뒤 환율이 바뀜
+  B.updateExpense(t, e.id, { memo: '이치란', day: 0, cat: 'etc', pay: 'cash' });
+  assert.deepEqual([t.expenses.length, e.id, e.krw, e.memo, e.day, e.cat, e.pay], [1, t.expenses[0].id, 9000, '이치란', 0, 'etc', 'cash']);
+  const p = B.expenseKrwPreview(t, e, { amount: 2000, cur: 'local' });
+  assert.deepEqual([p.krw, p.source], [18000, 'recorded']);
+  B.updateExpense(t, e.id, { amount: '2,000' });
+  assert.equal(e.krw, 18000);
+  B.updateExpense(t, e.id, { cur: 'KRW', amount: 15000 });
+  assert.deepEqual([e.cur, e.krw], ['KRW', 15000]);
+  assert.equal(B.updateExpense(t, e.id, { amount: '-1' }), null);
+  assert.equal(e.amount, 15000, '잘못된 금액이면 그대로');
+  const s = B.summarize(t);
+  assert.equal(s.spent, 15000);
+  assert.equal(s.byDay[0], 15000);
+});

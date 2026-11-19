@@ -1,0 +1,137 @@
+{
+  "note": "trends.json의 서비스가 작성한 문구(지역·분류·설명, 한국어가 섞인 이름) 번역. 키는 장소 id. 출처 링크·제목은 원문 그대로 둔다. 번역이 없는 장소는 한국어 원문을 lang=ko로 보여준다.",
+  "cities": {
+    "tokyo": { "en": "Tokyo", "zh": "东京", "ja": "東京" },
+    "osaka": { "en": "Osaka", "zh": "大阪", "ja": "大阪" },
+    "kyoto": { "en": "Kyoto", "zh": "京都", "ja": "京都" },
+    "fukuoka": { "en": "Fukuoka", "zh": "福冈", "ja": "福岡" }
+  },
+  "categories": {
+    "테마파크": { "en": "Theme park", "zh": "主题公园", "ja": "テーマパーク" },
+    "전시·문화": { "en": "Exhibition · culture", "zh": "展览·文化", "ja": "展示・文化" },
+    "박물관": { "en": "Museum", "zh": "博物馆", "ja": "博物館" },
+    "엔터테인먼트": { "en": "Entertainment", "zh": "娱乐", "ja": "エンターテインメント" },
+    "야경·쇼": { "en": "Night view · show", "zh": "夜景·表演", "ja": "夜景・ショー" },
+    "쇼핑·복합시설": { "en": "Shopping · complex", "zh": "购物·综合设施", "ja": "ショッピング・複合施設" },
+    "공원·복합시설": { "en": "Park · complex", "zh": "公园·综合设施", "ja": "公園・複合施設" },
+    "쇼핑": { "en": "Shopping", "zh": "购物", "ja": "ショッピング" },
+    "야경·축제": { "en": "Night view · festival", "zh": "夜景·节庆", "ja": "夜景・祭り" },
+    "전시·미디어아트": { "en": "Exhibition · media art", "zh": "展览·媒体艺术", "ja": "展示・メディアアート" },
+    "카페": { "en": "Café", "zh": "咖啡馆", "ja": "カフェ" },
+    "맛집거리": { "en": "Food street", "zh": "美食街", "ja": "グルメ街" },
+    "랜드마크": { "en": "Landmark", "zh": "地标", "ja": "ランドマーク" },
+    "숙소": { "en": "Hotel", "zh": "住宿", "ja": "宿泊" }
+  },
+  "places": {
+    "tokyo-pokepark-kanto": {
+      "en": { "area": "Yomiuriland (Inagi)", "summary": "A permanent outdoor Pokémon park inside Yomiuriland. Tickets for overseas visitors open two months ahead at 6 p.m. JST and tend to sell out fast." },
+      "zh": { "area": "读卖乐园（稻城）", "summary": "位于读卖乐园内的常设户外宝可梦乐园。外国游客门票在两个月前的日本时间下午6点开售，通常很快售罄。" },
+      "ja": { "area": "よみうりランド（稲城）", "summary": "よみうりランド内にできた常設の屋外ポケモンパーク。海外向けチケットは2か月前の日本時間18時に発売され、すぐ売り切れがち。" }
+    },
+    "tokyo-mon-takanawa": {
+      "en": { "area": "Takanawa Gateway City", "summary": "A new cultural complex next to Takanawa Gateway Station. Easy to combine with the redeveloped area around the station." },
+      "zh": { "area": "高轮 Gateway City", "summary": "高轮 Gateway 站旁的新综合文化设施，适合与车站周边的再开发区一起逛。" },
+      "ja": { "area": "高輪ゲートウェイシティ", "summary": "高輪ゲートウェイ駅横の新しい複合文化施設。駅周辺の再開発エリアと一緒に回りやすい。" }
+    },
+    "tokyo-edo-tokyo-museum": {
+      "en": { "area": "Ryogoku", "summary": "The Edo-Tokyo history museum has reopened after renovation, with new exhibits such as a life-size recreation of the Hattori clock shop." },
+      "zh": { "area": "两国", "summary": "翻修后重新开放的江户东京历史博物馆，新增了等比例复原的服部钟表店等展览。" },
+      "ja": { "area": "両国", "summary": "リニューアルを終えて再開した江戸東京の歴史博物館。服部時計店の実物大再現など新しい展示が加わった。" }
+    },
+    "tokyo-dream-park": {
+      "en": { "area": "Ariake", "summary": "A large entertainment venue in Ariake built by TV Asahi. Pairs well with an Odaiba/Ariake day (sources list the opening as Mar 26 or 27)." },
+      "zh": { "area": "有明", "summary": "朝日电视台在有明打造的大型娱乐设施，适合与台场·有明行程搭配（各来源的开业日期为3/26或3/27）。" },
+      "ja": { "area": "有明", "summary": "テレビ朝日が手がけた有明の大型エンタメ施設。お台場・有明の予定と組み合わせやすい（開業日は出典により3/26〜3/27と異なる）。" }
+    },
+    "tokyo-aqua-symphony": {
+      "en": { "area": "Odaiba", "summary": "A fountain show on the Odaiba waterfront. A nice way to end the evening; check show times locally." },
+      "zh": { "area": "台场", "summary": "在台场海滨上演的喷泉秀，适合作为晚间行程的收尾。演出时间请到当地确认。" },
+      "ja": { "area": "お台場", "summary": "お台場の海辺で開かれる噴水ショー。夜の締めくくりにおすすめ。上演時間は現地で確認を。" }
+    },
+    "tokyo-disneysea-25th": {
+      "en": { "name": "Tokyo DisneySea 25th Anniversary 'Sparkling Jubilee'", "area": "Maihama (Urayasu)", "summary": "Events for DisneySea's 25th anniversary, with limited-time parades and merchandise—relevant if you're visiting this winter." },
+      "zh": { "name": "东京迪士尼海洋25周年“Sparkling Jubilee”", "area": "舞滨（浦安）", "summary": "迪士尼海洋开园25周年纪念活动，有期间限定的游行和周边，今年冬天出行正好赶上。" },
+      "ja": { "name": "東京ディズニーシー25周年「スパークリング・ジュビリー」", "area": "舞浜（浦安）", "summary": "ディズニーシー開園25周年の記念イベント。期間限定のパレードやグッズがあり、この冬の旅行なら対象。" }
+    },
+    "tokyo-tofrom-yaesu": {
+      "en": { "area": "Tokyo Station Yaesu", "summary": "A 51-story tower on the Yaesu side of Tokyo Station. Sources differ on the opening ('Q3' vs. 'Sep 10'), so check before visiting." },
+      "zh": { "area": "东京站八重洲", "summary": "位于东京站八重洲一侧的51层综合大楼。各来源的开业时间分别为“第三季度”和“9/10”，请出行前确认。" },
+      "ja": { "area": "東京駅八重洲", "summary": "東京駅八重洲側にできた51階建ての複合タワー。開業時期は出典により「第3四半期」と「9/10」で異なるので訪問前に確認を。" }
+    },
+    "osaka-grand-green": {
+      "en": { "name": "GRAND GREEN OSAKA (Umekita)", "area": "North of JR Osaka Station", "summary": "Phase 2 of the Umekita redevelopment just north of Osaka Station, with a large urban park and shops—easy to fit into an Osaka Station day." },
+      "zh": { "name": "GRAND GREEN OSAKA（梅北）", "area": "JR 大阪站北侧", "summary": "大阪站正北的梅北二期再开发区，大型城市公园与商业设施并存，方便安排在大阪站附近的行程中。" },
+      "ja": { "name": "GRAND GREEN OSAKA（うめきた）", "area": "JR大阪駅北側", "summary": "大阪駅すぐ北のうめきた2期再開発地区。大きな都市公園と商業施設があり、大阪駅の予定に組み込みやすい。" }
+    },
+    "osaka-lucua-south": {
+      "en": { "area": "JR Osaka Station", "summary": "A renovation of LUCUA's south building, connected to Osaka Station. Some sources mention character/anime floors, but they're less reliable—please verify." },
+      "zh": { "area": "JR 大阪站", "summary": "与大阪站相连的 LUCUA 南馆翻新。有介绍称设有角色·动漫相关楼层，但来源可信度较低，需确认。" },
+      "ja": { "area": "JR大阪駅", "summary": "大阪駅直結のルクア南側の建物のリニューアル。キャラクター・アニメ関連フロアがあるとの紹介もあるが、出典の信頼性が低く確認が必要。" }
+    },
+    "osaka-quartz-shinsaibashi": {
+      "en": { "area": "Shinsaibashi", "summary": "A new Shinsaibashi complex gathering fashion, wellness, outdoor, art, and restaurants. Easy to add to a Dotonbori/Shinsaibashi shopping route." },
+      "zh": { "area": "心斋桥", "summary": "汇集时尚、健康、户外、艺术和餐厅的心斋桥新商业设施，适合加入道顿堀·心斋桥购物路线。" },
+      "ja": { "area": "心斎橋", "summary": "ファッション・ウェルネス・アウトドア・アート・飲食を集めた心斎橋の新商業施設。道頓堀・心斎橋の買い物ルートに追加しやすい。" }
+    },
+    "osaka-usj-25th": {
+      "en": { "name": "Universal Studios Japan 25th Anniversary", "area": "Universal City", "summary": "Year-long events for the park's 25th anniversary. Limited-time attractions (Detective Conan, Jujutsu Kaisen, Monster Hunter, etc.) change by season, so check what's on for your dates." },
+      "zh": { "name": "日本环球影城25周年", "area": "环球城", "summary": "开园25周年的全年纪念活动。名侦探柯南、咒术回战、怪物猎人等期间限定项目按季节更换，请确认出行时的节目。" },
+      "ja": { "name": "ユニバーサル・スタジオ・ジャパン25周年", "area": "ユニバーサルシティ", "summary": "開業25周年の年間イベント。名探偵コナン・呪術廻戦・モンスターハンターなど期間限定アトラクションが季節ごとに変わるので、旅行時期のプログラムを確認。" }
+    },
+    "osaka-hikari-renaissance": {
+      "en": { "name": "OSAKA Festival of Lights Renaissance 2026", "area": "Nakanoshima (around Osaka City Hall)", "summary": "A winter illumination festival around Nakanoshima. Tsutenkaku joins for the first time this year—an evening option for a December trip." },
+      "zh": { "name": "大阪光之文艺复兴 2026", "area": "中之岛（大阪市政府一带）", "summary": "中之岛一带的冬季灯光节，今年通天阁首次参加。12月出行可作为晚间行程候选。" },
+      "ja": { "name": "OSAKA光のルネサンス2026", "area": "中之島（大阪市役所周辺）", "summary": "中之島一帯の冬のイルミネーション祭り。今年は通天閣も初参加。12月の旅行なら夜の予定の候補に。" }
+    },
+    "kyoto-teamlab-biovortex": {
+      "en": { "area": "Southeast of Kyoto Station (about 10 min walk)", "summary": "A permanent teamLab museum of over 10,000 m² near Kyoto Station. Good for rainy days or arrival/departure days." },
+      "zh": { "area": "京都站东南（步行约10分钟）", "summary": "京都站附近面积超过1万㎡的 teamLab 常设馆，适合雨天或抵达·离开当天的行程。" },
+      "ja": { "area": "京都駅南東（徒歩約10分）", "summary": "京都駅近くにできた1万㎡以上のチームラボ常設館。雨の日や到着・出発日の予定に入れやすい。" }
+    },
+    "kyoto-uzumasa-village": {
+      "en": { "name": "Uzumasa Kyoto Village (formerly Toei Kyoto Studio Park)", "area": "Uzumasa", "summary": "The Toei film studio theme park reopened (phase 1) under a new name, with ninja attractions, period-costume experiences, an Evangelion base, and more." },
+      "zh": { "name": "太秦京都村（原东映京都摄影所公园）", "area": "太秦", "summary": "东映电影摄影所主题公园更名后第一阶段重新开放，有忍者项目、古装体验、EVA 基地等。" },
+      "ja": { "name": "太秦京都ヴィレッジ（旧東映太秦映画村）", "area": "太秦", "summary": "東映の映画撮影所テーマパークが新しい名前で第1期リニューアルオープン。忍者アトラクション、時代劇衣装体験、エヴァンゲリオンの基地など。" }
+    },
+    "kyoto-zen-ghibli": {
+      "en": { "name": "Zen and Ghibli Exhibition", "area": "Higashiyama Cube (Kyocera Museum of Art)", "summary": "A limited-time Ghibli exhibition at Higashiyama Cube in the Kyocera Museum of Art, Okazaki. On the same route as Heian Shrine and Okazaki Park." },
+      "zh": { "name": "禅与吉卜力展", "area": "东山 Cube（京瓷美术馆）", "summary": "在冈崎京瓷美术馆东山 Cube 举办的期间限定吉卜力展，与平安神宫、冈崎公园同一路线。" },
+      "ja": { "name": "禅とジブリ展", "area": "東山キューブ（京セラ美術館）", "summary": "岡崎の京セラ美術館・東山キューブで開かれる期間限定のジブリ展。平安神宮・岡崎公園と同じルート。" }
+    },
+    "kyoto-naked-garden-nights": {
+      "en": { "area": "Shoseien · Higashi Honganji", "summary": "Nightly light installations at Shoseien Garden and Higashi Honganji near Kyoto Station. An easy evening walk if you stay near the station." },
+      "zh": { "area": "涉成园 · 东本愿寺", "summary": "京都站附近的涉成园和东本愿寺每晚举办的灯光装置展。住在京都站附近的话，晚上步行即可前往。" },
+      "ja": { "area": "渉成園・東本願寺", "summary": "京都駅近くの庭園・渉成園と東本願寺で毎晩開かれる光の展示。京都駅周辺に泊まるなら夜に歩いて行きやすい。" }
+    },
+    "kyoto-ruru-gion": {
+      "en": { "name": "RURU GION (matcha café)", "area": "Gion · next to Yasui Konpiragu", "summary": "A new matcha café next to Yasui Konpiragu Shrine. The opening was confirmed by only one source, so check before visiting." },
+      "zh": { "name": "RURU GION（抹茶咖啡馆）", "area": "祇园 · 安井金比罗宫旁", "summary": "安井金比罗宫旁新开的抹茶咖啡馆。开业消息只有一个来源，前往前请确认。" },
+      "ja": { "name": "RURU GION（抹茶カフェ）", "area": "祇園・安井金比羅宮そば", "summary": "安井金比羅宮の隣に新しくできた抹茶カフェ。開業情報が1か所でしか確認できないため、訪問前に確認を。" }
+    },
+    "fukuoka-kuohka": {
+      "en": { "area": "Canal City Hakata basement", "summary": "A new restaurant floor in Canal City's basement with 21 shops, including some first-in-Japan openings. Handy for a meal during a Hakata day." },
+      "zh": { "area": "博多运河城地下", "summary": "运河城地下的新美食街，汇集21家店铺，其中有首次进驻日本的门店，适合在博多行程中用餐。" },
+      "ja": { "area": "キャナルシティ博多 地下", "summary": "キャナルシティ地下の新しい飲食街。21店舗が集まり日本初出店もある。博多の予定中の食事に便利。" }
+    },
+    "fukuoka-gundam": {
+      "en": { "name": "Life-size Gundam statue · GUNDAM SIDE-F", "area": "LaLaport Fukuoka", "summary": "The life-size Gundam at LaLaport Fukuoka and the official Gundam store. It moves at set times." },
+      "zh": { "name": "等身大高达立像 · GUNDAM SIDE-F", "area": "LaLaport 福冈", "summary": "LaLaport 福冈的等身大高达与高达官方商店，在固定时间会有动态演出。" },
+      "ja": { "name": "実物大ガンダム立像・GUNDAM SIDE-F", "area": "ららぽーと福岡", "summary": "ららぽーと福岡の実物大ガンダムとガンダム公式ショップ。決まった時間に動く演出がある。" }
+    },
+    "fukuoka-teamlab-forest": {
+      "en": { "area": "Momochi (BOSS E・ZO FUKUOKA)", "summary": "A permanent teamLab museum near Fukuoka Tower and Momochi Beach. Consistently recommended by travel guides." },
+      "zh": { "area": "百道（BOSS E・ZO FUKUOKA）", "summary": "福冈塔·百道海滨附近的 teamLab 常设馆，一直受到旅游指南推荐。" },
+      "ja": { "area": "百道（BOSS E・ZO FUKUOKA）", "summary": "福岡タワー・シーサイドももち近くのチームラボ常設館。旅行ガイドで定番のおすすめ。" }
+    },
+    "fukuoka-prince-momochihama": {
+      "en": { "area": "Momochihama", "summary": "A new hotel facing Momochi Beach with views of both sea and city. Close to teamLab and Fukuoka Tower." },
+      "zh": { "area": "百道滨", "summary": "百道海滨前新开的酒店，可同时欣赏海景与城市景观，靠近 teamLab 和福冈塔。" },
+      "ja": { "area": "ももち浜", "summary": "シーサイドももちの前に新しく開業したホテル。海と街を一緒に望む景色が特徴で、チームラボや福岡タワーに近い。" }
+    },
+    "fukuoka-tenjin-1-7": {
+      "en": { "name": "Tenjin 1-7 Project (Tenjin Big Bang)", "area": "South of Tenjin Station", "summary": "A complex being built south of Tenjin Station as part of the 'Tenjin Big Bang' redevelopment. Targeting December 2026—check whether it's open for your trip." },
+      "zh": { "name": "天神1-7项目（天神 Big Bang）", "area": "天神站南侧", "summary": "天神再开发“天神 Big Bang”的一部分，在天神站南侧兴建的综合设施。目标2026年12月开业，请确认出行时是否已开放。" },
+      "ja": { "name": "天神1-7プロジェクト（天神ビッグバン）", "area": "天神駅南側", "summary": "天神の再開発「天神ビッグバン」のひとつとして天神駅南側に建設中の複合施設。2026年12月目標のため、旅行時期に開業しているか確認を。" }
+    }
+  }
+}

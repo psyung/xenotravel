@@ -65,6 +65,9 @@
             <button id="exportXlsx" class="page-trip" data-i18n="엑셀로 내보내기">엑셀로 내보내기</button>
             <button id="exportPdf" class="page-trip" data-i18n="PDF (인쇄용)">PDF (인쇄용)</button>
             <button data-menu="calendar" class="page-trip" data-i18n="캘린더로 내보내기 (.ics)">캘린더로 내보내기 (.ics)</button>
+            <hr class="menu-narrow">
+            <button data-menu="flights" class="page-trip menu-narrow edit-only" data-i18n="항공편">항공편</button>
+            <button data-menu="theme" id="themeMenu" class="menu-narrow"></button>
             <hr class="page-trip">
             <button data-menu="backup" class="page-trip" data-i18n="백업 파일 저장 (JSON)">백업 파일 저장 (JSON)</button>
             <button data-menu="import" class="edit-only" data-i18n="백업 파일 불러오기">백업 파일 불러오기</button>
@@ -95,7 +98,17 @@
     </div>
     <div id="inAppBar" class="shared-banner" hidden>
       <span data-i18n="인앱 브라우저에 저장한 여행은 다른 브라우저와 공유되지 않아요. 작성한 여행은 백업 파일로 옮길 수 있어요.">인앱 브라우저에 저장한 여행은 다른 브라우저와 공유되지 않아요. 작성한 여행은 백업 파일로 옮길 수 있어요.</span>
-      <button type="button" id="inAppBackup" class="btn" hidden data-i18n="백업 파일 저장">백업 파일 저장</button>
+      <button type="button" id="inAppBackup" class="btn primary" hidden data-i18n="백업 파일 저장">백업 파일 저장</button>
+      <details class="inapp-how">
+        <summary class="btn" data-i18n="기본 브라우저로 여는 방법">기본 브라우저로 여는 방법</summary>
+        <ul>
+          <li data-i18n="카카오톡: 오른쪽 아래(또는 위) ⋯ 메뉴 → ‘다른 브라우저로 열기’">카카오톡: 오른쪽 아래(또는 위) ⋯ 메뉴 → ‘다른 브라우저로 열기’</li>
+          <li data-i18n="인스타그램·페이스북: 오른쪽 위 ⋯ → ‘브라우저에서 열기’ (또는 ‘외부 브라우저에서 열기’)">인스타그램·페이스북: 오른쪽 위 ⋯ → ‘브라우저에서 열기’ (또는 ‘외부 브라우저에서 열기’)</li>
+          <li data-i18n="라인: 오른쪽 위 ⋯ → ‘기본 브라우저로 열기’">라인: 오른쪽 위 ⋯ → ‘기본 브라우저로 열기’</li>
+          <li data-i18n="이미 만든 여행은 먼저 ‘백업 파일 저장’ 후, 기본 브라우저에서 ‘백업 파일 불러오기’로 옮기세요.">이미 만든 여행은 먼저 ‘백업 파일 저장’ 후, 기본 브라우저에서 ‘백업 파일 불러오기’로 옮기세요.</li>
+        </ul>
+        <button type="button" id="inAppCopy" class="btn" data-i18n="이 주소 복사">이 주소 복사</button>
+      </details>
       <button type="button" id="inAppClose" class="btn" data-i18n="닫기" data-i18n-attr="aria-label=인앱 브라우저 안내 닫기">닫기</button>
     </div>
     <span id="inAppStatus" class="sr-only" role="status"></span>
@@ -112,7 +125,8 @@
     </div>
 
     <div id="sharedBanner" class="shared-banner" hidden>
-      <span><b id="sharedTitle"></b> · <span data-i18n="공유받은 일정이에요 (보기 전용)">공유받은 일정이에요 (보기 전용)</span><small id="sharedAt" hidden> · <time></time> <span data-i18n="기준 사본">기준 사본</span></small></span>
+      <span><b id="sharedTitle"></b> · <span data-i18n="공유받은 일정이에요 (보기 전용)">공유받은 일정이에요 (보기 전용)</span><small id="sharedAt" hidden> · <time></time> <span data-i18n="기준 사본">기준 사본</span></small>
+        <small class="shared-note" data-i18n="보낸 사람의 가계부와 체크리스트는 공유 링크에 들어가지 않아요. 내 여행으로 저장하면 직접 쓸 수 있어요.">보낸 사람의 가계부와 체크리스트는 공유 링크에 들어가지 않아요. 내 여행으로 저장하면 직접 쓸 수 있어요.</small></span>
       <span class="shared-actions">
         <button id="sharedSave" class="btn primary" data-i18n="내 여행으로 저장">내 여행으로 저장</button>
         <button id="sharedLeave" class="btn" data-i18n="닫기">닫기</button>
@@ -122,7 +136,8 @@
     <!-- ───────── 일정 ───────── -->
     <section id="page-home" class="page" hidden></section>
 
-    <section id="page-plan" class="page" hidden>
+    <section id="page-plan" class="page" hidden aria-labelledby="planHeading">
+      <h1 id="planHeading" class="sr-only"></h1>
       <div class="summary">
         <div class="hero">
           <div class="hero-l">
@@ -203,6 +218,10 @@
             <div id="pickHint" class="pick-hint" role="group" data-i18n-attr="aria-label=지도에서 위치 고르기" hidden>
               <b class="pick-mode" data-i18n="위치 고르는 중">위치 고르는 중</b>
               <span id="pickText" data-i18n="지도를 움직여 가운데 핀을 맞춘 뒤 확정하세요.">지도를 움직여 가운데 핀을 맞춘 뒤 확정하세요.</span>
+              <span class="pick-quick">
+                <button type="button" id="pickHere" data-i18n-attr="aria-label=지도를 내 위치로">◎ <span data-i18n="내 위치">내 위치</span></button>
+                <button type="button" id="pickLast" data-i18n-attr="aria-label=지도를 이 날 마지막 장소로">↩ <span data-i18n="마지막 장소">마지막 장소</span></button>
+              </span>
               <span class="pick-actions"><button type="button" id="pickCancel" data-i18n="취소">취소</button><button type="button" id="pickConfirm" class="primary" data-i18n="이 위치 선택">이 위치 선택</button></span>
             </div>
           </section>

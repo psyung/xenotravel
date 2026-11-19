@@ -2,7 +2,7 @@
 // trip = { id, title, destination, startDate, endDate, center, days: [{id, date, items}], inbox: [items] }
 // item = { id, name, address, lat, lng, time, memo, url, category }
 
-import { t, longDate, num, dayName, tripLength } from './i18n.js';
+import { t, longDate, dayName, tripLength } from './i18n.js';
 
 export const INBOX = 'inbox';
 const MAX_DAYS = 60;
@@ -253,24 +253,6 @@ export const WALK_MAX_KM = 1.2;
 const DETOUR = 1.25;
 const WALK_KMH = 4.5;
 
-// 보폭 0.7m (성인 평균). 실제 길은 직선보다 25% 길다고 본다.
-const STRIDE_M = 0.7;
-/** 직선거리(km)를 걸었을 때 예상 걸음 수 (100걸음 단위) */
-export function walkSteps(km) {
-  return Math.round((km * DETOUR * 1000) / STRIDE_M / 100) * 100;
-}
-
-/** 하루 도보 이동 예상 걸음 수: 걸어갈 만한 구간(1.2km 이하)만 더한다. 대중교통 구간·관광지 안에서 걷는 건 뺀다. */
-export function daySteps(trip, dayIndex) {
-  const r = dayRoute(trip, dayIndex);
-  let steps = 0;
-  for (let i = 1; i < r.length; i++) steps += routeLeg(r[i - 1], r[i])?.steps ?? 0;
-  return steps;
-}
-
-/** "3,200" */
-export const formatSteps = (n) => num(Math.round(n));
-
 /** 하루 동선: 출발 숙소 → 장소들 → 귀가 숙소. 지도 선·거리·길찾기가 모두 이 순서를 쓴다. */
 export function dayRoute(trip, dayIndex) {
   const day = trip.days[dayIndex];
@@ -288,7 +270,6 @@ export function routeLeg(from, to) {
     km,
     mode: walk ? 'walking' : 'transit',
     walkMin: walk ? Math.max(1, Math.round(((km * DETOUR) / WALK_KMH) * 60)) : null,
-    steps: walk ? walkSteps(km) : 0,
     url: directionsUrl(from, to, walk ? 'walking' : 'transit'),
   };
 }
@@ -900,7 +881,6 @@ export function tripStats(trip, today) {
     days: n,
     places,
     km,
-    steps: trip.days.reduce((s, _, i) => s + daySteps(trip, i), 0),
   };
 }
 
@@ -913,7 +893,6 @@ export function daySummary(trip, dayIndex) {
     title: day.items.map((it) => it.name).join(' · '),
     places: day.items.length,
     km: dayKm(trip, dayIndex),
-    steps: daySteps(trip, dayIndex),
     from: times[0] ?? '',
     to: times.at(-1) ?? '',
   };

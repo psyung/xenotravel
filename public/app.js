@@ -530,6 +530,24 @@ function syncPickNavigation() {
 }
 pickViewport.addEventListener('change', syncPickNavigation);
 
+/** 지도에서 찍기의 빠른 이동: 지금 추가할 일차의 마지막 장소(없으면 숙소·여행지) */
+function pickAnchor() {
+  if (!trip) return null;
+  const listId = ui.target === STAY_TARGET ? lastListId() : ui.target;
+  const items = M.getList(trip, listId) ?? [];
+  const di = trip.days.findIndex((d) => d.id === listId);
+  const st = di >= 0 ? M.dayStays(trip, di) : {};
+  return items.at(-1) ?? st.start ?? st.end ?? trip.center ?? null;
+}
+$('#pickLast').addEventListener('click', () => {
+  const p = pickAnchor();
+  if (p) map.setView([p.lat, p.lng], Math.max(map.getZoom(), 15));
+});
+$('#pickHere').addEventListener('click', () => {
+  if (!navigator.geolocation) return toast(t('이 브라우저에서는 현재 위치를 확인할 수 없어요'));
+  map.locate({ setView: true, maxZoom: 16, timeout: 8000 });
+});
+
 /** 지도 전체(아래쪽 확정·취소 포함)가 화면 안에 들어오게 스크롤한다. 좁은 화면은 아래 탭바 높이만큼 비워 둔다. */
 function revealMap() {
   const wrap = $('.mapwrap');
@@ -550,6 +568,8 @@ function setPicking(on, { cancelled = false } = {}) {
     clearCandidate();
   }
   map.getContainer().classList.toggle('picking', on);
+  document.body.classList.toggle('picking', on);
+  setTimeout(() => map.invalidateSize(), 0);
   $('#pickHint').hidden = !on;
   $('#pickPin').hidden = !on;
   $('#pickBtn').classList.toggle('active', on);
@@ -558,7 +578,10 @@ function setPicking(on, { cancelled = false } = {}) {
     map.closePopup();
     showTab('map');
     revealMap();
+    requestAnimationFrame(revealMap); // 지도 높이가 바뀐 뒤 한 번 더 맞춘다
     $('#pickConfirm').focus({ preventScroll: true });
+    const last = pickAnchor();
+    $('#pickLast').hidden = !last;
   }
   syncPickNavigation();
   if (cancelled) {
@@ -784,6 +807,7 @@ function render({ fit = false } = {}) {
   trip.stays ??= []; // 숙소 기능 이전에 만든 여행
   repairCenter();
   document.title = `${trip.title} · XenoTravel`;
+  $('#planHeading').textContent = `${trip.title} · ${t('일정')}`;
   const title = $('#tripTitle');
   if (document.activeElement !== title) title.value = trip.title;
   title.readOnly = ui.readonly;
@@ -794,8 +818,10 @@ function render({ fit = false } = {}) {
   renderNotice();
   renderToday();
   renderTarget();
-  renderPlanEmpty();
-  renderDays();
+  if (prefs.page === 'plan') {
+    renderPlanEmpty();
+    renderDays();
+  } else clearPlanDom();
   renderMap({ fit });
   renderBadge();
   renderBackupReminder();
@@ -818,15 +844,27 @@ function repairCenter() {
   }
 }
 
+/**
+ * 일정 화면이 아닐 때는 일정 목록·보관함·안내를 DOM에서 비운다.
+ * (숨긴 화면의 글자가 어떤 보조기기·도구에서도 가계부·체크리스트 앞에 읽히지 않게. 일정으로 돌아오면 다시 그린다)
+ */
+function clearPlanDom() {
+  ui.sortables.forEach((s) => s.destroy());
+  ui.sortables = [];
+  for (const id of ['days', 'inboxDock', 'planEmpty', 'dayTabs']) $(`#${id}`).innerHTML = '';
+}
+
 /** 장소가 하나도 없는 일정: 첫 장소를 넣는 방법을 눈에 띄게 */
 function renderPlanEmpty() {
   const el = $('#planEmpty');
-  const show = !ui.readonly && placeCount() === 0;
+  const show = !ui.readonly && placeCount() === 0 && prefs.page === 'plan';
   el.hidden = !show;
   el.innerHTML = show
     ? `<section class="plan-empty card" aria-labelledby="planEmptyTitle">
         <h2 id="planEmptyTitle">${esc(t('첫 장소를 추가해 보세요'))}</h2>
-        <p>${esc(t('위 검색창에 장소 이름을 쓰거나, 구글맵 링크를 붙여넣거나, 지도에서 직접 찍으면 Day 1에 들어가요.'))}</p>
+        <p>${esc(ui.target === STAY_TARGET
+          ? t('위 검색창에 숙소 이름을 쓰거나, 구글맵 링크를 붙여넣거나, 지도에서 직접 찍으면 숙소로 추가돼요 ({range}).', { range: stayOptsLabel() })
+          : t('위 검색창에 장소 이름을 쓰거나, 구글맵 링크를 붙여넣거나, 지도에서 직접 찍으면 {target}에 들어가요. 넣을 곳은 ‘추가할 곳’에서 바꿀 수 있어요.', { target: targetLabel() }))}</p>
         <div class="plan-empty-actions">
           <button type="button" class="btn primary" data-empty="search">${esc(t('장소 검색하기'))}</button>
           <button type="button" class="btn" data-empty="pick">${esc(t('지도에서 찍기'))}</button>
@@ -857,6 +895,7 @@ function renderTarget() {
       })
       .join('') + `<option value="${STAY_TARGET}"${ui.target === STAY_TARGET ? ' selected' : ''}>${esc(t('숙소로 추가'))}</option>`;
   renderStayOpts();
+  renderPlanEmpty(); // 첫 장소 안내도 지금 고른 추가 대상을 따른다
 }
 
 /** 숙소 추가 옵션: 체크인 일차 + 박 수 (기본 2박) */
@@ -913,6 +952,7 @@ function addStayFromOpts(place) {
   const start = useOpts ? ui.stayStart ?? firstUncoveredNight() : firstUncoveredNight();
   const nights = useOpts ? ui.stayNights ?? M.DEFAULT_NIGHTS : M.DEFAULT_NIGHTS;
   const stay = M.addStay(trip, place, start, nights);
+  ui.lastAddedId = stay.id;
   const { checkIn, checkOut } = M.stayDates(trip, stay);
   ui.stayStart = Math.min(stay.startIndex + stay.nights, trip.days.length - 1); // 다음 숙소는 이어지는 날부터
   ui.stayNights = null;
@@ -967,7 +1007,7 @@ function stayRowHtml(stay, dayIndex, pos, flags, leg = null) {
 function legHtml(leg) {
   if (!leg) return '';
   const how = leg.mode === 'walking'
-    ? t('도보 약 {min}분 · {km} · {steps}걸음', { min: leg.walkMin, km: M.formatKm(leg.km), steps: M.formatSteps(leg.steps) })
+    ? t('도보 약 {min}분 · {km}', { min: leg.walkMin, km: M.formatKm(leg.km) })
     : t('{km} · 대중교통', { km: M.formatKm(leg.km) });
   const mode = leg.mode === 'walking' ? t('도보') : t('대중교통');
   return `<a class="leg" href="${leg.url}" target="_blank" rel="noopener"
@@ -1027,6 +1067,7 @@ function itemHtml(it, i, isDay, leg = null, listItems = null) {
   const pos = listItems ? listItems.indexOf(it) : i;
   const canUp = pos > 0;
   const canDown = listItems ? pos < listItems.length - 1 : false;
+  const dayPos = isDay ? trip.days.findIndex((d) => d.items.includes(it)) : -1;
   return `<li class="item${open ? ' open' : ''}${it.visited ? ' visited' : ''}" data-id="${it.id}">
     ${legHtml(leg)}
     <div class="tl-time">${esc(it.time)}</div>
@@ -1060,6 +1101,8 @@ function itemHtml(it, i, isDay, leg = null, listItems = null) {
         <span>${esc(t('순서'))}</span>
         <button type="button" data-action="item-up"${canUp ? '' : ' disabled'} aria-label="${esc(t('{name} 한 칸 위로', { name: it.name }))}">↑ ${esc(t('위로'))}</button>
         <button type="button" data-action="item-down"${canDown ? '' : ' disabled'} aria-label="${esc(t('{name} 한 칸 아래로', { name: it.name }))}">↓ ${esc(t('아래로'))}</button>
+        ${isDay ? `<button type="button" data-action="item-prev-day"${dayPos > 0 ? '' : ' disabled'} aria-label="${esc(t('{name} 전날로 옮기기', { name: it.name }))}">← ${esc(t('전날'))}</button>
+        <button type="button" data-action="item-next-day"${dayPos >= 0 && dayPos < trip.days.length - 1 ? '' : ' disabled'} aria-label="${esc(t('{name} 다음 날로 옮기기', { name: it.name }))}">${esc(t('다음 날'))} →</button>` : ''}
       </div>
       <label>${esc(t('다른 날로 옮기기'))}<select class="move-to">${moveOptions(listIdOf(it.id), t('옮길 날 고르기'))}</select></label>
       ${it.address ? `<p class="addr">${esc(it.address)}</p>` : ''}
@@ -1542,7 +1585,6 @@ function dayCardHtml(l) {
     `<span class="wx-slot" data-wx="${dayId}">${wxChipHtml(ui.weather.data[dayId], dayId)}</span>`,
     sum.places ? `<span class="chip">${esc(t('{n}곳', { n: sum.places }))}</span>` : '',
     sum.km >= 0.05 ? `<span class="chip">${esc(t('이동 {km}', { km: M.formatKm(sum.km) }))}</span>` : '',
-    sum.steps ? `<span class="chip" title="${esc(t('걸어갈 만한 구간만 더한 어림값'))}">${esc(t('약 {steps}걸음', { steps: M.formatSteps(sum.steps) }))}</span>` : '',
     sum.from ? `<span class="chip">${esc(sum.from)}${sum.to !== sum.from ? ` – ${esc(sum.to)}` : ''}</span>` : '',
     st.end ? `<span class="chip stay">${esc(t('숙소 {name}', { name: st.end.name }))}</span>` : '',
   ].join('');
@@ -1673,6 +1715,17 @@ $('#days').addEventListener('click', (e) => {
       ui.openItem = null;
       commit();
     }
+  } else if (action === 'item-prev-day' || action === 'item-next-day') {
+    // 하루 앞뒤로 원탭 이동 (그날 맨 끝에 넣는다)
+    const found = M.findItem(trip, id);
+    const di = trip.days.findIndex((d) => d.id === found?.listId);
+    const to = trip.days[di + (action === 'item-prev-day' ? -1 : 1)];
+    if (!found || !to) return;
+    M.moveItem(trip, id, to.id, Infinity);
+    ui.openItem = id;
+    const r = commit();
+    ($(`.item[data-id="${CSS.escape(id)}"] [data-action="${action}"]:not(:disabled)`) ?? $(`.item[data-id="${CSS.escape(id)}"] .item-main`))?.focus({ preventScroll: true });
+    saved(r, t('"{name}" → {list}(으)로 옮겼어요', { name: found.item.name, list: listName(to.id) }));
   } else if (action === 'item-up' || action === 'item-down') {
     // 끌지 않고 순서 바꾸기 (키보드·터치)
     const found = M.findItem(trip, id);
@@ -1992,8 +2045,10 @@ async function runSearch({ explicit = false } = {}) {
   try {
     if (parsed && 'lat' in parsed) {
       let place = { name: parsed.name ?? '', address: '', lat: parsed.lat, lng: parsed.lng };
-      showResults([{ ...place, name: place.name || t('위치 확인 중…') }]);
-      const r = await reversePlace(parsed.lat, parsed.lng, ctrl.signal).catch(() => null);
+      // 주소를 찾는 동안 추가해도 '위치 확인 중…'이 이름으로 남지 않게: 찾으면 나중에 채운다
+      const lookup = reversePlace(parsed.lat, parsed.lng, ctrl.signal).catch(() => null);
+      showResults([{ ...place, name: place.name || t('위치 확인 중…'), lookup, unnamed: !place.name }]);
+      const r = await lookup;
       place = { ...place, name: place.name || r?.name || t('링크로 추가한 장소'), address: r?.address ?? '', region: r?.region ?? '' };
       if (!ctrl.signal.aborted) showResults([place]);
       return;
@@ -2061,9 +2116,26 @@ document.addEventListener('click', (e) => {
 
 function addPlace(place, { edit = false, listId = null } = {}) {
   if (!trip || !place) return;
+  if (place.lookup) {
+    // 주소 조회가 끝나기 전에 고름: 일단 좌표 이름으로 넣고, 찾으면 이름·주소를 채운다 (그사이 사용자가 고친 이름은 그대로)
+    const { lookup, unnamed, ...rest } = place;
+    const tmpName = unnamed ? t('링크로 추가한 장소') : rest.name;
+    const forTrip = trip;
+    lookup.then((r) => {
+      if (!r || trip !== forTrip) return;
+      const found = M.findItem(trip, ui.lastAddedId) ?? M.findStay?.(trip, ui.lastAddedId);
+      const it = found?.item ?? found;
+      if (!it || it.lat !== rest.lat) return;
+      if (unnamed && it.name === tmpName) it.name = r.name || tmpName;
+      if (!it.address) it.address = r.address ?? '';
+      commit();
+    });
+    place = { ...rest, name: tmpName };
+  }
   if (listId == null && ui.target === STAY_TARGET) return addStayFromOpts(place);
   const target = listId ?? ui.target;
   const item = M.addItem(trip, target, place);
+  ui.lastAddedId = item.id;
   ui.openItem = edit ? item.id : null;
   if (edit) ui.openStay = null;
   searchEl.value = '';
@@ -2081,6 +2153,7 @@ $('#target').addEventListener('change', (e) => {
   ui.target = e.target.value;
   if (ui.target !== STAY_TARGET) ui.lastList = ui.target;
   renderStayOpts();
+  renderPlanEmpty();
 });
 $('#stayIn').addEventListener('change', (e) => {
   const range = M.rangeFromDates(trip, e.target.value, M.dateAtIndex(trip, M.indexOfDate(trip, e.target.value) + (ui.stayNights ?? M.DEFAULT_NIGHTS)));
@@ -2158,6 +2231,8 @@ $('.menu .menu-pop').addEventListener('click', (e) => {
   else if (action === 'calendar' && !downloadCalendar(trip)) toast(t('캘린더에 내보낼 일정이 없어요. 날짜가 있는 일차에 장소를 넣으면 내보낼 수 있어요'), 3500);
   else if (action === 'import') $('#importFile').click();
   else if (action === 'delete') deleteTrip(trip.id);
+  else if (action === 'flights') openFlights();
+  else if (action === 'theme') $('#themeBtn').click();
 });
 
 const BACKUP_INTERVAL = 3 * 24 * 60 * 60 * 1000;
@@ -2497,7 +2572,7 @@ function renderHome() {
         <li><b>${esc(t('지도와 일정을 한 화면에'))}</b><p>${esc(t('날짜별 타임라인과 지도 동선을 같이 보고, 끌어서 순서·날짜를 바꿔요.'))}</p></li>
         <li><b>${esc(t('설치 없이 공유'))}</b><p>${esc(t('링크 하나면 친구가 앱 없이 바로 봐요. 원하면 자기 여행으로 저장해 고쳐요.'))}</p></li>
         <li><b>${esc(t('어디든 장소 추가'))}</b><p>${esc(t('한국어 검색, 구글맵 링크 붙여넣기, 지도에서 찍기. 소도시도 빠짐없이.'))}</p></li>
-        <li><b>${esc(t('거리 · 걸음 · 길찾기'))}</b><p>${esc(t('장소 사이 도보 시간과 예상 걸음, 누르면 구글맵 길찾기가 열려요.'))}</p></li>
+        <li><b>${esc(t('거리 · 길찾기'))}</b><p>${esc(t('장소 사이 거리와 도보 시간, 누르면 구글맵 길찾기가 열려요.'))}</p></li>
         <li><b>${esc(t('가계부 · 체크리스트'))}</b><p>${esc(t('현지 돈으로 적으면 원화도 같이. 출발 전 할 일, 짐, 쇼핑 리스트까지.'))}</p></li>
         <li><b>${esc(t('전부 무료'))}</b><p>${esc(t('엑셀 · PDF 내보내기, 다크 모드, 백업까지 돈 내는 기능이 없어요.'))}</p></li>
       </ul>
@@ -2797,8 +2872,7 @@ function renderHero() {
     <div class="tile dday"><span>${esc(s.dday.sub)}</span><b>${esc(s.dday.label)}</b></div>
     <div class="tile"><span>${esc(t('여행 기간'))}</span><b>${s.days}<small>${esc(t('일'))}</small></b></div>
     <div class="tile"><span>${esc(t('들를 곳'))}</span><b>${s.places}<small>${esc(t('곳'))}</small></b></div>
-    <div class="tile"><span>${esc(t('이동 (직선)'))}</span><b>${num(Number(km), { maximumFractionDigits: 1 })}<small>km</small></b></div>
-    <div class="tile" title="${esc(t('걸어갈 만한 구간(1.2km 이하)만 더한 어림값이에요. 관광지 안에서 걷는 건 빠져 있어요'))}"><span>${esc(t('예상 걸음'))}</span><b>${M.formatSteps(s.steps)}<small>${esc(t('걸음'))}</small></b></div>`;
+    <div class="tile wide"><span>${esc(t('이동 (직선)'))}</span><b>${num(Number(km), { maximumFractionDigits: 1 })}<small>km</small></b></div>`;
   const out = trip.flights.find((f) => f.kind === 'out');
   const back = trip.flights.find((f) => f.kind === 'in');
   const flights = [out, ...trip.flights.filter((f) => f.kind === 'move'), back].filter(Boolean);
@@ -2968,7 +3042,7 @@ function showPage(page, { scroll = true } = {}) {
   if (prefs.page !== 'plan') setPicking(false);
   document.body.dataset.page = prefs.page;
   document.body.dataset.hasTrip = trip || store.currentId ? 'yes' : 'no';
-  $('#inAppBackup').hidden = prefs.page === 'home' || ui.readonly;
+  $('#inAppBackup').hidden = !trip || ui.readonly;
   renderBackupReminder();
   // 보이지 않는 화면은 읽기 순서·탭 순서에서 완전히 뺀다 (hidden + inert)
   for (const p of PAGES) {
@@ -2989,7 +3063,13 @@ function showPage(page, { scroll = true } = {}) {
   }
   document.title = `${trip.title} · XenoTravel`;
   renderTripSwitcher();
-  if (prefs.page === 'plan') setTimeout(() => map.invalidateSize(), 0);
+  if (prefs.page === 'plan') {
+    if (!$('#days').childElementCount) {
+      renderPlanEmpty();
+      renderDays();
+    }
+    setTimeout(() => map.invalidateSize(), 0);
+  } else clearPlanDom();
   if (prefs.page === 'budget') {
     renderBudget();
     const b = trip.budget;
@@ -3023,6 +3103,7 @@ function applyTheme() {
   const label = th === 'dark' ? t('어둡게 (누르면 시스템 따라가기)') : th === 'light' ? t('밝게 (누르면 어둡게)') : t('시스템 따라가기 (누르면 밝게)');
   btn.title = label;
   btn.setAttribute('aria-label', `${t('화면 밝기')}: ${label}`);
+  $('#themeMenu').textContent = `${t('화면 밝기')}: ${label}`;
 }
 $('#themeBtn').addEventListener('click', () => {
   prefs.theme = prefs.theme === 'light' ? 'dark' : prefs.theme === 'dark' ? 'system' : 'light';
@@ -3264,6 +3345,7 @@ function drawBudget(el) {
         recs.length
           ? `<ul class="rec-list">${recs
               .map((e) => {
+                if (ui.editExpense === e.id && !ui.readonly) return expenseEditHtml(e);
                 const c = B.EXPENSE_CATS[e.cat] ?? B.EXPENSE_CATS.etc;
                 const pay = B.PAYMENTS[e.pay] ?? B.PAYMENTS.card;
                 const orig = e.cur === 'KRW' ? '' : B.moneyCode(e.amount, b.currency);
@@ -3271,7 +3353,7 @@ function drawBudget(el) {
                 return `<li>
                   <span class="rec-main"><b>${esc(e.memo || t(c.label))}</b><small>${esc(B.expenseDayLabel(trip, e))} · ${esc(t(c.label))} · ${esc(t(pay.label))}${link ? ` · ${esc(link)}` : ''}</small></span>
                   <span class="rec-amt">${e.krw == null ? `<span class="pend">${esc(t('환율 미정'))}</span>` : B.won(e.krw)}${orig ? `<small>${esc(orig)}</small>` : ''}</span>
-                  <button class="icon" data-b="del" data-id="${e.id}" title="${esc(t('삭제'))}" aria-label="${esc(t('{name} 삭제', { name: e.memo || t(c.label) }))}">✕</button></li>`;
+                  <span class="rec-acts"><button class="icon" data-b="edit" data-id="${e.id}" title="${esc(t('수정'))}" aria-label="${esc(t('{name} 수정', { name: e.memo || t(c.label) }))}">✎</button><button class="icon" data-b="del" data-id="${e.id}" title="${esc(t('삭제'))}" aria-label="${esc(t('{name} 삭제', { name: e.memo || t(c.label) }))}">✕</button></span></li>`;
               })
               .join('')}</ul>`
           : `<p class="empty-note">${esc(t('아직 기록된 지출이 없어요. 첫 지출을 추가해 보세요.'))}</p>`
@@ -3279,6 +3361,43 @@ function drawBudget(el) {
     </div>
     <p class="fine">${esc(t('가계부는 이 브라우저에만 저장되고 공유 링크에는 들어가지 않아요. 백업 파일에는 포함돼요. 자동 환율: ExchangeRate-API (하루 1번 갱신).'))}</p>
   </div>`;
+}
+
+/** 저장한 지출 고치기 (행 안에서) */
+function expenseEditHtml(e) {
+  const b = trip.budget;
+  const local = b.currency !== 'KRW';
+  const dk = B.expenseDay(trip, e);
+  const days = [-1, ...trip.days.map((_, i) => i)];
+  const opt = (v, label, sel) => `<option value="${v}"${sel ? ' selected' : ''}>${esc(label)}</option>`;
+  return `<li class="rec-edit"><form class="exp-form" data-exp="${e.id}" aria-label="${esc(t('지출 수정'))}">
+      <div class="exp-row">
+        <label class="exp-amt"><span>${esc(t('금액'))}</span><input name="amount" data-draft="exp-amount-${e.id}" inputmode="decimal" value="${e.amount}" autocomplete="off"></label>
+        ${local ? `<label><span>${esc(t('통화'))}</span><select name="cur">${opt('local', `${B.CURRENCIES[b.currency].symbol.trim()} ${b.currency}`, e.cur !== 'KRW')}${opt('KRW', '₩ KRW', e.cur === 'KRW')}</select></label>` : ''}
+      </div>
+      <label><span>${esc(t('메모'))}</span><input name="memo" data-draft="exp-memo-${e.id}" value="${esc(e.memo)}" maxlength="80"></label>
+      <div class="exp-row">
+        <label><span>${esc(t('언제'))}</span><select name="day">${dk === 'out' ? opt('out', B.expenseDayLabel(trip, e), true) : ''}${days.map((d) => opt(d, d < 0 ? t('출발 전') : dayName(d), d === dk)).join('')}</select></label>
+        <label><span>${esc(t('분류'))}</span><select name="cat">${Object.entries(B.EXPENSE_CATS).map(([key, c]) => opt(key, t(c.label), key === e.cat)).join('')}</select></label>
+        <label><span>${esc(t('결제 수단'))}</span><select name="pay">${Object.entries(B.PAYMENTS).map(([key, c]) => opt(key, t(c.label), key === e.pay)).join('')}</select></label>
+      </div>
+      <p class="exp-krw" role="status">${esc(expensePreviewText(e, e.amount, e.cur))}</p>
+      <p class="form-error" role="alert" hidden></p>
+      <div class="exp-actions"><button type="button" class="btn ghost" data-b="edit-cancel">${esc(t('취소'))}</button><button class="btn primary">${esc(t('저장'))}</button></div>
+    </form></li>`;
+}
+
+/** 고치는 중: 원화가 어떻게 계산될지 미리 보여준다 */
+function expensePreviewText(e, amount, cur) {
+  const same = B.parseAmount(amount) === e.amount && cur === e.cur;
+  if (same) return e.krw == null ? t('원화: 환율 미정') : t('원화 {krw} (기록 당시 그대로)', { krw: B.won(e.krw) });
+  const p = B.expenseKrwPreview(trip, e, { amount, cur });
+  if (!p) return '';
+  if (p.source === 'krw') return t('원화 {krw}', { krw: B.won(p.krw) });
+  if (p.source === 'none') return t('원화: 환율 미정 (환율을 정하면 채워져요)');
+  const unit = B.CURRENCIES[trip.budget.currency].unit;
+  const rate = `${unit} ${t(B.CURRENCIES[trip.budget.currency].name)} = ${num(p.rate * unit, { maximumFractionDigits: 2 })} KRW`;
+  return t(p.source === 'recorded' ? k('원화 {krw} · 기록 당시 환율 {rate}') : k('원화 {krw} · 지금 환율 {rate}'), { krw: B.won(p.krw), rate });
 }
 
 function updateKrwPreview() {
@@ -3368,6 +3487,16 @@ $('#page-budget').addEventListener('click', (e) => {
     $('#bAmount')?.focus();
   } else if (act === 'add') addExpenseFromForm();
   else if (act === 'rate') fetchRate();
+  else if (act === 'edit') {
+    ui.editExpense = btn.dataset.id;
+    renderBudget();
+    $(`#page-budget .exp-form[data-exp="${CSS.escape(btn.dataset.id)}"] input[name="amount"]`)?.focus();
+  } else if (act === 'edit-cancel') {
+    const id = ui.editExpense;
+    ui.editExpense = null;
+    renderBudget();
+    $(`#page-budget [data-b="edit"][data-id="${CSS.escape(id)}"]`)?.focus();
+  }
   else if (act === 'to-check') go('check');
   else if (act === 'del') {
     const ex = trip.expenses.find((x) => x.id === btn.dataset.id);
@@ -3386,7 +3515,53 @@ $('#page-budget').addEventListener('click', (e) => {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 });
+$('#page-budget').addEventListener('submit', (ev) => {
+  const form = ev.target.closest('.exp-form');
+  if (!form) return;
+  ev.preventDefault();
+  const id = form.dataset.exp;
+  const data = Object.fromEntries(new FormData(form));
+  const problem = B.amountProblem(data.amount);
+  const err = $('.form-error', form);
+  if (problem) {
+    err.textContent = problem;
+    err.hidden = false;
+    form.amount.setAttribute('aria-invalid', 'true');
+    form.amount.focus();
+    return;
+  }
+  const e = B.updateExpense(trip, id, data);
+  if (!e) return;
+  const linked = e.checkId && trip.checks?.find((c) => c.id === e.checkId);
+  ui.editExpense = null;
+  const r = commit();
+  if (!r.ok) ui.editExpense = id; // 저장 실패: 고치던 칸을 그대로 열어 둔다 (위 안내 참고)
+  else {
+    toast(t('지출을 고쳤어요'));
+    $(`#page-budget [data-b="edit"][data-id="${CSS.escape(id)}"]`)?.focus();
+  }
+  void linked;
+});
+$('#page-budget').addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape' && ui.editExpense) {
+    const id = ui.editExpense;
+    ui.editExpense = null;
+    renderBudget();
+    $(`#page-budget [data-b="edit"][data-id="${CSS.escape(id)}"]`)?.focus();
+  }
+});
 $('#page-budget').addEventListener('input', (e) => {
+  const form = e.target.closest('.exp-form');
+  if (form) {
+    const ex = trip.expenses.find((x) => x.id === form.dataset.exp);
+    const amt = form.amount.value;
+    const problem = amt.trim() ? B.amountProblem(amt) : B.amountProblem('');
+    const err = $('.form-error', form);
+    err.hidden = !problem;
+    err.textContent = problem ?? '';
+    $('.exp-krw', form).textContent = problem ? '' : expensePreviewText(ex, amt, form.cur?.value ?? ex.cur);
+    return;
+  }
   if (e.target.id === 'bAmount') {
     updateKrwPreview();
     const v = e.target.value;
@@ -3405,6 +3580,12 @@ $('#page-budget').addEventListener('keydown', (e) => {
   }
 });
 $('#page-budget').addEventListener('change', (e) => {
+  const form = e.target.closest('.exp-form');
+  if (form) {
+    const ex = trip.expenses.find((x) => x.id === form.dataset.exp);
+    if (!B.amountProblem(form.amount.value)) $('.exp-krw', form).textContent = expensePreviewText(ex, form.amount.value, form.cur?.value ?? ex.cur);
+    return;
+  }
   const b = trip.budget;
   if (e.target.id === 'bTotal') {
     const v = B.parseAmount(e.target.value);
@@ -4159,6 +4340,7 @@ if (/KAKAOTALK|Instagram|FBAN|FBAV|Line\//i.test(navigator.userAgent)) {
   $('#inAppStatus').textContent = $('#inAppBar span').textContent;
 }
 $('#inAppBackup').addEventListener('click', saveTripBackup);
+$('#inAppCopy').addEventListener('click', () => copyText(location.href, t('주소를 복사했어요. 기본 브라우저 주소창에 붙여넣으세요')));
 $('#inAppClose').addEventListener('click', () => {
   $('#inAppBar').hidden = true;
   $('#inAppStatus').textContent = '';

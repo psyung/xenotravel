@@ -71,16 +71,16 @@ test('safeUrl: http(s)만 허용', () => {
   assert.equal(M.safeUrl(undefined), '');
 });
 
-test('걸음 수: 도보 구간만, 100걸음 단위', () => {
-  // 350m 직선 → 437m 실제 → 625걸음 → 600
-  assert.equal(M.walkSteps(0.35), 600);
-  assert.equal(M.routeLeg(NAMBA, DOTON).steps, 600);
-  assert.equal(M.routeLeg(NAMBA, UMEDA).steps, 0); // 4km는 대중교통으로 본다
+test('예상 걸음은 없다 (제거됨): 구간은 거리·도보 시간·길찾기만', () => {
+  const leg = M.routeLeg(NAMBA, DOTON);
+  assert.equal(leg.mode, 'walking');
+  assert.ok(leg.walkMin > 0 && leg.km > 0 && leg.url);
+  assert.equal('steps' in leg, false);
+  assert.equal(M.routeLeg(NAMBA, UMEDA).mode, 'transit'); // 4km는 대중교통으로 본다
   const t = tripWith([NAMBA, DOTON, UMEDA]);
-  assert.equal(M.daySteps(t, 1), 600);
-  assert.equal(M.daySummary(t, 1).steps, 600);
-  assert.equal(M.tripStats(t, '2026-11-01').steps, 600);
-  assert.equal(M.formatSteps(12345), '12,345');
+  assert.equal('steps' in M.daySummary(t, 1), false);
+  assert.equal('steps' in M.tripStats(t, '2026-11-01'), false);
+  for (const f of ['walkSteps', 'daySteps', 'formatSteps']) assert.equal(M[f], undefined);
 });
 
 test('dayShareText: 카톡용 하루 일정 (항공·숙소·시간·메모·동선 링크)', () => {

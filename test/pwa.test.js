@@ -46,3 +46,15 @@ test('앱 셸과 본문이 하나의 main을 공유하고 설치 리소스가 �
     readFileSync(new URL(href, pub));
   }
 });
+
+test('sw.js의 앱 파일은 모두 git에 들어간다 (.gitignore에 걸려 배포에서 빠지지 않게)', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const files = list('APP_FILES').filter((x) => x !== './').map((f) => `public/${f}`);
+  let ignored = '';
+  try {
+    ignored = execFileSync('git', ['check-ignore', ...files], { cwd: new URL('..', import.meta.url), encoding: 'utf8' });
+  } catch (err) {
+    if (err.status !== 1) return; // git이 없는 환경이면 건너뛴다 (1 = 무시된 파일 없음)
+  }
+  assert.equal(ignored.trim(), '', `배포에서 빠지는 파일: ${ignored}`);
+});

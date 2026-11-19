@@ -386,3 +386,46 @@ export function combinePlans(...plans) {
   }
   return out;
 }
+
+/* ───────── 저장한 지출 고치기 ─────────
+ * 메모·분류·날짜·결제수단만 바꾸면 원화 환산액(기록 당시 환율)은 그대로 둔다.
+ * 금액·통화를 바꾸면: 원화 → 그 금액, 현지 돈 → 이 기록에 적용했던 환율(있으면), 없으면 지금 환율, 그것도 없으면 '환율 미정'.
+ */
+export function expenseKrwPreview(trip, e, { amount, cur }) {
+  const b = ensureBudget(trip);
+  const a = parseAmount(amount);
+  if (!(a > 0)) return null;
+  if (cur === 'KRW' || b.currency === 'KRW') return { krw: Math.round(a), rate: null, source: 'krw' };
+  if (e.cur !== 'KRW' && e.krw != null && e.amount > 0) {
+    const rate = e.krw / e.amount;
+    return { krw: Math.round(a * rate), rate, source: 'recorded' };
+  }
+  if (b.krwPerUnit > 0) return { krw: Math.round(a * b.krwPerUnit), rate: b.krwPerUnit, source: 'current' };
+  return { krw: null, rate: null, source: 'none' };
+}
+
+/** 저장한 지출 고치기 (id는 그대로). 잘못된 금액이면 null */
+export function updateExpense(trip, id, patch) {
+  const e = (trip.expenses ?? []).find((x) => x.id === id);
+  if (!e) return null;
+  const amount = patch.amount != null ? parseAmount(patch.amount) : e.amount;
+  if (!(amount > 0) || amount > MAX_AMOUNT) return null;
+  const cur = patch.cur === 'KRW' ? 'KRW' : patch.cur === 'local' ? 'local' : e.cur;
+  if (amount !== e.amount || cur !== e.cur) {
+    const p = expenseKrwPreview(trip, e, { amount, cur });
+    e.amount = amount;
+    e.cur = cur;
+    e.krw = p.krw;
+  }
+  if (patch.memo != null) e.memo = String(patch.memo).trim();
+  if (EXPENSE_CATS[patch.cat]) e.cat = patch.cat;
+  if (PAYMENTS[patch.pay]) e.pay = patch.pay;
+  if (patch.day != null && patch.day !== 'out') {
+    const d = Number(patch.day);
+    if (Number.isInteger(d) && d >= -1 && d < trip.days.length) {
+      e.day = d;
+      delete e.date;
+    }
+  }
+  return e;
+}
