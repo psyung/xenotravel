@@ -835,7 +835,16 @@ export function validateTrip(obj) {
   for (const fl of obj.flights ?? []) {
     if (typeof fl?.id !== 'string' || typeof fl.departAt !== 'string') fail('항공편');
   }
-  const out = { ...obj, inbox: obj.inbox ?? [], stays: obj.stays ?? [], flights: obj.flights ?? [] };
+  // 예전 버전 백업은 메모·주소 같은 칸이 없을 수 있다: 빈 글자로 채워 화면이 깨지지 않게
+  const str = (v) => (typeof v === 'string' ? v : '');
+  const fillItem = (it) => ({ ...it, address: str(it.address), time: str(it.time), memo: str(it.memo), url: str(it.url), category: str(it.category) });
+  const out = {
+    ...obj,
+    days: obj.days.map((d) => ({ ...d, date: str(d.date), items: d.items.map(fillItem) })),
+    inbox: (obj.inbox ?? []).map(fillItem),
+    stays: (obj.stays ?? []).map((st) => ({ ...st, address: str(st.address), memo: str(st.memo), url: str(st.url) })),
+    flights: (obj.flights ?? []).map((f) => ({ kind: 'out', flightNo: '', from: '', to: '', arriveAt: '', bookingRef: '', memo: '', ...f })),
+  };
   if (obj.expenses != null) {
     if (!Array.isArray(obj.expenses)) fail('가계부');
     out.expenses = obj.expenses.filter((e) => typeof e?.id === 'string' && Number.isFinite(Number(e.amount)));

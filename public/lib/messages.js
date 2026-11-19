@@ -811,4 +811,10 @@ export const MESSAGES = {
   "day id": ["day id", "day id", "day id"],
   "숙소 기간": ["stay dates", "住宿期间", "宿の期間"],
   "한국 여행자들이 많이 사는 품목이에요": ["Popular buys among Korean travelers", "韩国游客常买的商品", "韓国人旅行者がよく買う品です"],
+  "한국어 원문": ["Korean original", "韩语原文", "韓国語の原文"],
+  "확대": ["Zoom in", "放大", "拡大"],
+  "축소": ["Zoom out", "缩小", "縮小"],
+  "확인할 것": ["To check", "待确认", "確認すること"],
+  "+ 숙소 추가": ["+ Add a stay", "+ 添加住宿", "+ 宿を追加"],
+  "차례": ["Contents", "目录", "目次"],
 };

@@ -41,6 +41,9 @@ export function saveLang(storage = globalThis.localStorage) {
   }
 }
 
+/** 한 키의 모든 언어 문구 (원문 + 번역). 템플릿에서 온 값이 사용자가 바꾸지 않은 그대로인지 볼 때 쓴다. */
+export const allVersions = (key) => [key, ...(MESSAGES[key] ?? [])];
+
 /** 나중에 t()로 바꿀 문구라는 표시 (값은 그대로). 번역 누락 검사(test/i18n.test.js)가 찾는다. */
 export const k = (s) => s;
 

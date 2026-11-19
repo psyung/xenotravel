@@ -122,6 +122,7 @@ public/sw.js         오프라인용 서비스 워커
 public/manifest.webmanifest, public/icons/  홈 화면 앱 정보·아이콘
 public/og.png        공유 미리보기 이미지
 public/data/trends.json 트렌드 데이터
+public/data/trends-i18n.json 트렌드 문구(지역·분류·설명) 영·중·일 번역. 번역이 없으면 한국어 원문을 lang=ko·‘한국어 원문’ 표시로 보여준다
 test/                node:test 단위 테스트
 ```
 

@@ -540,8 +540,10 @@ body[data-view="board"] .board-only { display: inline-flex; }
 .box { background: var(--paper); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; }
 .box h3 { margin: 0 0 12px; font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
 .box h3 .link { margin-left: auto; font-size: 13px; font-weight: 600; border: 0; background: none; color: var(--accent); }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+/* 칸 안의 긴 이름·가격이 칸(과 문서)을 넓히지 않게: 줄을 바꾸고 조작은 다음 줄로 */
+.box, .kpi { min-width: 0; }
 .kpi { background: var(--paper); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; }
 .kpi span { display: block; color: var(--mute); font-size: 12px; font-weight: 500; }
 .kpi b { display: block; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
@@ -723,7 +725,11 @@ dialog#flightDialog { width: min(520px, calc(100vw - 32px)); }
 .home-alert p { margin: 0 0 6px; font-size: 13.5px; color: var(--sub); }
 .home-alert ul { margin: 0; padding-left: 18px; font-size: 13px; color: var(--sub); }
 .home-alert-actions { display: flex; flex-wrap: wrap; gap: 6px; }
-.site-foot { margin: 40px 0 0; padding: 22px 0 8px; border-top: 1px solid var(--line); text-align: center; color: var(--sub); font-size: 12.5px; }
+.site-foot {
+  max-width: 1080px; margin: 32px auto 0; padding: 22px clamp(12px, 3vw, 32px) calc(16px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line); text-align: center; color: var(--sub); font-size: 12.5px;
+}
+.page { padding-bottom: 8px; }
 .foot-links { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 20px; }
 .foot-links .linkbtn { font-size: 13px; min-height: 44px; padding: 0 4px; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
 .foot-contact { min-height: 44px; display: inline-flex; align-items: center; gap: 6px; overflow-wrap: anywhere; }
@@ -819,7 +825,7 @@ body.readonly .trip-title { pointer-events: none; }
   .pagebar .pg.on { color: var(--ink); }
   .pagebar .check-badge { position: absolute; top: 4px; left: calc(50% + 6px); margin: 0; }
   #toast { bottom: calc(76px + env(safe-area-inset-bottom)); }
-  .grid2, .grid3 { grid-template-columns: 1fr; }
+  .grid2, .grid3 { grid-template-columns: minmax(0, 1fr); }
   .grid3.kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
   .kpis .kpi { padding: 10px; border-radius: 12px; }
   .kpis .kpi b, .kpis .kpi input { font-size: 15px; }
@@ -980,7 +986,7 @@ body[data-has-trip="no"] .trip-only { display: none !important; }
   .dialog-body::before { content: ""; display: block; width: 36px; height: 4px; margin: -6px auto 12px; border-radius: 4px; background: var(--line); }
   .flight-form .row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .kind-seg span { padding: 8px 4px; font-size: 13px; }
-  .dialog-actions { position: sticky; bottom: -20px; margin: 4px -16px -20px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--paper); border-top: 1px solid var(--line); }
+  .dialog-actions { position: sticky; bottom: 0; z-index: 2; margin: 4px -16px -20px; padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); background: var(--paper); border-top: 1px solid var(--line); }
   .dialog-actions .btn { flex: 1; height: 44px; }
   /* 손가락으로 누르기 쉬운 크기 */
   .icon { min-width: 34px; min-height: 34px; display: inline-grid; place-items: center; }
@@ -1383,7 +1389,41 @@ button.td-num:hover { box-shadow: 0 0 0 2px var(--ok-soft); }
 @media (max-width: 900px) {
   .icon { min-width: 40px; min-height: 40px; }
   .lang-wrap { height: 32px; }
-  .site-foot { margin-top: 28px; }
+  .site-foot { margin-top: 24px; }
+  /* 아래 탭(60px)·안전 영역에 가리지 않게: 탭이 있는 화면은 그만큼 더 띄운다 */
+  body:not([data-page="home"]):not(.readonly) .site-foot { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+  .page { padding-bottom: 8px; }
   .privacy-dialog { width: 100%; max-width: 100%; margin: auto 0 0; border-radius: 22px 22px 0 0; max-height: 88dvh; }
   .privacy-body { padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
 }
+
+/* ───────── 체크리스트: 좁은 폭에서도 문서가 가로로 넓어지지 않게 ───────── */
+.checks li { flex-wrap: wrap; row-gap: 4px; }
+.checks label { flex: 1 1 150px; }
+.checks label span { min-width: 0; overflow-wrap: anywhere; }
+.price-chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.checks li .icon { margin-left: auto; }
+.price-form { flex-wrap: wrap; min-width: 0; max-width: 100%; }
+.price-form input { min-width: 0; }
+.check-head, .picks-btn, .plan-bar span, .check-sum { min-width: 0; overflow-wrap: anywhere; }
+.plan-bar { flex-wrap: wrap; }
+.addrow { min-width: 0; }
+.rec-main, .rec-amt { min-width: 0; overflow-wrap: anywhere; }
+.privacy-toc ul { list-style: none; margin: 10px 0 4px; padding: 10px 12px; border-radius: 12px; background: var(--soft); display: grid; gap: 2px; }
+.privacy-toc a { display: inline-block; min-height: 32px; line-height: 32px; color: var(--accent); font-weight: 600; }
+.privacy-body section:focus { outline: none; }
+.notice { flex-wrap: wrap; align-items: flex-start; }
+.notice ul { flex: 1 1 200px; }
+.notice-act { height: 32px; font-size: 12.5px; }
+.orig-tag { color: var(--mute); font-size: 11px; font-weight: 500; }
+/* 낮은 화면(가로 모드·키보드): 항공편 창의 닫기·저장이 늘 보이게 */
+@media (max-height: 480px) {
+  dialog, dialog#flightDialog, dialog.share-dialog, dialog.bulk-dialog { max-height: 100dvh; }
+  .dialog-body { padding-top: 10px; }
+  .dialog-body::before { display: none; }
+  .dialog-body h2 { margin-bottom: 8px; font-size: 16px; }
+  .flight-list { max-height: 30dvh; }
+}
+
+/* 키보드로 푸터에 가면 아래 탭바에 가리지 않게 */
+.site-foot :is(a, button) { scroll-margin-bottom: calc(96px + env(safe-area-inset-bottom)); }

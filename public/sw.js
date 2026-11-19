@@ -3,7 +3,7 @@
 //  - 우리 파일: 인터넷이 되면 항상 새로 받고(개발 중 수정이 바로 보이게), 안 되면 저장해 둔 것
 //  - CDN 라이브러리: 버전이 고정이라 저장해 둔 것을 먼저 쓴다
 //  - 지도 타일·검색·날씨·환율 API: 저장하지 않는다 (날씨는 앱이 따로 저장, 타일은 이용 조건 확인 전)
-const VERSION = 'v5';
+const VERSION = 'v6';
 const APP = `xenotravel-app-${VERSION}`;
 const LIBS = `xenotravel-libs-${VERSION}`;
 
@@ -18,6 +18,7 @@ const APP_FILES = [
   'icons/icon-512.png',
   'icons/icon-180.png',
   'data/trends.json',
+  'data/trends-i18n.json',
   'lib/budget.js',
   'lib/checklist.js',
   'lib/datepicker.js',

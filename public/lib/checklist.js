@@ -4,7 +4,7 @@
 //   가격이 있는 항목은 가계부 "예상"에 잡히고, 체크하면 가계부에 실제 지출로 기록된다 (expense.checkId로 연결).
 import { uid, indexOfDate } from './model.js';
 import { guessCurrency, ensureBudget, toKrw, addExpense } from './budget.js';
-import { t } from './i18n.js';
+import { t, allVersions } from './i18n.js';
 // 그룹 이름·기본 항목·추천 품목은 번역 키다. 기본 항목과 추천 품목은 넣는 순간의 언어로 저장된다 (그 뒤로는 사용자 데이터).
 
 export const CHECK_GROUPS = {
@@ -84,7 +84,7 @@ export function shopPickSets(trip) {
  */
 export function ensureChecks(trip) {
   if (!Array.isArray(trip.checks)) {
-    trip.checks = Object.entries(DEFAULTS).flatMap(([group, list]) => list.map((text) => ({ id: uid(), group, text: t(text), done: false })));
+    trip.checks = Object.entries(DEFAULTS).flatMap(([group, list]) => list.map((text, i) => ({ id: uid(), group, text: t(text), done: false, tpl: `${group}:${i}` })));
     trip.checksV = 2;
   }
   if (trip.checksV !== 2) undoAutoPicks(trip);
@@ -102,6 +102,22 @@ function undoAutoPicks(trip) {
   const auto = shopPickSets(trip)[0]?.items;
   if (!auto || shop.length !== auto.length || shop.some((c, i) => c.done || c.text !== auto[i])) return;
   trip.checks = trip.checks.filter((c) => c.group !== 'shop');
+}
+
+/**
+ * 화면에 보일 항목 이름. 기본 템플릿(기본 할 일·짐, 추천 쇼핑 품목)에서 온 항목이고 글자가 템플릿 그대로면
+ * 지금 언어로 보여준다. 사용자가 직접 쓴 항목·바꾼 항목은 저장된 글자 그대로 (저장 데이터는 바꾸지 않는다).
+ * 표시가 없는 예전 한국어 여행도 기본 항목과 글자가 똑같으면 템플릿으로 본다.
+ */
+export function checkText(c) {
+  let key = null;
+  const [g, i] = String(c.tpl ?? '').split(':');
+  if (DEFAULTS[g]?.[i]) key = DEFAULTS[g][i];
+  else if (c.pick) {
+    const [setId, j] = c.pick.split(':');
+    key = Object.values(SHOP_PICKS).flat().find((s) => s.id === setId)?.items[j] ?? null;
+  } else if (DEFAULTS[c.group]?.includes(c.text)) key = c.text;
+  return key && allVersions(key).includes(c.text) ? t(key) : c.text;
 }
 
 /** 그 목록에서 아직 쇼핑 리스트에 없는 품목 (번역 키). 다른 언어로 담았던 품목도 담은 것으로 본다. */

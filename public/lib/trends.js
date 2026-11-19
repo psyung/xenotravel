@@ -67,3 +67,17 @@ export function trendToPlace(p, cityName) {
     category: categoryFromText(p.category),
   };
 }
+
+/**
+ * 서비스가 작성한 트렌드 문구를 지금 언어로 (data/trends-i18n.json).
+ * 장소 이름은 번역이 있을 때만 바꾸고(한국어 설명이 섞인 이름), 없으면 원래 이름을 둔다.
+ * 번역이 없는 장소는 한국어 원문을 그대로 쓰고 original: true로 알려 준다 (화면에서 lang="ko"와 '한국어 원문' 표시).
+ */
+export function localizePlace(p, lang, i18n) {
+  const base = { name: p.name, area: p.area, category: p.category, summary: p.summary, original: false };
+  if (!lang || lang === 'ko') return base;
+  const tr = i18n?.places?.[p.id]?.[lang];
+  const category = i18n?.categories?.[p.category]?.[lang] ?? p.category;
+  if (!tr) return { ...base, category, original: true };
+  return { name: tr.name ?? p.name, area: tr.area ?? p.area, category, summary: tr.summary ?? p.summary, original: !tr.summary };
+}

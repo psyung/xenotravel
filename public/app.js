@@ -10,7 +10,7 @@ import { encodeShare, decodeShare, shareUrl, shareCodeFromHash, shareSummary, sh
 import { enhanceDates, refreshDates } from './lib/datepicker.js';
 import { enhanceSuggestions } from './lib/suggestions.js';
 import { loadWeather, weatherSignature } from './lib/weather.js';
-import { t, k, LANGS, LANG_KEY, getLang, setLang, loadLang, saveLang, locale, num, dayName, shortDate, dateTime, normalizeLang, tripLength } from './lib/i18n.js';
+import { t, k, missing as i18nMissing, LANGS, LANG_KEY, getLang, setLang, loadLang, saveLang, locale, num, dayName, shortDate, dateTime, normalizeLang, tripLength } from './lib/i18n.js';
 import { privacySections } from './lib/privacy.js';
 
 const COLORS = ['#3B6FD6', '#E8590C', '#C2255C', '#0B8A6F', '#7048E8', '#1098AD', '#F08C00', '#5C940D'];
@@ -40,6 +40,12 @@ const savePrefs = () => {
   }
 };
 let trends = { cities: [] };
+let trendsI18n = null; // data/trends-i18n.json (트렌드 문구 번역)
+/** 트렌드 장소 문구를 지금 언어로. 번역이 없으면 한국어 원문 (original) */
+const tp = (p) => T.localizePlace(p, getLang(), trendsI18n);
+/** 원문(한국어)을 보여줄 때 언어를 드러낸다 */
+const origAttr = (loc) => (loc.original ? ' lang="ko"' : '');
+const origTag = (loc) => (loc.original ? ` <small class="orig-tag">${esc(t('한국어 원문'))}</small>` : '');
 
 // 지도 타일: Esri Light Gray Canvas (바탕 + 글자 두 겹). 차분한 회색이라 일정 핀이 잘 보인다. 키 없이 쓰고 출처 표기 필수.
 // 어두운 화면에서는 Dark Gray Canvas. (CARTO는 2025년부터 키가 필요하고, Stadia는 localhost 밖에서 키가 필요하다)
@@ -87,6 +93,7 @@ function applyStaticI18n(root = document) {
   }
 }
 applyStaticI18n();
+globalThis.__xenoI18nMissing = i18nMissing; // 브라우저 검사용: 번역이 없어 한국어로 보인 키
 
 const db = openStore();
 const store = db.load();
@@ -125,7 +132,7 @@ map.on('locationerror', () => toast(t('현재 위치를 확인하지 못했어�
 /** 지도 자체 조작(확대·축소·출처)의 글자도 지금 언어로 */
 function mapControlsText() {
   const zc = map.zoomControl;
-  for (const [btn, key] of [[zc._zoomInButton, '확대'], [zc._zoomOutButton, '축소']]) {
+  for (const [btn, key] of [[zc._zoomInButton, k('확대')], [zc._zoomOutButton, k('축소')]]) {
     if (!btn) continue;
     btn.title = t(key);
     btn.setAttribute('aria-label', t(key));
@@ -390,18 +397,19 @@ function renderTrendMarkers() {
   const city = currentCity();
   if (!city || ui.readonly || (prefs.view === 'list' && !trendsOpen())) return;
   for (const p of T.activePlaces(city, TODAY)) {
+    const loc = tp(p);
     const m = L.marker([p.lat, p.lng], {
       icon: L.divIcon({ className: '', html: '<div class="trend-pin" aria-hidden="true">★</div>', iconSize: [22, 22], iconAnchor: [11, 11] }),
       zIndexOffset: -100,
     })
       .bindPopup(
-        `<div class="popup-name">${esc(p.name)}</div>` +
+        `<div class="popup-name">${esc(loc.name)}</div>` +
           `<div class="popup-meta">${esc(t('요즘 뜨는 곳'))} · ${esc(T.statusLabel(p, TODAY))}</div>` +
-          `<p class="popup-sum">${esc(p.summary)}</p>` +
+          `<p class="popup-sum"${origAttr(loc)}>${esc(loc.summary)}${origTag(loc)}</p>` +
           `<button class="popup-add" data-add-trend="${esc(p.id)}">${esc(t('+ 일정에 담기'))}</button>`,
       )
       .addTo(layer);
-    labelMarker(m, `${t('요즘 뜨는 곳')}: ${p.name}`);
+    labelMarker(m, `${t('요즘 뜨는 곳')}: ${loc.name}`);
   }
 }
 
@@ -415,15 +423,16 @@ function trendSectionHtml() {
     ...trends.cities.map((c) => `<option value="${c.id}"${c.id === city?.id ? ' selected' : ''}>${esc(t(c.name))}</option>`),
   ].join('');
   const cards = places
+    .map((p) => [p, tp(p)])
     .map(
-      (p) => `<li class="trend-card" data-trend="${esc(p.id)}">
-        <div class="tc-top"><span class="tc-badge s-${esc(p.status)}">${esc(T.statusLabel(p, TODAY))}</span><span class="tc-cat">${esc(p.category)}</span></div>
-        <div class="tc-name">${esc(p.name)}</div>
-        <div class="tc-area">${esc(p.area)}${p.approx ? ` · ${esc(t('대략 위치'))}` : ''}</div>
-        <p class="tc-sum">${esc(p.summary)}</p>
+      ([p, loc]) => `<li class="trend-card" data-trend="${esc(p.id)}">
+        <div class="tc-top"><span class="tc-badge s-${esc(p.status)}">${esc(T.statusLabel(p, TODAY))}</span><span class="tc-cat">${esc(loc.category)}</span></div>
+        <div class="tc-name">${esc(loc.name)}</div>
+        <div class="tc-area">${esc(loc.area)}${p.approx ? ` · ${esc(t('대략 위치'))}` : ''}</div>
+        <p class="tc-sum"${origAttr(loc)}>${esc(loc.summary)}${origTag(loc)}</p>
         <div class="tc-foot">
           <span class="tc-src">${esc(t('출처'))} ${p.sources.map((s, i) => `<a href="${esc(s.url)}" target="_blank" rel="noopener" title="${esc(s.title)}" aria-label="${esc(t('출처 {n}: {title}', { n: i + 1, title: s.title }))}">${i + 1}</a>`).join(' ')}</span>
-          <button class="tc-add" data-action="add-trend" aria-label="${esc(t('{name} 일정에 담기', { name: p.name }))}">${esc(t('+ 담기'))}</button>
+          <button class="tc-add" data-action="add-trend" aria-label="${esc(t('{name} 일정에 담기', { name: loc.name }))}">${esc(t('+ 담기'))}</button>
         </div>
       </li>`,
     )
@@ -445,8 +454,9 @@ function trendSectionHtml() {
 function addTrend(id, listId, index) {
   const found = findTrend(id);
   if (!found) return;
-  if (listId == null) return addPlace(T.trendToPlace(found.place, t(found.city.name)));
-  const item = M.addItem(trip, listId, T.trendToPlace(found.place, t(found.city.name)));
+  const local = { ...found.place, ...tp(found.place) };
+  if (listId == null) return addPlace(T.trendToPlace(local, t(found.city.name)));
+  const item = M.addItem(trip, listId, T.trendToPlace(local, t(found.city.name)));
   M.moveItem(trip, item.id, listId, index);
   if (commit().ok) toast(t('"{name}"을(를) 담았어요', { name: item.name }));
 }
@@ -520,6 +530,18 @@ function syncPickNavigation() {
 }
 pickViewport.addEventListener('change', syncPickNavigation);
 
+/** 지도 전체(아래쪽 확정·취소 포함)가 화면 안에 들어오게 스크롤한다. 좁은 화면은 아래 탭바 높이만큼 비워 둔다. */
+function revealMap() {
+  const wrap = $('.mapwrap');
+  const r = wrap.getBoundingClientRect();
+  const head = $('.topbar').offsetHeight;
+  const bar = pickViewport.matches && !ui.picking ? $('.pagebar').offsetHeight : 0;
+  const room = innerHeight - head - bar;
+  // 지도가 화면보다 크면 위쪽을 머리 바로 아래에, 아니면 아래쪽이 보이도록
+  const dy = r.height > room ? r.top - head : Math.max(0, r.bottom - (innerHeight - bar)) || Math.min(0, r.top - head);
+  if (Math.abs(dy) > 1) window.scrollBy({ top: dy, behavior: 'instant' });
+}
+
 function setPicking(on, { cancelled = false } = {}) {
   if (ui.picking === on) return;
   ui.picking = on;
@@ -535,6 +557,7 @@ function setPicking(on, { cancelled = false } = {}) {
   if (on) {
     map.closePopup();
     showTab('map');
+    revealMap();
     $('#pickConfirm').focus({ preventScroll: true });
   }
   syncPickNavigation();
@@ -1153,9 +1176,19 @@ flightForm.addEventListener('submit', (e) => {
   const problem = M.flightProblem(data);
   const err = $('#flightError');
   err.classList.remove('warn');
+  for (const el of flightForm.querySelectorAll('[aria-invalid]')) el.removeAttribute('aria-invalid');
   if (problem) {
+    // 어느 칸이 문제인지 표시하고 그 칸으로 간다 (입력한 값은 그대로)
+    const field = !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(data.departAt) ? 'departAt' : data.arriveAt && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(data.arriveAt) ? 'arriveAt' : !data.from.trim() ? 'from' : 'to';
+    const input = flightForm.elements[field];
+    input.setAttribute('aria-invalid', 'true');
+    const visible = input.type === 'datetime-local' ? input.parentElement.querySelector('.dp-field') ?? input : input;
+    visible.setAttribute('aria-invalid', 'true');
+    visible.setAttribute('aria-describedby', 'flightError');
     err.textContent = problem;
     err.hidden = false;
+    visible.focus();
+    visible.scrollIntoView({ block: 'center' });
     return;
   }
   // 날짜 변경선을 넘는 비행은 도착이 출발보다 빠를 수 있다: 한 번 알리고, 다시 누르면 저장
@@ -2118,7 +2151,7 @@ $('#exportXlsx').addEventListener('click', () => {
 });
 $('#exportPdf').addEventListener('click', openPrint);
 
-$('.menu-pop').addEventListener('click', (e) => {
+$('.menu .menu-pop').addEventListener('click', (e) => {
   const action = e.target.closest('[data-menu]')?.dataset.menu;
   $('.menu').open = false;
   if (action === 'backup') saveTripBackup();
@@ -2386,18 +2419,23 @@ function homeAlertHtml() {
     </section>`;
 }
 
-/** 메인 아래 푸터: 저작권 · 문의 · 개인정보처리방침 */
+/** 공통 푸터 (모든 화면 아래): 저작권 · 문의 · 개인정보처리방침 */
 const CONTACT = 'xenobase.official@gmail.com';
-function footerHtml() {
-  return `<footer class="site-foot">
+function renderFooter() {
+  $('#siteFoot').innerHTML = `
       <nav class="foot-links" aria-label="${esc(t('사이트 정보'))}">
-        <button type="button" class="linkbtn" id="privacyLink" data-home="privacy">${esc(t('개인정보처리방침'))}</button>
+        <button type="button" class="linkbtn" id="privacyLink" data-foot="privacy" aria-haspopup="dialog">${esc(t('개인정보처리방침'))}</button>
         <span class="foot-contact">${esc(t('문의'))} <a href="mailto:${CONTACT}">${CONTACT}</a></span>
       </nav>
-      <p class="foot-note">${esc(t('일정·가계부는 이 브라우저에만 저장돼요. 다른 기기로 옮길 땐 백업 파일을 쓰세요'))} · <button type="button" class="linkbtn" data-home="import">${esc(t('백업 파일 불러오기'))}</button></p>
-      <p class="foot-copy">© 2026 XenoTravel. ${esc(t('모든 권리 보유.'))}</p>
-    </footer>`;
+      <p class="foot-note">${esc(t('일정·가계부는 이 브라우저에만 저장돼요. 다른 기기로 옮길 땐 백업 파일을 쓰세요'))}<span class="edit-only"> · <button type="button" class="linkbtn" data-foot="import">${esc(t('백업 파일 불러오기'))}</button></span></p>
+      <p class="foot-copy">© 2026 XenoTravel. ${esc(t('모든 권리 보유.'))}</p>`;
 }
+renderFooter();
+$('#siteFoot').addEventListener('click', (e) => {
+  const act = e.target.closest('[data-foot]')?.dataset.foot;
+  if (act === 'privacy') openPrivacy();
+  else if (act === 'import' && !ui.readonly) $('#importFile').click();
+});
 
 function renderHome() {
   const el = $('#page-home');
@@ -2442,9 +2480,10 @@ function renderHome() {
       <div class="sec-head"><h2>${esc(t('요즘 뜨는 곳'))}</h2><span class="count">${esc(t('{date} 조사', { date: trends.researchedAt }))}</span></div>
       <div class="city-tabs" role="group" aria-label="${esc(t('트렌드 도시'))}">${cities.map((c) => `<button data-city="${c.id}" aria-pressed="${c.id === city.id}" class="${c.id === city.id ? 'on' : ''}">${esc(t(c.name))}</button>`).join('')}</div>
       <ul class="insp">${places
+        .map((p) => [p, tp(p)])
         .map(
-          (p) => `<li><span class="tc-badge s-${esc(p.status)}">${esc(T.statusLabel(p, TODAY))}</span>
-            <b>${esc(p.name)}</b><small>${esc(p.area)} · ${esc(p.category)}</small><p>${esc(p.summary)}</p></li>`,
+          ([p, loc]) => `<li><span class="tc-badge s-${esc(p.status)}">${esc(T.statusLabel(p, TODAY))}</span>
+            <b>${esc(loc.name)}</b><small>${esc(loc.area)} · ${esc(loc.category)}</small><p${origAttr(loc)}>${esc(loc.summary)}${origTag(loc)}</p></li>`,
         )
         .join('')}</ul>
       <button class="btn insp-go" data-dest="${esc(t(city.name))}">${esc(t('{city} 일정 만들기', { city: t(city.name) }))}</button>
@@ -2463,7 +2502,6 @@ function renderHome() {
         <li><b>${esc(t('전부 무료'))}</b><p>${esc(t('엑셀 · PDF 내보내기, 다크 모드, 백업까지 돈 내는 기능이 없어요.'))}</p></li>
       </ul>
     </section>
-    ${footerHtml()}
   </div>`;
   if (keep) for (const [k, v] of Object.entries(keep)) if (v) $(`#homeNew [name="${k}"]`).value = v;
   enhanceDates(el);
@@ -2494,7 +2532,6 @@ $('#page-home').addEventListener('click', (e) => {
     renderHome();
     $(`#page-home [data-city="${CSS.escape(cityId)}"]`)?.focus();
   } else if (home === 'import') $('#importFile').click();
-  else if (home === 'privacy') openPrivacy(e.target.closest('[data-home]'));
   else if (home === 'mytrips') {
     const sec = $('#myTrips');
     sec?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -2867,9 +2904,24 @@ function renderNotice() {
   if (!ui.readonly && total && plan > total) list.push(t('예상 비용({plan})이 예산({total})보다 {diff} 많아요', { plan: B.won(plan), total: B.won(total), diff: B.won(plan - total) }));
   const el = $('#notice');
   el.hidden = !list.length;
-  el.innerHTML = list.length ? `<b>${esc(t('확인'))}</b><ul>${list.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
+  const noStay = !ui.readonly && !(trip.stays ?? []).length && trip.days.length > 1;
+  el.innerHTML = list.length
+    ? `<b>${esc(t('확인할 것'))}</b><ul>${list.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>${noStay ? `<button type="button" class="btn notice-act" data-notice="stay">${esc(t('+ 숙소 추가'))}</button>` : ''}`
+    : '';
 }
 
+$('#notice').addEventListener('click', (e) => {
+  if (e.target.closest('[data-notice="stay"]')) {
+    ui.target = STAY_TARGET;
+    ui.stayStart = firstUncoveredNight();
+    ui.stayNights = null;
+    renderTarget();
+    showTab('plan');
+    searchEl.focus();
+    searchEl.scrollIntoView({ block: 'center' });
+    toast(t('숙소 이름을 검색하거나 ‘지도에서 찍기’로 위치를 골라요.'));
+  }
+});
 $('#dayTabs').addEventListener('click', (e) => {
   const b = e.target.closest('[data-day]');
   if (b) selectDay(Number(b.dataset.day));
@@ -2918,7 +2970,11 @@ function showPage(page, { scroll = true } = {}) {
   document.body.dataset.hasTrip = trip || store.currentId ? 'yes' : 'no';
   $('#inAppBackup').hidden = prefs.page === 'home' || ui.readonly;
   renderBackupReminder();
-  for (const p of PAGES) $(`#page-${p}`).hidden = p !== prefs.page;
+  // 보이지 않는 화면은 읽기 순서·탭 순서에서 완전히 뺀다 (hidden + inert)
+  for (const p of PAGES) {
+    $(`#page-${p}`).hidden = p !== prefs.page;
+    $(`#page-${p}`).inert = p !== prefs.page;
+  }
   $$('button.pg').forEach((b) => {
     b.classList.toggle('on', b.dataset.page === prefs.page);
     if (b.dataset.page === prefs.page) b.setAttribute('aria-current', 'page');
@@ -3002,6 +3058,7 @@ function applyLanguage() {
   if (bulkDialog.open) renderBulk();
   if (privacyDialog.open) renderPrivacy();
   renderSaveBar();
+  renderFooter();
   if (trip && prefs.page !== 'home') {
     render();
     showPage(prefs.page, { scroll: false });
@@ -3418,17 +3475,17 @@ function checkRowHtml(c) {
     const sym = cur === 'KRW' ? '₩' : B.CURRENCIES[budget.currency].symbol.trim();
     price = `<form class="price-form" data-id="${c.id}" data-mode="${paidMode ? 'paid' : 'price'}">
         ${local && !paidMode ? `<button type="button" class="cur-mini" data-c="pcur" aria-label="${esc(t('통화 바꾸기: 지금 {cur}', { cur: cur === 'KRW' ? 'KRW' : budget.currency }))}">${esc(sym)}</button>` : `<span class="cur-mini" aria-hidden="true">${esc(sym)}</span>`}
-        <input name="amt" data-draft="price-${c.id}" inputmode="decimal" autocomplete="off" aria-label="${esc(paidMode ? t('{name} 실제 결제 금액', { name: c.text }) : t('{name} 예상 가격', { name: c.text }))}" placeholder="${esc(paidMode ? t('실제 결제') : t('예상 가격'))}" value="${paidMode ? paid?.amount ?? '' : c.price > 0 ? c.price : ''}">
+        <input name="amt" data-draft="price-${c.id}" inputmode="decimal" autocomplete="off" aria-label="${esc(paidMode ? t('{name} 실제 결제 금액', { name: C.checkText(c) }) : t('{name} 예상 가격', { name: C.checkText(c) }))}" placeholder="${esc(paidMode ? t('실제 결제') : t('예상 가격'))}" value="${paidMode ? paid?.amount ?? '' : c.price > 0 ? c.price : ''}">
         <button class="ok">${esc(t('확인'))}</button>
       </form>`;
   } else {
-    price = `<button class="price-chip${c.price > 0 ? ' set' : ''}" data-c="price" data-id="${c.id}" title="${esc(t('예상 가격 (가계부 예상에 잡혀요)'))}" aria-label="${esc(c.price > 0 ? t('{name} 예상 가격 {amount} 고치기', { name: c.text, amount: priceLabel(c) }) : t('{name} 예상 가격 넣기', { name: c.text }))}">${c.price > 0 ? `${esc(t('예상'))} ${esc(priceLabel(c))}` : esc(t('+ 가격'))}</button>`;
-    if (paid) price += `<button class="price-chip paid" data-c="paid" data-id="${c.id}" title="${esc(t('가계부에 기록된 실제 결제 금액이에요. 눌러서 고쳐요'))}" aria-label="${esc(t('{name} 실제 결제 {amount} 고치기', { name: c.text, amount: expenseLabel(paid) }))}">${esc(t('결제'))} ${esc(expenseLabel(paid))}</button>`;
+    price = `<button class="price-chip${c.price > 0 ? ' set' : ''}" data-c="price" data-id="${c.id}" title="${esc(t('예상 가격 (가계부 예상에 잡혀요)'))}" aria-label="${esc(c.price > 0 ? t('{name} 예상 가격 {amount} 고치기', { name: C.checkText(c), amount: priceLabel(c) }) : t('{name} 예상 가격 넣기', { name: C.checkText(c) }))}">${c.price > 0 ? `${esc(t('예상'))} ${esc(priceLabel(c))}` : esc(t('+ 가격'))}</button>`;
+    if (paid) price += `<button class="price-chip paid" data-c="paid" data-id="${c.id}" title="${esc(t('가계부에 기록된 실제 결제 금액이에요. 눌러서 고쳐요'))}" aria-label="${esc(t('{name} 실제 결제 {amount} 고치기', { name: C.checkText(c), amount: expenseLabel(paid) }))}">${esc(t('결제'))} ${esc(expenseLabel(paid))}</button>`;
   }
   return `<li class="${c.done ? 'done' : ''}${ui.editPrice === c.id || ui.editPaid === c.id ? ' editing' : ''}">
-      <label><input type="checkbox" data-c="toggle" data-id="${c.id}"${c.done ? ' checked' : ''}><span>${esc(c.text)}</span></label>
+      <label><input type="checkbox" data-c="toggle" data-id="${c.id}"${c.done ? ' checked' : ''}><span>${esc(C.checkText(c))}</span></label>
       ${price}
-      <button class="icon" data-c="del" data-id="${c.id}" title="${esc(t('지우기'))}" aria-label="${esc(t('{name} 삭제', { name: c.text }))}">✕</button>
+      <button class="icon" data-c="del" data-id="${c.id}" title="${esc(t('지우기'))}" aria-label="${esc(t('{name} 삭제', { name: C.checkText(c) }))}">✕</button>
     </li>`;
 }
 
@@ -3862,10 +3919,21 @@ closeOnBackdrop(copyDialog);
 const privacyDialog = $('#privacyDialog');
 closeOnBackdrop(privacyDialog);
 function renderPrivacy() {
-  $('#privacyBody').innerHTML = privacySections(getLang(), { contact: CONTACT })
-    .map((s) => `<section><h3>${esc(s.title)}</h3>${s.body.map((p) => (Array.isArray(p) ? `<ul>${p.map((li) => `<li>${esc(li)}</li>`).join('')}</ul>` : `<p>${esc(p)}</p>`)).join('')}</section>`)
+  const doc = privacySections(getLang(), { contact: CONTACT });
+  // 위쪽 차례: 저장·공유·외부 전송·삭제·문의로 바로 이동
+  const toc = `<nav class="privacy-toc" aria-label="${esc(t('차례'))}"><ul>${doc.map((s, i) => `<li><a href="#pv-${i}" data-pv="${i}">${esc(s.title)}</a></li>`).join('')}</ul></nav>`;
+  $('#privacyBody').innerHTML = toc + doc
+    .map((s, i) => `<section id="pv-${i}" tabindex="-1"><h3>${esc(s.title)}</h3>${s.body.map((p) => (Array.isArray(p) ? `<ul>${p.map((li) => `<li>${esc(li)}</li>`).join('')}</ul>` : `<p>${esc(p)}</p>`)).join('')}</section>`)
     .join('');
 }
+$('#privacyBody').addEventListener('click', (e) => {
+  const i = e.target.closest('[data-pv]')?.dataset.pv;
+  if (i == null) return;
+  e.preventDefault(); // 주소(#/trip/…)는 바꾸지 않는다
+  const sec = $(`#pv-${i}`);
+  sec.scrollIntoView({ block: 'start' });
+  sec.focus({ preventScroll: true });
+});
 function openPrivacy() {
   renderPrivacy();
   showDialog(privacyDialog);
@@ -4110,10 +4178,11 @@ if (await openSharedFromAddress()) {
 renderSaveBar();
 $('#appShell').hidden = true;
 document.fonts?.ready.then(sizeDockCards); // 글꼴이 늦게 로드되면 다시 잰다
-fetch('data/trends.json')
-  .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
-  .then((data) => {
+const getJson = (u) => fetch(u).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))));
+Promise.all([getJson('data/trends.json'), getJson('data/trends-i18n.json').catch(() => null)])
+  .then(([data, tr]) => {
     trends = data;
+    trendsI18n = tr;
     if (prefs.page === 'home') renderHome();
     else if (trip && prefs.page === 'plan') renderDays();
   })

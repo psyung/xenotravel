@@ -131,3 +131,39 @@ test('F05: 개인정보처리방침은 네 언어로 같은 항목을 안내하�
   }
   assert.equal(privacySections('xx', { contact })[0].title, ko[0].title); // 모르는 언어는 한국어
 });
+
+test('3-2: 추천 카드(트렌드) 문구는 네 언어로 현지화되고, 번역이 없으면 원문 표시를 한다', async () => {
+  const T = await import('../public/lib/trends.js');
+  const data = JSON.parse(readFileSync(new URL('data/trends.json', pub), 'utf8'));
+  const tr = JSON.parse(readFileSync(new URL('data/trends-i18n.json', pub), 'utf8'));
+  for (const city of data.cities) {
+    for (const p of city.places) {
+      for (const lang of ['en', 'zh', 'ja']) {
+        const loc = T.localizePlace(p, lang, tr);
+        assert.equal(loc.original, false, `${p.id} ${lang}`);
+        for (const f of ['area', 'category', 'summary', 'name']) assert.ok(!/[가-힣]/.test(loc[f]), `${p.id} ${lang} ${f}: ${loc[f]}`);
+      }
+      assert.equal(T.localizePlace(p, 'ko', tr).summary, p.summary);
+    }
+  }
+  const unknown = T.localizePlace({ id: 'x', name: 'X', area: '어딘가', category: '카페', summary: '설명' }, 'en', tr);
+  assert.equal(unknown.original, true);
+  assert.equal(unknown.category, 'Café');
+});
+
+test('3-2: 체크리스트 기본 항목은 템플릿 그대로일 때만 지금 언어로 보이고, 사용자 항목·저장값은 그대로', () => {
+  I.setLang('ko');
+  const trip = M.createTrip({ title: 'x', startDate: '2026-12-01', endDate: '2026-12-02' });
+  C.ensureChecks(trip);
+  const passport = trip.checks.find((c) => c.text === '여권');
+  C.addCheck(trip, 'pack', '내가 쓴 항목');
+  const legacy = { id: 'l', group: 'pack', text: '세면도구', done: false }; // 예전 여행 (tpl 없음)
+  const edited = { ...passport, id: 'e', text: '여권 사본' };
+  I.setLang('en');
+  assert.equal(C.checkText(passport), 'Passport');
+  assert.equal(C.checkText(legacy), 'Toiletries');
+  assert.equal(C.checkText(edited), '여권 사본');
+  assert.equal(C.checkText(trip.checks.find((c) => c.text === '내가 쓴 항목')), '내가 쓴 항목');
+  assert.equal(passport.text, '여권', '저장값은 그대로');
+  I.setLang('ko');
+});

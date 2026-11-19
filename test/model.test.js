@@ -224,3 +224,11 @@ test('항공편이 있으면 첫날 출발·마지막 날 귀가를 숙소로 �
   assert.equal(rows[0], 'Day 1/항공(출국)/ICN 09:00 → KIX 11:00');
   assert.equal(rows.at(-1), 'Day 3/항공(귀국)/KIX 18:00 → ICN 20:00');
 });
+
+test('validateTrip: 메모·주소 칸이 없는 예전 백업도 빈 글자로 채워 연다', () => {
+  const legacy = { id: 'old', title: '예전', days: [{ id: 'd1', items: [{ id: 'i1', name: '오사카성', lat: 34.68, lng: 135.52 }] }] };
+  const t = M.validateTrip(legacy);
+  assert.deepEqual([t.days[0].items[0].memo, t.days[0].items[0].address, t.days[0].date], ['', '', '']);
+  assert.deepEqual([t.inbox, t.stays, t.flights], [[], [], []]);
+  assert.equal(legacy.days[0].items[0].memo, undefined, '원본 객체는 바꾸지 않는다');
+});
