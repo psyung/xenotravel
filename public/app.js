@@ -3390,7 +3390,7 @@ function picksHtml() {
     .map((set) => {
       const n = C.missingPicks(trip, set).length;
       if (!n) return '';
-      return `<button class="picks-btn" data-c="picks" data-set="${esc(set.id)}">${esc(t('{title} {n}개 담기', { title: t(set.title), n }))}<small>${esc(t(set.note || '한국 여행자들이 많이 사는 품목이에요'))}</small></button>`;
+      return `<button class="picks-btn" data-c="picks" data-set="${esc(set.id)}">${esc(t('{title} {n}개 담기', { title: t(set.title), n }))}<small>${esc(t(set.note || k('한국 여행자들이 많이 사는 품목이에요')))}</small></button>`;
     })
     .join('');
 }

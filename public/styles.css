@@ -56,6 +56,9 @@ body {
   letter-spacing: -0.012em; -webkit-font-smoothing: antialiased; word-break: keep-all;
 }
 button, input, select, textarea { font: inherit; color: inherit; letter-spacing: inherit; }
+/* 중국어·일본어는 글자 사이에서 줄을 바꾼다 (keep-all이면 띄어쓰기가 없어 한 줄로 넘친다) */
+html:is([lang|="zh"], [lang|="ja"]) body { word-break: normal; line-break: strict; letter-spacing: 0; }
+html[lang="en"] body { letter-spacing: 0; }
 button { cursor: pointer; }
 a { color: var(--accent); text-decoration: none; }
 .danger { color: var(--hot) !important; }

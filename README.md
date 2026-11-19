@@ -106,7 +106,11 @@ public/app.js        UI·지도·이벤트
 public/lib/model.js  여행 데이터 모델 (순수 함수, 테스트 대상)
 public/lib/links.js  지도 링크 / 좌표 파서 (테스트 대상)
 public/lib/geo.js    장소 검색 / 역지오코딩 (Photon)
-public/lib/store.js  localStorage 저장
+public/lib/store.js  localStorage 저장 (여러 탭이 동시에 저장해도 합친다)
+public/lib/sync.js   탭 사이 3-way 병합·충돌 감지 (테스트 대상)
+public/lib/i18n.js   언어 선택(한국어·English·简体中文·日本語)과 날짜·숫자 형식
+public/lib/messages.js 번역 사전 (한국어 원문 → 영·중·일). 새 문구는 t('…')로 쓰고 여기에 넣는다 (빠지면 npm test 실패)
+public/lib/privacy.js 개인정보처리방침 (네 언어)
 public/lib/export.js 엑셀·JSON 내보내기
 public/lib/trends.js 트렌드 도시 선택·기간 필터 (테스트 대상)
 public/lib/budget.js 가계부 (통화·환율·합계·CSV, 테스트 대상)
