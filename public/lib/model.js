@@ -286,7 +286,7 @@ export function routeDirectionsUrl(points) {
 
 /* ───────── 동선 자동 정리 ─────────
  * 하루 장소를 "가장 덜 돌아가는 순서"로 바꾼다. 출발 숙소 → 장소들 → 귀가 숙소 직선거리 합이 기준이다.
- * 시간을 정한 장소는 지금 자리(몇 번째)에 그대로 두고, 시간이 없는 장소만 나머지 자리에 다시 넣는다.
+ * 시간을 정했거나 "순서 고정"(item.pinned)한 장소는 지금 자리(몇 번째)에 그대로 두고, 나머지만 다시 넣는다.
  */
 // 시간이 없는 장소가 이 개수 이하면 모든 경우를 따져 최단 순서를 찾는다 (2^12 × 12 정도라 금방 끝난다).
 const EXACT_MAX = 12;
@@ -387,7 +387,7 @@ export function optimizeDay(trip, dayIndex) {
   if (!day) return null;
   const items = day.items;
   const { start, end } = dayStays(trip, dayIndex);
-  const freeSlots = items.map((it, i) => (it.time ? -1 : i)).filter((i) => i !== -1);
+  const freeSlots = items.map((it, i) => (it.time || it.pinned ? -1 : i)).filter((i) => i !== -1);
   const beforeKm = pathKm([start, ...items, end]);
   const base = { items: items.slice(), beforeKm, afterKm: beforeKm, savedKm: 0, changed: false, fixed: items.length - freeSlots.length, movable: freeSlots.length };
   if (freeSlots.length < 2) return base;
@@ -396,6 +396,15 @@ export function optimizeDay(trip, dayIndex) {
   // 10m도 안 줄면 지금 순서가 이미 좋은 것으로 본다.
   if (!(afterKm < beforeKm - 0.01) || order.every((it, i) => it === items[i])) return base;
   return { ...base, items: order, afterKm, savedKm: beforeKm - afterKm, changed: true };
+}
+
+/** 두 날의 장소를 통째로 바꾼다 (날짜·숙소·항공편은 날짜에 붙어 있어서 그대로). */
+export function swapDays(trip, a, b) {
+  const da = trip.days[a];
+  const db = trip.days[b];
+  if (!da || !db || a === b) return false;
+  [da.items, db.items] = [db.items, da.items];
+  return true;
 }
 
 /** 제안받은 순서(장소 id 목록)를 적용한다. 그사이 장소가 바뀌었으면(추가·삭제·이동) 적용하지 않고 false. */

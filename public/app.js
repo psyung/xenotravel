@@ -549,7 +549,8 @@ function costTagHtml(it) {
   const code = it.cost.cur === 'KRW' ? 'KRW' : trip.budget?.currency ?? B.guessCurrency(trip.destination);
   return `<span class="cost-tag" title="예정 비용">${esc(B.money(it.cost.price, code))}</span>`;
 }
-const nameHtml = (it) => `<span class="nm">${esc(it.name)}</span>${catIcon(it)}${costTagHtml(it)}`;
+const nameHtml = (it) =>
+  `<span class="nm">${esc(it.name)}</span>${catIcon(it)}${it.pinned ? '<span class="pin-tag" title="동선 정리할 때 이 자리 그대로">고정</span>' : ''}${costTagHtml(it)}`;
 
 function costEditorHtml(it) {
   const b = trip.budget ?? { currency: B.guessCurrency(trip.destination) };
@@ -597,6 +598,7 @@ function itemHtml(it, i, isDay, leg = null) {
         .map(([k, c]) => `<button type="button" data-action="set-cat" data-cat="${k}" class="${it.category === k ? 'on' : ''}" style="--c:${c.color}">${c.label}</button>`)
         .join('')}</div>
       <label>시간<input type="time" data-field="time" value="${esc(it.time)}"></label>
+      ${isDay ? `<label class="pin-toggle"><input type="checkbox" data-pin${it.pinned ? ' checked' : ''}> 동선 정리할 때 이 순서 그대로 두기 <small>(시간을 정한 곳은 늘 그대로)</small></label>` : ''}
       ${isDay ? costEditorHtml(it) : ''}
       <label>메모<textarea data-field="memo" placeholder="영업시간, 예약번호, 꼭 먹을 것…">${esc(it.memo)}</textarea></label>
       <label>링크<input type="url" data-field="url" value="${esc(it.url)}" placeholder="예약 페이지, 블로그 등"></label>
@@ -818,10 +820,16 @@ function dayToolsHtml(l) {
   const copy = `<button data-action="day-copy" data-day="${l.dayIndex}" title="이 날 일정을 카톡에 붙일 글로 복사해요">카톡용 복사</button>`;
   const route = link + copy;
   if (ui.readonly) return route;
-  const movable = l.items.filter((it) => !it.time).length;
+  const movable = l.items.filter((it) => !it.time && !it.pinned).length;
   return `${route}${st.end ? '' : `<button data-action="stay-here" data-day="${l.dayIndex}" title="이 날부터 묵을 숙소 추가">+ 숙소</button>`}${
     movable > 1 ? `<button data-action="route-opt" data-list="${l.id}" title="숙소 기준으로 덜 돌아가는 순서를 찾아요. 시간을 정한 장소는 그대로 둬요">동선 정리</button>` : ''
-  }${l.items.length > 1 ? `<button data-action="sort-time" data-list="${l.id}">시간순</button>` : ''}`;
+  }${l.items.length > 1 ? `<button data-action="sort-time" data-list="${l.id}">시간순</button>` : ''}${
+    trip.days.length > 1
+      ? `<span class="swap-wrap"><span class="swap-label" aria-hidden="true">다른 날과 바꾸기</span><select class="day-swap" data-day="${l.dayIndex}" aria-label="이 날 장소를 다른 날과 통째로 바꾸기" title="이 날 장소를 다른 날과 통째로 바꿔요 (날짜·숙소·항공편은 그대로)"><option value="">다른 날과 바꾸기</option>${trip.days
+          .map((d, i) => (i === l.dayIndex ? '' : `<option value="${i}">Day ${i + 1}${d.date ? ` · ${esc(M.formatDate(d.date))}` : ''}</option>`))
+          .join('')}</select></span>`
+      : ''
+  }`;
 }
 
 /* ───────── 일차별 날씨 ─────────
@@ -904,7 +912,7 @@ function proposeRoute(listId) {
   if (!r) return;
   if (!r.changed) {
     ui.routePlan = null;
-    toast(r.fixed ? '시간을 정한 곳을 그대로 두면 지금 순서가 가장 짧아요' : '지금 순서가 이미 가장 짧아요');
+    toast(r.fixed ? '시간을 정했거나 고정한 곳을 그대로 두면 지금 순서가 가장 짧아요' : '지금 순서가 이미 가장 짧아요');
     return;
   }
   ui.routePlan = { listId, dayIndex, current: dayIds(dayIndex), ids: r.items.map((it) => it.id), beforeKm: r.beforeKm, afterKm: r.afterKm, savedKm: r.savedKm, fixed: r.fixed };
@@ -944,8 +952,8 @@ function routePlanHtml(l) {
       .map((id, i) => {
         const it = byId.get(id);
         const moved = plan.current[i] !== id;
-        return `<li class="${it.time ? 'fixed' : moved ? 'moved' : ''}"><span class="rp-num">${i + 1}</span><span class="rp-name">${esc(it.name)}</span>${
-          it.time ? `<span class="rp-tag">${esc(it.time)} 고정</span>` : ''
+        return `<li class="${it.time || it.pinned ? 'fixed' : moved ? 'moved' : ''}"><span class="rp-num">${i + 1}</span><span class="rp-name">${esc(it.name)}</span>${
+          it.time ? `<span class="rp-tag">${esc(it.time)} 고정</span>` : it.pinned ? '<span class="rp-tag">자리 고정</span>' : ''
         }</li>`;
       })
       .join('');
@@ -954,7 +962,7 @@ function routePlanHtml(l) {
           <strong>동선 정리 제안</strong>
           <span class="rp-km">${M.formatKm(plan.beforeKm)} → <b>${M.formatKm(plan.afterKm)}</b></span>
         </div>
-        <p class="rp-sub">이동 거리가 ${M.formatKm(plan.savedKm)} 줄어요. 숙소 기준 직선거리로 계산했어요${plan.fixed ? ` · 시간을 정한 ${plan.fixed}곳은 그대로 둬요` : ''}.</p>
+        <p class="rp-sub">이동 거리가 ${M.formatKm(plan.savedKm)} 줄어요. 숙소 기준 직선거리로 계산했어요${plan.fixed ? ` · 시간을 정했거나 고정한 ${plan.fixed}곳은 그대로 둬요` : ''}.</p>
         <ol class="rp-list">${rows}</ol>
         <div class="rp-actions">
           <button class="btn" data-action="route-cancel">취소</button>
@@ -1234,6 +1242,26 @@ $('#days').addEventListener('input', (e) => {
   const timeEl = $('.tl-time', li);
   if (timeEl) timeEl.textContent = it.time;
   refreshMapSoon();
+});
+
+// 순서 고정
+$('#days').addEventListener('change', (e) => {
+  if (!e.target.matches('[data-pin]')) return;
+  const found = M.findItem(trip, e.target.closest('.item')?.dataset.id);
+  if (!found) return;
+  if (e.target.checked) found.item.pinned = true;
+  else delete found.item.pinned;
+  commit();
+});
+// 다른 날과 통째로 바꾸기 (다시 바꾸면 돌아간다)
+$('#days').addEventListener('change', (e) => {
+  if (!e.target.matches('.day-swap') || e.target.value === '') return;
+  const a = Number(e.target.dataset.day);
+  const b = Number(e.target.value);
+  if (!M.swapDays(trip, a, b)) return;
+  ui.routePlan = ui.routeUndo = null;
+  commit();
+  toast(`Day ${a + 1} ↔ Day ${b + 1} 장소를 바꿨어요. 한 번 더 바꾸면 돌아가요`, 3000);
 });
 
 // 장소 예상 비용: 칸을 벗어나거나 통화를 바꾸면 저장 (가계부 "예상"에 바로 잡힌다)

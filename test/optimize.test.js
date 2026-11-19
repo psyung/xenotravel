@@ -74,3 +74,24 @@ test('applyDayOrder: 제안 순서를 적용하고, 장소가 바뀌었으면 �
   assert.equal(M.applyDayOrder(t, 1, ids.slice(1)), false);
   assert.equal(M.applyDayOrder(t, 1, [ids[0], ids[0], ids[1]]), false);
 });
+
+test('optimizeDay: "순서 고정"한 장소는 시간이 없어도 제자리', () => {
+  const t = tripWith([P('C', 3), P('A', 1, { pinned: true }), P('D', 4), P('B', 2)]);
+  t.days[1].items[1].pinned = true; // addItem은 pinned를 옮기지 않는다
+  const r = M.optimizeDay(t, 1);
+  assert.equal(r.items[1].name, 'A');
+  assert.equal(r.fixed, 1);
+  assert.equal(r.movable, 3);
+});
+
+test('swapDays: 두 날의 장소를 통째로 바꾼다', () => {
+  const t = tripWith([P('A', 1), P('B', 2)], { stay: true });
+  M.addItem(t, t.days[2].id, P('X', 5));
+  const dates = t.days.map((d) => d.date);
+  assert.equal(M.swapDays(t, 1, 2), true);
+  assert.deepEqual(names(t.days[1].items), ['X']);
+  assert.deepEqual(names(t.days[2].items), ['A', 'B']);
+  assert.deepEqual(t.days.map((d) => d.date), dates); // 날짜는 그대로
+  assert.equal(M.swapDays(t, 1, 1), false);
+  assert.equal(M.swapDays(t, 1, 9), false);
+});
