@@ -1,5 +1,5 @@
 import * as M from './lib/model.js';
-import { parseLocationInput } from './lib/links.js';
+import { parseLocationInput, parseLocationList } from './lib/links.js';
 import { searchPlaces, searchPlacesKo, HANGUL, reversePlace, geocodeDestination } from './lib/geo.js';
 import { loadStore, saveStore } from './lib/store.js';
 import { exportXlsx, downloadJson } from './lib/export.js';
@@ -2709,6 +2709,149 @@ function closeOnBackdrop(dlg, canClose = () => true) {
 }
 closeOnBackdrop(flightDialog);
 closeOnBackdrop(shareDialog);
+
+/* ───────── 장소 여러 개 한 번에 담기 ─────────
+ * 링크 여러 개 / 테이크아웃 파일 → 미리 보기(체크) → 담기. 위치 없이 이름만 있는 곳은 "이름으로 찾기"를 눌러야 찾는다.
+ * 검색창에 링크를 2개 이상 붙여넣어도 이 창이 열린다 (한 줄 입력칸은 줄바꿈을 지워서 링크가 붙어 버린다).
+ */
+const bulkDialog = $('#bulkDialog');
+closeOnBackdrop(bulkDialog);
+ui.bulk = { rows: [], shortLinks: 0, unsupported: 0, finding: false };
+
+function openBulk(text = '') {
+  if (!trip || ui.readonly) return;
+  $('#bulkText').value = text;
+  readBulk(text);
+  const dest = $('#bulkDest');
+  dest.innerHTML = `<option value="${M.INBOX}">장소 보관함</option>${trip.days.map((d, i) => `<option value="${d.id}">${esc(M.dayTitle(d, i))}</option>`).join('')}`;
+  bulkDialog.showModal();
+  if (!text) $('#bulkText').focus();
+}
+
+function readBulk(text) {
+  const r = parseLocationList(text);
+  const have = new Set(allLists().flatMap((l) => l.items).map((it) => `${(+it.lat).toFixed(5)},${(+it.lng).toFixed(5)}`));
+  ui.bulk = {
+    rows: [
+      ...r.places.map((p) => {
+        const dup = have.has(`${p.lat.toFixed(5)},${p.lng.toFixed(5)}`);
+        return { ...p, kind: 'place', on: !dup, dup };
+      }),
+      ...r.names.map((n) => ({ ...n, kind: 'name', on: false })),
+    ],
+    shortLinks: r.shortLinks,
+    unsupported: r.unsupported,
+    finding: false,
+  };
+  renderBulk();
+}
+
+function renderBulk() {
+  const { rows, shortLinks, unsupported, finding } = ui.bulk;
+  const names = rows.filter((x) => x.kind === 'name').length;
+  const on = rows.filter((x) => x.on && x.kind === 'place').length;
+  const parts = [
+    rows.length ? `${rows.length - names}곳 찾음` : '',
+    names ? `이름만 있는 곳 ${names}개` : '',
+    shortLinks ? `짧은 링크 ${shortLinks}개는 열 수 없어요 (한 번 연 뒤 긴 주소를 복사해 주세요)` : '',
+    unsupported ? `위치를 못 읽은 링크 ${unsupported}개` : '',
+  ].filter(Boolean);
+  $('#bulkSummary').innerHTML = `${esc(parts.join(' · '))}${
+    names ? ` <button type="button" class="linkbtn" data-bulk="find"${finding ? ' disabled' : ''}>${finding ? '찾는 중…' : '이름으로 찾기'}</button>` : ''
+  }`;
+  $('#bulkList').innerHTML = rows
+    .map((x, i) => {
+      if (x.kind === 'name') {
+        return `<li class="bulk-row name"><span class="bulk-check"></span><span class="bulk-text"><b>${esc(x.name)}</b><small>${x.missing ? '찾지 못했어요. 검색창에서 직접 찾아 주세요' : '위치가 없어요. "이름으로 찾기"를 누르면 찾아요'}</small></span></li>`;
+      }
+      const sub = x.found ? `찾은 곳: ${x.address || `${x.lat.toFixed(4)}, ${x.lng.toFixed(4)}`}` : x.address || `${x.lat.toFixed(5)}, ${x.lng.toFixed(5)}`;
+      return `<li class="bulk-row${x.found ? ' found' : ''}"><label class="bulk-check"><input type="checkbox" data-bulk-i="${i}"${x.on ? ' checked' : ''}></label>
+        <span class="bulk-text"><b>${esc(x.name || '이름 없는 장소 (담은 뒤 주소로 이름을 찾아요)')}</b><small>${esc(sub)}${x.dup ? ' · 이미 일정에 있어요' : ''}${x.memo ? ` · ${esc(x.memo)}` : ''}</small></span></li>`;
+    })
+    .join('');
+  const btn = $('#bulkAdd');
+  btn.disabled = !on;
+  btn.textContent = on ? `${on}곳 담기` : '담기';
+}
+
+async function findBulkNames() {
+  const b = ui.bulk;
+  if (b.finding) return;
+  if (!navigator.onLine) return toast('이름으로 찾으려면 인터넷이 필요해요');
+  b.finding = true;
+  renderBulk();
+  const c = trip.center ?? map.getCenter();
+  const near = { lat: c.lat, lng: c.lng, zoom: 12 };
+  for (const row of b.rows.filter((x) => x.kind === 'name' && !x.missing)) {
+    try {
+      const hits = HANGUL.test(row.name) ? await searchPlacesKo(row.name, near) : await searchPlaces(row.name, near);
+      const hit = hits[0];
+      if (hit) Object.assign(row, { kind: 'place', lat: hit.lat, lng: hit.lng, address: hit.address, found: true, on: true });
+      else row.missing = true;
+    } catch {
+      row.missing = true;
+    }
+    if (ui.bulk !== b) return; // 그사이 내용을 바꿈
+    renderBulk();
+  }
+  b.finding = false;
+  renderBulk();
+}
+
+async function addBulk() {
+  const picked = ui.bulk.rows.filter((x) => x.kind === 'place' && x.on);
+  if (!picked.length) return;
+  const dest = $('#bulkDest').value || M.INBOX;
+  const added = picked.map((p) => M.addItem(trip, dest, { name: p.name || '링크로 추가한 장소', address: p.address, lat: p.lat, lng: p.lng, memo: p.memo ?? '' }));
+  const di = trip.days.findIndex((d) => d.id === dest);
+  bulkDialog.close();
+  if (dest === M.INBOX) {
+    prefs.dockOpen = true;
+    savePrefs();
+  }
+  commit({ fit: true });
+  toast(`${added.length}곳을 ${di === -1 ? '장소 보관함' : `Day ${di + 1}`}에 담았어요`);
+  // 이름이 없던 곳(좌표만 있던 링크)은 주소로 이름을 찾아 채운다
+  const nameless = added.filter((it, i) => !picked[i].name);
+  for (const it of nameless) {
+    const r = await reversePlace(it.lat, it.lng).catch(() => null);
+    if (!r) continue;
+    it.name = r.name || it.name;
+    it.address = it.address || r.address || '';
+  }
+  if (nameless.length) commit();
+}
+
+$('#bulkBtn').addEventListener('click', () => openBulk());
+$('#bulkClose').addEventListener('click', () => bulkDialog.close());
+$('#bulkAdd').addEventListener('click', addBulk);
+$('#bulkText').addEventListener('input', debounce((e) => readBulk(e.target.value), 250));
+$('#bulkFile').addEventListener('change', async (e) => {
+  const f = e.target.files?.[0];
+  e.target.value = '';
+  if (!f) return;
+  if (f.size > 5 * 1024 * 1024) return toast('파일이 너무 커요 (5MB까지)');
+  const text = await f.text();
+  $('#bulkText').value = text.length > 20000 ? `${f.name} (${Math.round(f.size / 1024)}KB)를 읽었어요` : text;
+  readBulk(text);
+});
+bulkDialog.addEventListener('click', (e) => {
+  if (e.target.closest('[data-bulk="find"]')) findBulkNames();
+});
+bulkDialog.addEventListener('change', (e) => {
+  const i = e.target.dataset.bulkI;
+  if (i == null) return;
+  ui.bulk.rows[Number(i)].on = e.target.checked;
+  renderBulk();
+});
+// 검색창에 링크를 여러 개 붙여넣으면 이 창으로
+searchEl.addEventListener('paste', (e) => {
+  const text = e.clipboardData?.getData('text') ?? '';
+  const r = parseLocationList(text);
+  if (r.places.length + r.names.length + r.shortLinks + r.unsupported < 2) return;
+  e.preventDefault();
+  openBulk(text);
+});
 enhanceDates(document); // 처음부터 있는 날짜 칸 (여행 날짜, 숙소 추가, 항공편)
 
 /* ───────── 오프라인 (PWA) ─────────

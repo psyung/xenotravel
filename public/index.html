@@ -115,7 +115,10 @@
                      placeholder="장소 검색 (한국어는 Enter) 또는 구글맵 링크">
               <button id="pickBtn" class="pill" title="지도를 클릭해서 장소 추가"><svg class="ic"><use href="#i-pin"/></svg><span class="hide-sm">지도에서 찍기</span></button>
             </div>
-            <label class="target">추가할 곳 <select id="target"></select></label>
+            <div class="target-row">
+              <label class="target">추가할 곳 <select id="target"></select></label>
+              <button type="button" id="bulkBtn" class="linkbtn" title="구글맵 링크 여러 개, 구글 테이크아웃 저장 장소 파일">링크 여러 개 담기</button>
+            </div>
             <div id="stayOpts" class="stay-opts" data-dp-pair="숙소 날짜" data-dp-min-nights="1" hidden>
               <label>체크인 <input type="date" id="stayIn" data-dp="start" aria-label="체크인"></label>
               <span class="arrow">→</span>
@@ -189,6 +192,24 @@
       </form>
     </div>
   </dialog>
+  <dialog id="bulkDialog" class="bulk-dialog">
+    <div class="dialog-body">
+      <h2>장소 여러 개 한 번에 담기</h2>
+      <p class="fine">구글맵·애플맵 링크 여러 개, "위도, 경도" 줄, 구글 테이크아웃의 저장 장소 파일(Saved Places.json, 저장 목록 .csv)을 넣으면 미리 보여줘요. 고른 것만 담아요.</p>
+      <textarea id="bulkText" rows="5" placeholder="여기에 붙여넣기&#10;예) https://www.google.com/maps/place/…&#10;     34.6687, 135.5013"></textarea>
+      <div class="bulk-tools">
+        <label class="linkbtn bulk-file">파일 고르기 (.json, .csv)<input type="file" id="bulkFile" accept=".json,.csv,.geojson,.txt,application/json,text/csv" hidden></label>
+        <span id="bulkSummary" class="fine"></span>
+      </div>
+      <ul id="bulkList" class="bulk-list"></ul>
+      <div class="dialog-actions">
+        <label class="bulk-dest">담을 곳 <select id="bulkDest"></select></label>
+        <button type="button" id="bulkClose" class="btn ghost">닫기</button>
+        <button type="button" id="bulkAdd" class="btn primary" disabled>담기</button>
+      </div>
+    </div>
+  </dialog>
+
   <dialog id="shareDialog" class="share-dialog">
     <div class="dialog-body">
       <h2>일정 공유하기</h2>
