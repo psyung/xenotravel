@@ -60,7 +60,12 @@ export function mergeEntities(base = [], local = [], remote = [], path, ctx) {
       const c = conflict(ctx, p, x, null, B.get(x.id));
       if (c.value) out.push(c.value);
     } else if (R.has(x.id)) {
-      out.push(mergeValue(B.get(x.id), x, R.get(x.id), p, ctx));
+      const r = R.get(x.id);
+      if (path.at(-1) === 'expenses' && !B.has(x.id) && x.checkId && x.checkId === r.checkId) {
+        // 두 탭에서 동시에 체크해 만든 같은 지출은 최초 기록 시각을 쓴다.
+        const at = x.at < r.at ? x.at : r.at;
+        out.push(mergeValue(undefined, { ...x, at }, { ...r, at }, p, ctx));
+      } else out.push(mergeValue(B.get(x.id), x, r, p, ctx));
     } else out.push(x);
   }
   remote.forEach((r, i) => {

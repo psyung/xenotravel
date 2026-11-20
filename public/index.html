@@ -251,8 +251,8 @@
   </dialog>
 
   <dialog id="flightDialog" aria-labelledby="flightDialogTitle">
+    <h2 class="dialog-heading" id="flightDialogTitle" data-i18n="항공편">항공편</h2>
     <div class="dialog-body">
-      <h2 id="flightDialogTitle" data-i18n="항공편">항공편</h2>
       <ul id="flightList" class="trip-list flight-list"></ul>
       <form id="flightForm" class="new-trip flight-form" novalidate>
         <h3 id="flightFormTitle"></h3>
@@ -275,17 +275,17 @@
           <label><span data-i18n="메모">메모</span> <input name="memo" data-i18n-attr="placeholder=터미널, 수하물 등"></label>
         </div>
         <p id="flightError" class="form-error" role="alert" hidden></p>
-        <div class="dialog-actions">
-          <button type="button" id="flightNew" class="btn ghost" hidden data-i18n="새로 입력">새로 입력</button>
-          <button type="button" id="flightClose" class="btn ghost" data-i18n="닫기">닫기</button>
-          <button type="submit" id="flightSubmit" class="btn primary"></button>
-        </div>
       </form>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" id="flightNew" class="btn ghost" hidden data-i18n="새로 입력">새로 입력</button>
+      <button type="button" id="flightClose" class="btn ghost" data-i18n="닫기">닫기</button>
+      <button type="submit" id="flightSubmit" form="flightForm" class="btn primary"></button>
     </div>
   </dialog>
   <dialog id="bulkDialog" class="bulk-dialog" aria-labelledby="bulkTitle">
+    <h2 class="dialog-heading" id="bulkTitle" data-i18n="장소 여러 개 한 번에 담기">장소 여러 개 한 번에 담기</h2>
     <div class="dialog-body">
-      <h2 id="bulkTitle" data-i18n="장소 여러 개 한 번에 담기">장소 여러 개 한 번에 담기</h2>
       <p class="fine" data-i18n='구글맵·애플맵 링크 여러 개, "위도, 경도" 줄, 구글 테이크아웃의 저장 장소 파일(Saved Places.json, 저장 목록 .csv)을 넣으면 미리 보여줘요. 고른 것만 담아요.'>구글맵·애플맵 링크 여러 개, "위도, 경도" 줄, 구글 테이크아웃의 저장 장소 파일(Saved Places.json, 저장 목록 .csv)을 넣으면 미리 보여줘요. 고른 것만 담아요.</p>
       <textarea id="bulkText" rows="5" data-i18n-attr="aria-label=붙여넣을 링크·좌표;placeholder=여기에 붙여넣기&#10;예) https://www.google.com/maps/place/…&#10;     34.6687, 135.5013"></textarea>
       <div class="bulk-tools">
@@ -295,11 +295,11 @@
       <p class="fine" data-i18n="파일은 최대 5MB까지 읽어요. 장소가 200개를 넘으면 여러 파일로 나눠 가져오세요.">파일은 최대 5MB까지 읽어요. 장소가 200개를 넘으면 여러 파일로 나눠 가져오세요.</p>
       <p id="bulkStatus" class="form-error" role="status"></p>
       <ul id="bulkList" class="bulk-list"></ul>
-      <div class="dialog-actions">
-        <label class="bulk-dest"><span data-i18n="담을 곳">담을 곳</span> <select id="bulkDest"></select></label>
-        <button type="button" id="bulkClose" class="btn ghost" data-i18n="닫기">닫기</button>
-        <button type="button" id="bulkAdd" class="btn primary" disabled data-i18n="담기">담기</button>
-      </div>
+    </div>
+    <div class="dialog-actions">
+      <label class="bulk-dest"><span data-i18n="담을 곳">담을 곳</span> <select id="bulkDest"></select></label>
+      <button type="button" id="bulkClose" class="btn ghost" data-i18n="닫기">닫기</button>
+      <button type="button" id="bulkAdd" class="btn primary" disabled data-i18n="담기">담기</button>
     </div>
   </dialog>
 

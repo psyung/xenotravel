@@ -1495,3 +1495,49 @@ body.picking .leaflet-bottom.leaflet-right { opacity: .4; pointer-events: none; 
 .inapp-how summary { list-style: none; display: inline-flex; height: 32px; }
 .inapp-how summary::-webkit-details-marker { display: none; }
 .inapp-how ul { margin: 8px 0; padding-left: 18px; font-size: 12.5px; }
+
+.ctx select, .ctx-note { color: var(--ink); }
+.ctx select { min-width: 0; width: 100%; background: var(--paper); }
+.ctx-note:empty { display: none; }
+.ctx .popup-name, .ctx .popup-meta { overflow-wrap: anywhere; }
+.ctx-btn { background: #1759b8; }
+.ctx-btn.stay { background: #0a686b; }
+.ctx-btn:disabled { opacity: .6; cursor: default; }
+.leaflet-container .leaflet-popup-content-wrapper,
+.leaflet-container .leaflet-popup-tip { background: var(--paper); color: var(--ink); }
+.leaflet-container a.leaflet-popup-close-button { color: var(--ink); }
+.check-grid.grid3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.check-top { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 8px; }
+.check-top .bulk { gap: 8px; margin: 0; }
+.check-top .bulk button { min-height: 32px; padding-inline: 6px; }
+.check-top .bulk button:disabled { opacity: .55; }
+.check-tabs { display: none; }
+#flightDialog[open], #bulkDialog[open] {
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden;
+}
+:is(#flightDialog, #bulkDialog) > .dialog-heading { margin: 0; padding: 14px 18px 10px; font-size: 18px; }
+:is(#flightDialog, #bulkDialog) > .dialog-body {
+  min-height: 0; overflow: auto; overscroll-behavior: contain; padding-block: 6px;
+}
+:is(#flightDialog, #bulkDialog) > .dialog-body::before { display: none; }
+:is(#flightDialog, #bulkDialog) > .dialog-actions {
+  margin: 0; padding: 8px 18px max(10px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line);
+}
+@media (max-width: 767px) {
+  .check-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-bottom: 10px; }
+  .check-tabs button {
+    display: flex; align-items: center; justify-content: center; gap: 3px; min-width: 0; min-height: 42px;
+    padding: 0 3px; white-space: nowrap; font-size: 12px; background: var(--paper); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 8px;
+  }
+  .check-tabs button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .check-tabs button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+  .check-tabs .complete b { color: var(--ok); background: var(--ok-soft); border-radius: 4px; }
+  .check-grid.grid3 { grid-template-columns: minmax(0, 1fr); }
+  .check-grid > [data-active="false"] { display: none; }
+  .checks li.editing { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .checks li.editing label span { overflow: visible; white-space: normal; }
+  .checks li.editing .icon { grid-row: 1; grid-column: 2; }
+  .checks li.editing .price-form { grid-column: 1 / -1; }
+  .checks li.editing .price-form input { flex: 1; }
+}

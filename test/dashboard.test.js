@@ -3,8 +3,45 @@ import assert from 'node:assert/strict';
 import * as M from '../public/lib/model.js';
 import * as B from '../public/lib/budget.js';
 import * as C from '../public/lib/checklist.js';
+import { mergeTrip } from '../public/lib/sync.js';
 
 const trip = () => M.createTrip({ title: '오사카', destination: '오사카', startDate: '2026-12-01', endDate: '2026-12-03' });
+
+test('일괄 해제 후 재체크와 완료 항목 삭제가 실제 결제액을 보존한다', () => {
+  const t = trip();
+  const item = C.addCheck(t, 'shop', '선물');
+  C.setPrice(t, item.id, 2000, 'KRW');
+  const manual = B.addExpense(t, { amount: 100, cur: 'KRW' });
+  C.setGroupDone(t, 'shop', true, '2026-12-01');
+  const expense = C.linkedExpense(t, item.id);
+  B.updateExpenseAmount(t, expense.id, 1900);
+  C.setGroupDone(t, 'shop', false, '2026-12-01', { keepExpense: true });
+  assert.equal(item.done, false);
+  C.setGroupDone(t, 'shop', true, '2026-12-01');
+  C.setGroupDone(t, 'shop', true, '2026-12-01');
+  assert.equal(C.linkedExpense(t, item.id).amount, 1900);
+  assert.equal(t.expenses.length, 2);
+  C.removeDone(t, 'shop');
+  assert.equal(C.planned(t).total, 0);
+  assert.equal(C.linkedExpense(t, item.id), null);
+  assert.deepEqual(t.expenses.map(({ id, amount }) => [id, amount]), [[manual.id, 100], [expense.id, 1900]]);
+});
+
+test('다른 탭에서 같은 항목을 일괄 체크해도 연결 지출은 한 건이다', () => {
+  const base = trip();
+  const item = C.addCheck(base, 'shop', '선물');
+  C.setPrice(base, item.id, 2000, 'KRW');
+  const local = structuredClone(base);
+  const remote = structuredClone(base);
+  C.setGroupDone(local, 'shop', true, '2026-12-01');
+  C.setGroupDone(remote, 'shop', true, '2026-12-01');
+  local.expenses[0].at = '2026-12-01T00:00:00.000Z';
+  remote.expenses[0].at = '2026-12-01T00:00:01.000Z';
+  const ctx = { choices: {}, conflicts: [] };
+  const result = mergeTrip(base, local, remote, ctx);
+  assert.deepEqual(ctx.conflicts, []);
+  assert.deepEqual(result.expenses, local.expenses);
+});
 
 test('ddayInfo', () => {
   const t = trip();

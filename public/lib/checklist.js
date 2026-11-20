@@ -153,7 +153,7 @@ export function linkedExpense(trip, checkId) {
 
 /**
  * 체크/해제. 가격이 있는 항목을 체크하면 가계부에 기록하고, 해제하면 그 기록을 지운다.
- * keepExpense: 해제하면서 이미 낸 돈은 가계부에 남긴다 (연결만 끊는다).
+ * keepExpense: 이미 낸 돈과 연결을 유지해 다시 체크할 때 중복 기록하지 않는다.
  * today: 'YYYY-MM-DD' (여행 중이면 그날, 아니면 "출발 전"으로 기록)
  * → { check, expense: 새로 적은 기록 | null, removed: 지운 기록 수 }
  */
@@ -163,20 +163,24 @@ export function toggleCheck(trip, id, today = '', { keepExpense = false } = {}) 
   c.done = !c.done;
   const budget = ensureBudget(trip);
   if (!c.done) {
-    if (keepExpense) {
-      for (const e of trip.expenses) if (e.checkId === c.id) delete e.checkId;
-      return { check: c, expense: null, removed: 0 };
-    }
+    if (keepExpense) return { check: c, expense: null, removed: 0 };
     const before = trip.expenses.length;
     trip.expenses = trip.expenses.filter((e) => e.checkId !== c.id);
     return { check: c, expense: null, removed: before - trip.expenses.length };
   }
-  if (!(c.price > 0)) return { check: c, expense: null, removed: 0 }; // 환율을 몰라도 기록 (원화는 나중에)
+  if (!(c.price > 0) || linkedExpense(trip, c.id)) return { check: c, expense: null, removed: 0 };
   const i = indexOfDate(trip, today);
   const day = i != null && i >= 0 && i < trip.days.length ? i : -1;
   const e = addExpense(trip, { amount: c.price, cur: c.cur, cat: GROUP_CAT[c.group] ?? 'etc', pay: 'card', day, memo: c.text });
+  e.id = `check-${c.id}`;
   e.checkId = c.id;
   return { check: c, expense: e, removed: 0 };
+}
+
+export function setGroupDone(trip, group, done, today, options) {
+  for (const check of ensureChecks(trip)) {
+    if (check.group === group && check.done !== done) toggleCheck(trip, check.id, today, options);
+  }
 }
 
 /** 예상 가격 정하기 (0이나 빈 값이면 지운다) */

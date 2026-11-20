@@ -116,7 +116,9 @@ const ui = {
 };
 
 /* ───────── 지도 ───────── */
-const map = L.map('map', { worldCopyJump: true }).setView([30, 20], 2);
+const map = L.map('map', { worldCopyJump: true, tapHold: false }).setView([30, 20], 2);
+let locationChoice;
+const mapDayContext = () => JSON.stringify([trip?.id, ui.focusList, getLang(), trip?.days.map(({ id, date }) => [id, date])]);
 map.zoomControl.setPosition('topright');
 $('#mapLocate').addEventListener('click', () => {
   if (!navigator.geolocation) return toast(t('이 브라우저에서는 현재 위치를 확인할 수 없어요'));
@@ -237,10 +239,12 @@ function allLists() {
 }
 
 function renderMap({ fit = false } = {}) {
+  if (locationChoice && locationChoice.context !== mapDayContext()) map.closePopup(locationChoice.popup);
   if (!ui.candidate) $('#mapPlace').hidden = true;
   layer.clearLayers();
   markers.clear();
   if (!trip) return;
+  if (trip.days.some((d) => d.id === ui.focusList)) ui.mapLastDay = ui.focusList;
   const bounds = [];
   const plan = currentRoutePlan();
   allLists().forEach((l, dayIndex) => {
@@ -483,42 +487,157 @@ $('#pickConfirm').addEventListener('click', () => {
 });
 
 map.on('contextmenu', (e) => {
-  if (!ui.picking) showLocationChoices(map.wrapLatLng(e.latlng));
+  if (!ui.picking && !e.originalEvent.sourceCapabilities?.firesTouchEvents && e.originalEvent.pointerType !== 'touch' && !mapTouchActive) {
+    showLocationChoices(map.wrapLatLng(e.latlng));
+  }
 });
+
+const mapEl = map.getContainer();
+let mapTouchActive = false;
+let holdTimer;
+let holdOrigin;
+let holdOpened = false;
+let ignoreMapTapUntil = 0;
+const cancelMapHold = () => {
+  clearTimeout(holdTimer);
+  holdOrigin = null;
+};
+mapEl.addEventListener('touchstart', (e) => {
+  mapTouchActive = true;
+  if (e.touches.length === 1) holdOpened = false;
+  cancelMapHold();
+  if (ui.picking || !trip || ui.readonly || e.touches.length !== 1 || e.target.closest('.leaflet-control, .leaflet-popup, .leaflet-marker-icon')) return;
+  const point = e.touches[0];
+  const latlng = map.wrapLatLng(map.mouseEventToLatLng(point));
+  holdOrigin = point;
+  const context = mapDayContext();
+  holdTimer = setTimeout(() => {
+    if (context !== mapDayContext() || ui.picking) return;
+    holdOpened = true;
+    showLocationChoices(latlng);
+  }, 500);
+}, { passive: true });
+mapEl.addEventListener('touchmove', (e) => {
+  const p = e.touches[0];
+  if (!holdOrigin || e.touches.length !== 1 || Math.hypot(p.clientX - holdOrigin.clientX, p.clientY - holdOrigin.clientY) > 10) cancelMapHold();
+}, { passive: true });
+for (const event of ['touchend', 'touchcancel']) {
+  mapEl.addEventListener(event, (e) => {
+    mapTouchActive = e.touches.length > 0;
+    if (!mapTouchActive && holdOpened) ignoreMapTapUntil = performance.now() + 400;
+    cancelMapHold();
+  }, { passive: true });
+}
+mapEl.addEventListener('click', (e) => {
+  if (performance.now() >= ignoreMapTapUntil || e.target.closest('.leaflet-popup, .leaflet-control')) return;
+  ignoreMapTapUntil = 0;
+  e.stopImmediatePropagation();
+}, true);
+map.on('dragstart zoomstart', cancelMapHold);
 
 async function showLocationChoices(latlng) {
   if (!trip || ui.readonly) return;
   const { lat, lng } = latlng;
-  const place = { name: t('선택한 위치'), address: '', lat, lng };
-  ui.ctxPlace = place;
-  const html = (name, address) =>
-    `<div class="ctx">
-      <div class="popup-name">${esc(name)}</div>
-      <div class="popup-meta">${esc(address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`)}</div>
-      <button class="ctx-btn" data-ctx-add="item">${esc(t('+ 이 위치 추가'))} <small>(${esc(targetLabel())})</small></button>
-      <button class="ctx-btn stay" data-ctx-add="stay">${esc(t('숙소로 추가'))} <small>(${esc(stayOptsLabel())})</small></button>
-    </div>`;
-  const popup = L.popup({ minWidth: 220 }).setLatLng(latlng).setContent(html(place.name, '')).openOn(map);
-  setTimeout(() => popup.getElement()?.querySelector('.ctx-btn')?.focus({ preventScroll: true }), 0);
+  const context = mapDayContext();
+  let place = { name: t('선택한 위치'), address: '', lat, lng };
+  let dayId = trip.days.some((d) => d.id === ui.focusList) ? ui.focusList : ui.mapLastDay;
+  const all = !trip.days.some((d) => d.id === ui.focusList);
+  const content = document.createElement('div');
+  content.className = 'ctx';
+  content.innerHTML = `<div class="popup-name">${esc(place.name)}</div>
+    <div class="popup-meta">${lat.toFixed(5)}, ${lng.toFixed(5)}</div>
+    ${all ? `<select aria-label="${esc(t('추가할 날짜 선택'))}">
+      <option value="">${esc(t('추가할 날짜 선택'))}</option>
+      ${trip.days.map((d, i) => `<option value="${esc(d.id)}">${esc(dayName(i))} · ${esc(shortDate(d.date))}</option>`).join('')}
+    </select>` : ''}
+    <button class="ctx-btn" data-ctx-add="item"></button>
+    <button class="ctx-btn stay" data-ctx-add="stay"></button>
+    <small class="ctx-note"></small>`;
+  const select = content.querySelector('select');
+  const item = content.querySelector('[data-ctx-add="item"]');
+  const stay = content.querySelector('[data-ctx-add="stay"]');
+  const range = () => {
+    const start = trip.days.findIndex((day) => day.id === dayId);
+    return { start, nights: start < 0 ? 0 : Math.min(M.DEFAULT_NIGHTS, trip.days.length - 1 - start) };
+  };
+  function updateActions() {
+    const { start, nights } = range();
+    item.disabled = start < 0;
+    stay.disabled = !nights;
+    item.textContent = t('+ 이 위치 추가') + (start < 0 ? '' : ` (${dayName(start)})`);
+    stay.textContent = t('숙소로 추가') + (nights ? ` (${t('{day}부터 {n}박', { day: dayName(start), n: nights })})` : '');
+    content.querySelector('.ctx-note').textContent = start >= 0 && !nights ? t('이 날짜부터 숙박할 수 없어요') : '';
+  }
+  if (select) {
+    select.value = dayId ?? '';
+    if (select.selectedIndex < 0) select.selectedIndex = 0;
+    dayId = select.value;
+    select.addEventListener('change', () => {
+      dayId = select.value;
+      updateActions();
+      popup.update();
+    });
+  }
+  updateActions();
+  const back = document.activeElement;
+  const popup = L.popup({ maxWidth: Math.max(180, Math.min(280, mapEl.clientWidth - 58)) }).setLatLng(latlng).setContent(content).openOn(map);
+  locationChoice = { popup, context };
+  const popupEl = popup.getElement();
+  const close = popupEl.querySelector('.leaflet-popup-close-button');
+  close?.setAttribute('aria-label', t('닫기'));
+  popupEl.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    map.closePopup(popup);
+  });
+  popup.once('remove', () => {
+    if (locationChoice?.popup === popup) locationChoice = null;
+    if (document.activeElement === document.body || content.contains(document.activeElement) || document.activeElement === close) {
+      (back instanceof HTMLElement && back !== document.body && back.isConnected ? back : mapEl).focus({ preventScroll: true });
+    }
+  });
+  (select ?? item).focus({ preventScroll: true });
+  item.addEventListener('click', () => {
+    if (context !== mapDayContext() || range().start < 0) return;
+    map.closePopup(popup);
+    addPlace(place, { edit: true, listId: dayId });
+  });
+  stay.addEventListener('click', async () => {
+    if (context !== mapDayContext()) return;
+    const { start, nights } = range();
+    if (!nights) return;
+    const overlaps = () => trip.stays.filter((s) => s.startIndex < start + nights && s.startIndex + s.nights > start);
+    const conflicts = overlaps();
+    if (conflicts.length) {
+      const dates = conflicts.map((s) => {
+        const { checkIn, checkOut } = M.stayDates(trip, s);
+        return `${s.name} (${shortDate(checkIn)} – ${shortDate(checkOut)})`;
+      }).join(', ');
+      const choice = await ask({
+        title: t('겹치는 숙소를 교체할까요?'),
+        body: dates,
+        actions: [{ value: 'replace', label: t('교체'), danger: true }],
+      });
+      if (!choice || locationChoice?.popup !== popup || context !== mapDayContext()) return;
+      if (JSON.stringify(overlaps()) !== JSON.stringify(conflicts)) return;
+      const ids = new Set(conflicts.map((s) => s.id));
+      trip.stays = trip.stays.filter((s) => !ids.has(s.id));
+    }
+    map.closePopup(popup);
+    addStayFromOpts(place, { start, nights });
+  });
   try {
     const r = await reversePlace(lat, lng);
-    if (r && ui.ctxPlace === place && popup.isOpen()) {
-      ui.ctxPlace = { ...r, lat, lng };
-      popup.setContent(html(r.name, r.address));
+    if (r && popup.isOpen()) {
+      place = { ...r, lat, lng };
+      content.querySelector('.popup-name').textContent = r.name;
+      if (r.address) content.querySelector('.popup-meta').textContent = r.address;
+      popup.update();
     }
   } catch {
     // 주소를 못 찾아도 좌표로 추가할 수 있다.
   }
 }
-
-map.getContainer().addEventListener('click', (e) => {
-  const kind = e.target.closest('[data-ctx-add]')?.dataset.ctxAdd;
-  if (!kind || !ui.ctxPlace || !trip || ui.readonly) return;
-  map.closePopup();
-  if (kind === 'stay') addStayFromOpts(ui.ctxPlace);
-  else addPlace(ui.ctxPlace, { edit: true, listId: ui.target === STAY_TARGET ? lastListId() : null });
-  ui.ctxPlace = null;
-});
 
 /* ───────── 지도에서 찍기 ─────────
  * 시작하면 지도 화면으로 가서 "위치 고르는 중" 안내·확정·취소를 바로 보여준다. 취소하면 시작 버튼으로 돌아간다.
@@ -564,6 +683,7 @@ function setPicking(on, { cancelled = false } = {}) {
   if (ui.picking === on) return;
   ui.picking = on;
   if (on) {
+    if (locationChoice) map.closePopup(locationChoice.popup);
     $('#mapPlace').hidden = true;
     clearCandidate();
   }
@@ -863,8 +983,8 @@ function renderPlanEmpty() {
     ? `<section class="plan-empty card" aria-labelledby="planEmptyTitle">
         <h2 id="planEmptyTitle">${esc(t('첫 장소를 추가해 보세요'))}</h2>
         <p>${esc(ui.target === STAY_TARGET
-          ? t('위 검색창에 숙소 이름을 쓰거나, 구글맵 링크를 붙여넣거나, 지도에서 직접 찍으면 숙소로 추가돼요 ({range}).', { range: stayOptsLabel() })
-          : t('위 검색창에 장소 이름을 쓰거나, 구글맵 링크를 붙여넣거나, 지도에서 직접 찍으면 {target}에 들어가요. 넣을 곳은 ‘추가할 곳’에서 바꿀 수 있어요.', { target: targetLabel() }))}</p>
+          ? t('숙소를 검색하거나 구글맵 링크를 붙여넣으면 숙소로 추가돼요 ({range}). 지도에서 찍을 때는 지도 일차를 사용해요.', { range: stayOptsLabel() })
+          : t('장소를 검색하거나 구글맵 링크를 붙여넣으면 {target}에 담겨요. 지도에서 찍을 때는 지도 일차를 사용해요.', { target: targetLabel() }))}</p>
         <div class="plan-empty-actions">
           <button type="button" class="btn primary" data-empty="search">${esc(t('장소 검색하기'))}</button>
           <button type="button" class="btn" data-empty="pick">${esc(t('지도에서 찍기'))}</button>
@@ -947,10 +1067,10 @@ function stayOptsLabel() {
   return t('{day}부터 {n}박', { day: dayName(start), n: nights });
 }
 
-function addStayFromOpts(place) {
+function addStayFromOpts(place, range) {
   const useOpts = ui.target === STAY_TARGET;
-  const start = useOpts ? ui.stayStart ?? firstUncoveredNight() : firstUncoveredNight();
-  const nights = useOpts ? ui.stayNights ?? M.DEFAULT_NIGHTS : M.DEFAULT_NIGHTS;
+  const start = range?.start ?? (useOpts ? ui.stayStart ?? firstUncoveredNight() : firstUncoveredNight());
+  const nights = range?.nights ?? (useOpts ? ui.stayNights ?? M.DEFAULT_NIGHTS : M.DEFAULT_NIGHTS);
   const stay = M.addStay(trip, place, start, nights);
   ui.lastAddedId = stay.id;
   const { checkIn, checkOut } = M.stayDates(trip, stay);
@@ -2361,6 +2481,7 @@ function openTrip(tr, { save = false } = {}) {
   map.closePopup();
   clearCandidate();
   trip = tr;
+  ui.mapLastDay = null;
   store.currentId = tr.id;
   if (save) store.trips[tr.id] = tr;
   ui.openItem = null;
@@ -3039,7 +3160,11 @@ document.addEventListener('keydown', (e) => {
 const PAGES = ['home', 'plan', 'budget', 'check'];
 function showPage(page, { scroll = true } = {}) {
   prefs.page = PAGES.includes(page) && (page === 'home' || trip) ? page : 'home';
-  if (prefs.page !== 'plan') setPicking(false);
+  if (prefs.page !== 'plan') {
+    setPicking(false);
+    cancelMapHold();
+    if (locationChoice) map.closePopup(locationChoice.popup);
+  }
   document.body.dataset.page = prefs.page;
   document.body.dataset.hasTrip = trip || store.currentId ? 'yes' : 'no';
   $('#inAppBackup').hidden = !trip || ui.readonly;
@@ -3670,6 +3795,14 @@ function checkRowHtml(c) {
     </li>`;
 }
 
+const checkViews = new Map();
+const checkShortLabels = () => ({ todo: t('출발 전 체크'), pack: t('짐 싸기'), shop: t('쇼핑') });
+
+function checkView(id = trip.id) {
+  if (!checkViews.has(id)) checkViews.set(id, { group: 'todo', drafts: {} });
+  return checkViews.get(id);
+}
+
 function renderChecks() {
   const before = JSON.stringify([trip.checksV, trip.checks?.length]);
   C.ensureChecks(trip);
@@ -3679,7 +3812,21 @@ function renderChecks() {
     persistSoon();
   }
   const el = $('#page-check');
-  keepDrafts(el, () => drawChecks(el));
+  if (el.dataset.trip === trip.id) keepDrafts(el, () => drawChecks(el));
+  else {
+    if (el.dataset.trip) {
+      const previous = checkView(el.dataset.trip);
+      previous.drafts = Object.fromEntries($$('[data-draft]', el).map((input) => [input.dataset.draft, input.value]));
+      previous.editor = { editPrice: ui.editPrice, editPaid: ui.editPaid, priceCur: ui.priceCur };
+    }
+    const view = checkView();
+    ui.editPrice = view.editor?.editPrice ?? null;
+    ui.editPaid = view.editor?.editPaid ?? null;
+    ui.priceCur = view.editor?.priceCur;
+    el.dataset.trip = trip.id;
+    drawChecks(el);
+    for (const input of $$('[data-draft]', el)) input.value = view.drafts[input.dataset.draft] ?? input.value;
+  }
   if (ui.editPrice || ui.editPaid) {
     const input = $(`#page-check .price-form[data-id="${ui.editPrice || ui.editPaid}"] input`);
     if (document.activeElement !== input) {
@@ -3691,6 +3838,9 @@ function renderChecks() {
 
 function drawChecks(el) {
   const plan = C.planned(trip);
+  const active = checkView().group;
+  const groups = Object.entries(C.CHECK_GROUPS);
+  const shortLabels = checkShortLabels();
   el.innerHTML = `<div class="wrap">
     <h1 class="page-h">${esc(t('체크리스트'))}</h1>
     <ul class="page-sub check-legend">
@@ -3703,24 +3853,29 @@ function drawChecks(el) {
         ? `<div class="plan-bar"><span>${esc(t('체크리스트 예상'))} <b>${B.won(plan.total)}</b>${plan.noRate ? ` <small>(${esc(t('환율이 없어 {n}개 빠짐', { n: plan.noRate }))})</small>` : ''}</span><button class="linkbtn" data-c="to-budget">${esc(t('가계부에서 보기 →'))}</button></div>`
         : ''
     }
-    <div class="grid3">${Object.entries(C.CHECK_GROUPS)
+    <div class="check-tabs" role="group" aria-label="${esc(t('체크리스트'))}">${groups.map(([g, def]) => {
+      const { done, total } = C.progress(trip, g);
+      return `<button data-c="tab" data-group="${g}" aria-controls="check-panel-${g}" aria-pressed="${g === active}" aria-label="${esc(`${t(def.label)} ${done}/${total}`)}" class="${total && done === total ? 'complete' : ''}"><span>${esc(shortLabels[g])}</span> <b>${done}/${total}</b></button>`;
+    }).join('')}</div>
+    <div class="grid3 check-grid">${groups
       .map(([g, def]) => {
         const p = C.progress(trip, g);
         const list = trip.checks.filter((c) => c.group === g);
         const sum = plan.byGroup[g] ?? 0;
-        return `<section class="box" aria-labelledby="chk-${g}">
-          <h3 class="check-head" id="chk-${g}">${esc(t(def.label))}<span class="count">${p.done}/${p.total}</span></h3>
+        return `<section class="box" id="check-panel-${g}" data-active="${g === active}" aria-labelledby="chk-${g}">
+          <header class="check-top">
+            <h3 class="check-head" id="chk-${g}">${esc(t(def.label))}<span class="count">${p.done}/${p.total}</span></h3>
+            <div class="bulk">
+              <button data-c="toggle-group" data-group="${g}" ${p.total ? '' : 'disabled'}>${esc(p.total && p.done === p.total ? t('전체 해제') : t('전체 체크'))}</button>
+              <button data-c="delete-group" data-group="${g}" ${p.total ? '' : 'disabled'}>${esc(t('삭제'))}</button>
+            </div>
+          </header>
           <div class="cprog" aria-hidden="true"><i style="width:${p.total ? (p.done / p.total) * 100 : 0}%"></i></div>
           <ul class="checks">${list.map(checkRowHtml).join('')}</ul>
           ${list.length ? '' : `<p class="empty-note">${esc(t('아직 항목이 없어요. 아래에서 추가하세요.'))}</p>`}
           ${sum ? `<p class="check-sum">${esc(t('예상 합계'))} <b>${B.won(sum)}</b></p>` : ''}
           ${g === 'shop' ? picksHtml() : ''}
           <form class="addrow" data-group="${g}"><input name="text" data-draft="add-${g}" placeholder="${esc(t(def.placeholder))}" aria-label="${esc(t(def.placeholder))}" maxlength="80" autocomplete="off"><button>${esc(t('추가'))}</button></form>
-          ${
-            list.length
-              ? `<div class="bulk">${p.done ? `<button data-c="del-done" data-group="${g}">${esc(t('체크한 것 삭제 ({n})', { n: p.done }))}</button>` : ''}<button data-c="clear" data-group="${g}">${esc(t('전체 삭제'))}</button></div>`
-              : ''
-          }
         </section>`;
       })
       .join('')}</div>
@@ -3774,6 +3929,63 @@ $('#page-check').addEventListener('change', async (e) => {
   else if (r.removed) saved(res, t('체크를 풀어서 가계부 기록도 지웠어요'));
   else if (keepExpense) saved(res, t('체크를 풀었어요. 가계부 지출은 그대로 남겼어요'));
 });
+async function changeCheckGroup(group, action) {
+  const id = trip.id;
+  const items = () => trip.checks.filter((c) => c.group === group);
+  const entries = items();
+  if (!entries.length || ui.readonly || askDialog.open) return;
+  const done = entries.filter((c) => c.done);
+  const linked = (checks) => checks.map((c) => C.linkedExpense(trip, c.id)).filter(Boolean);
+  const snapshot = () => JSON.stringify([items(), linked(items())]);
+  const before = snapshot();
+  const valid = () => trip?.id === id && !ui.readonly && prefs.page === 'check' && snapshot() === before;
+  const restoreFocus = () => {
+    const control = $(`#page-check [data-c="${action}"][data-group="${group}"]`);
+    (control?.disabled ? $(`#check-panel-${group} .addrow input`) : control)?.focus({ preventScroll: true });
+  };
+  if (action === 'toggle-group') {
+    const next = done.length !== entries.length;
+    const expenses = linked(done);
+    let choice;
+    if (!next && expenses.length) {
+      choice = await ask({
+        title: t('전체 해제'),
+        body: t('연결된 지출 {n}건: {amounts}', { n: expenses.length, amounts: expenses.map(expenseLabel).join(', ') }),
+        actions: [
+          { value: 'keep', label: t('체크만 해제'), primary: true },
+          { value: 'remove', label: t('지출도 지우기'), danger: true },
+        ],
+      });
+      if (!choice || !valid()) return;
+    }
+    C.setGroupDone(trip, group, next, TODAY, { keepExpense: choice !== 'remove' });
+    saved(commit(), next ? t('{n}개를 체크했어요', { n: entries.length - done.length }) : t('{n}개를 해제했어요', { n: done.length }));
+    restoreFocus();
+    return;
+  }
+  const kept = (checks) => t('기록된 실제 지출 {n}건은 가계부에 남아요', { n: linked(checks).length });
+  const choice = await ask({
+    title: done.length ? t('완료한 {n}개 항목을 삭제할까요?', { n: done.length }) : t('삭제'),
+    body: done.length ? kept(done) : t('완료한 항목 없음'),
+    actions: [
+      ...(done.length ? [{ value: 'done', label: t('완료한 {n}개 삭제', { n: done.length }), primary: true }] : []),
+      { value: 'all', label: t('전체 {n}개 삭제', { n: entries.length }), danger: true },
+    ],
+  });
+  if (!choice || !valid()) return;
+  if (choice === 'all') {
+    const confirmed = await ask({
+      title: t('전체 {n}개 항목을 삭제할까요?', { n: entries.length }),
+      body: kept(entries),
+      actions: [{ value: 'all', label: t('전체 삭제'), danger: true }],
+    });
+    if (!confirmed || !valid()) return;
+  }
+  const n = choice === 'all' ? C.clearGroup(trip, group) : C.removeDone(trip, group);
+  saved(commit(), t('{n}개를 지웠어요', { n }));
+  restoreFocus();
+}
+
 $('#page-check').addEventListener('click', (e) => {
   const pick = e.target.closest('[data-c="picks"]');
   if (pick) {
@@ -3786,8 +3998,11 @@ $('#page-check').addEventListener('click', (e) => {
   if (!btn) return;
   const act = btn.dataset.c;
   const g = btn.dataset.group;
-  const label = C.CHECK_GROUPS[g] ? t(C.CHECK_GROUPS[g].label) : '';
-  if (act === 'del') {
+  if (act === 'tab') {
+    checkView().group = g;
+    for (const tab of $$('.check-tabs button')) tab.setAttribute('aria-pressed', String(tab.dataset.group === g));
+    for (const panel of $$('.check-grid > section')) panel.dataset.active = String(panel.id === `check-panel-${g}`);
+  } else if (act === 'del') {
     C.removeCheck(trip, btn.dataset.id);
     commit();
   } else if (act === 'price') {
@@ -3804,14 +4019,8 @@ $('#page-check').addEventListener('click', (e) => {
     ui.priceCur = ui.priceCur === 'KRW' ? 'local' : 'KRW';
     btn.textContent = ui.priceCur === 'KRW' ? '₩' : B.CURRENCIES[trip.budget.currency].symbol.trim();
     btn.nextElementSibling?.focus();
-  } else if (act === 'del-done') {
-    if (!confirm(t('{label}에서 체크한 항목을 지울까요? 가계부에 기록된 금액은 그대로 남아요.', { label }))) return;
-    const n = C.removeDone(trip, g);
-    saved(commit(), t('{n}개를 지웠어요', { n }));
-  } else if (act === 'clear') {
-    if (!confirm(t('{label}을(를) 전부 지울까요? 되돌릴 수 없어요. 가계부에 기록된 금액은 그대로 남아요.', { label }))) return;
-    const n = C.clearGroup(trip, g);
-    saved(commit(), t('{n}개를 지웠어요', { n }));
+  } else if (act === 'delete-group' || act === 'toggle-group') {
+    void changeCheckGroup(g, act);
   } else if (act === 'to-budget') go('budget');
 });
 $('#page-check').addEventListener('submit', (e) => {
@@ -3836,9 +4045,10 @@ $('#page-check').addEventListener('keydown', (e) => {
 // 가격 칸 밖을 누르면 입력한 값으로 저장
 $('#page-check').addEventListener('focusout', (e) => {
   const form = e.target.closest('.price-form');
-  if (!form || form.contains(e.relatedTarget)) return;
+  if (!form || form.contains(e.relatedTarget) || e.relatedTarget?.closest?.('.check-tabs, .pg, #tripSw, #tripsBtn')) return;
+  const id = trip?.id;
   setTimeout(() => {
-    if ((ui.editPrice === form.dataset.id || ui.editPaid === form.dataset.id) && document.contains(form) && !askDialog.open) savePrice(form);
+    if (trip?.id === id && prefs.page === 'check' && (ui.editPrice === form.dataset.id || ui.editPaid === form.dataset.id) && document.contains(form) && !askDialog.open) savePrice(form);
   }, 0);
 });
 
