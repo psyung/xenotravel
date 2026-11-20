@@ -18,7 +18,7 @@ const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
 const keyOf = (path) => path.join('/');
 
 /** 장소·지출처럼 id가 있는 목록 */
-const ENTITY_LISTS = new Set(['expenses', 'checks', 'stays', 'flights']);
+const ENTITY_LISTS = new Set(['expenses', 'checks', 'stays', 'flights', 'members']);
 // 장소 배치(days/inbox)와 날짜는 따로 합친다. updatedAt은 늦은 쪽.
 const SPECIAL = new Set(['days', 'inbox', 'startDate', 'endDate', 'updatedAt']);
 

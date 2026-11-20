@@ -1,5 +1,5 @@
 // 엑셀(.xlsx)과 JSON 백업 내보내기. 엑셀은 전역 XLSX(SheetJS)를 쓴다.
-import { EXPORT_HEADER, tripToRows, safeFileName } from './model.js';
+import { EXPORT_HEADER, tripToRows, safeFileName, stayDates, flightKind, flightSummary } from './model.js';
 import { t } from './i18n.js';
 
 const COL_WIDTHS = { 일차: 8, 날짜: 11, 순서: 5, 시간: 7, 종류: 6, 장소: 28, 주소: 40, 메모: 40, 링크: 30, 구글맵: 22, 위도: 11, 경도: 11 };
@@ -60,9 +60,59 @@ function foldCalendarLine(line) {
   return folded;
 }
 
+const DATETIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
+const icsDateTime = (v) => {
+  const m = DATETIME.exec(v ?? '');
+  return m ? `${m[1]}${m[2]}${m[3]}T${m[4]}${m[5]}00` : '';
+};
+const icsDate = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v ?? '') ? v.replaceAll('-', '') : '');
+
+/** 항공편: 출발~도착 (현지 시각 그대로, 시간대 없이) */
+function flightEvents(trip, stamp) {
+  return (trip.flights ?? []).flatMap((f) => {
+    const start = icsDateTime(f.departAt);
+    if (!start) return [];
+    const end = f.arriveAt && f.arriveAt > f.departAt ? icsDateTime(f.arriveAt) : '';
+    const desc = [f.bookingRef && t('예약번호 {ref}', { ref: f.bookingRef }), f.memo].filter(Boolean).join('\n');
+    return [[
+      'BEGIN:VEVENT',
+      `UID:${calendarEscape(trip.id)}-flight-${calendarEscape(f.id)}@xenotravel`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART:${start}`,
+      ...(end ? [`DTEND:${end}`] : []),
+      `SUMMARY:${calendarEscape(`${flightKind(f.kind)} · ${flightSummary(f)}`)}`,
+      ...(f.from || f.to ? [`LOCATION:${calendarEscape([f.from, f.to].filter(Boolean).join(' → '))}`] : []),
+      ...(desc ? [`DESCRIPTION:${calendarEscape(desc)}`] : []),
+      'END:VEVENT',
+    ]];
+  });
+}
+
+/** 숙소: 체크인 날부터 체크아웃 날까지 종일 일정 */
+function stayEvents(trip, stamp) {
+  return (trip.stays ?? []).flatMap((s) => {
+    const { checkIn, checkOut } = stayDates(trip, s);
+    const start = icsDate(checkIn);
+    if (!start) return [];
+    const end = icsDate(checkOut);
+    return [[
+      'BEGIN:VEVENT',
+      `UID:${calendarEscape(trip.id)}-stay-${calendarEscape(s.id)}@xenotravel`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART;VALUE=DATE:${start}`,
+      ...(end && end > start ? [`DTEND;VALUE=DATE:${end}`] : []),
+      `SUMMARY:${calendarEscape(t('숙소 {name}', { name: s.name }))}`,
+      ...(s.address ? [`LOCATION:${calendarEscape(s.address)}`] : []),
+      ...(s.memo ? [`DESCRIPTION:${calendarEscape(s.memo)}`] : []),
+      'END:VEVENT',
+    ]];
+  });
+}
+
+/** 표준 캘린더(VCALENDAR 2.0): 항공편 · 숙소(체크인~체크아웃) · 날짜가 있는 일차의 장소(시간을 정했으면 그 시각, 아니면 종일) */
 export function tripToCalendar(trip) {
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
-  const events = trip.days.flatMap(({ date, items }) => {
+  const placeEvents = (trip.days ?? []).flatMap(({ date, items }) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return [];
     const day = date.replaceAll('-', '');
     return items.map((item) => {
@@ -79,6 +129,7 @@ export function tripToCalendar(trip) {
       ];
     });
   });
+  const events = [...flightEvents(trip, stamp), ...(trip.days?.length ? stayEvents(trip, stamp) : []), ...placeEvents];
   if (!events.length) return '';
   return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//XenoTravel//Trip Planner//KO',
     ...events.flat(), 'END:VCALENDAR', ''].map(foldCalendarLine).join('\r\n');

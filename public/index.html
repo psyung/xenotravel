@@ -71,7 +71,7 @@
           <div class="menu-pop">
             <button id="exportXlsx" class="page-trip" data-i18n="엑셀로 내보내기">엑셀로 내보내기</button>
             <button id="exportPdf" class="page-trip" data-i18n="PDF (인쇄용)">PDF (인쇄용)</button>
-            <button data-menu="calendar" class="page-trip" data-i18n="캘린더로 내보내기 (.ics)">캘린더로 내보내기 (.ics)</button>
+            <button data-menu="calendar" class="page-trip" data-i18n="캘린더에 추가 (.ics)">캘린더에 추가 (.ics)</button>
             <hr class="menu-narrow">
             <button data-menu="flights" class="page-trip menu-narrow edit-only" data-i18n="항공편">항공편</button>
             <button data-menu="share" class="page-trip menu-narrow" data-i18n="공유">공유</button>
@@ -214,10 +214,12 @@
               <div id="pinLegend" class="pin-legend"></div>
             </div>
             <button type="button" id="mapLocate" class="map-locate" data-i18n-attr="aria-label=현재 위치 보기;title=현재 위치 보기">◎</button>
+            <div id="miniMap" class="mini-map" hidden></div>
             <div id="mapPlace" class="map-place" role="region" data-i18n-attr="aria-label=지도 장소 요약" hidden></div>
             <div id="tileError" class="map-error" role="status" hidden>
               <span data-i18n="지도 바탕을 불러오지 못했어요. 일정과 핀은 그대로 쓸 수 있어요.">지도 바탕을 불러오지 못했어요. 일정과 핀은 그대로 쓸 수 있어요.</span>
               <button type="button" id="tileRetry" data-i18n="다시 시도">다시 시도</button>
+              <small id="miniHint" class="mini-hint" hidden></small>
             </div>
             <div id="pickPin" hidden aria-hidden="true"><svg class="ic"><use href="#i-pin"/></svg></div>
             <div id="pickHint" class="pick-hint" role="group" data-i18n-attr="aria-label=지도에서 위치 고르기" hidden>
@@ -324,7 +326,7 @@
       <p id="shareLong" class="fine" hidden data-i18n="긴 링크로 만들었어요. 메신저에는 기본 XenoTravel 미리보기가 표시될 수 있어요.">긴 링크로 만들었어요. 메신저에는 기본 XenoTravel 미리보기가 표시될 수 있어요.</p>
       <p id="shareTooLong" class="fine warn" hidden data-i18n="링크가 2,000자를 넘어서 메신저에서 잘릴 수 있어요. 일정 파일을 보내고, 받는 사람에게 ‘백업 파일 불러오기’를 안내하세요.">링크가 2,000자를 넘어서 메신저에서 잘릴 수 있어요. 일정 파일을 보내고, 받는 사람에게 ‘백업 파일 불러오기’를 안내하세요.</p>
       <p id="shareError" class="form-error" role="alert" hidden></p>
-      <button type="button" id="shareFile" class="btn" hidden data-i18n="공유 일정 파일 저장 (JSON)">공유 일정 파일 저장 (JSON)</button>
+      <button type="button" id="shareFile" class="btn share-file" hidden data-i18n="백업 파일(.json) 바로 저장">백업 파일(.json) 바로 저장</button>
       <div class="share-buttons">
         <button type="button" id="shareCopy" class="btn primary share-main" data-i18n="메시지 복사">메시지 복사</button>
         <button type="button" id="shareNative" class="btn" hidden data-i18n="다른 앱으로 보내기">다른 앱으로 보내기</button>

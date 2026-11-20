@@ -3,7 +3,7 @@
     .route, .origin { stroke: #18181B; }
     .beacon { fill: #D94E34; }
     @media (prefers-color-scheme: dark) {
-      .route, .origin { stroke: #F4F4F5; }
+      .route, .origin { stroke: #FAFAFA; }
       .beacon { fill: #F2745B; }
     }
   </style>

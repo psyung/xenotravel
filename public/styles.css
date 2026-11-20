@@ -1579,21 +1579,167 @@ body.picking .leaflet-bottom.leaflet-right { opacity: .4; pointer-events: none; 
   content: ''; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px;
   border-radius: 50%; pointer-events: none;
 }
-/* 안쪽 링: 은은하게 밝기를 유지하며 살짝 숨쉬기 */
+/* 기본(정적) 후광: 안쪽 링은 은은하게, 바깥 링은 1.35배 자리에 옅게 고정.
+   .cat-pulse가 붙은 핀만 반짝인다 (좁은 화면에서 강조 핀이 15개 이상이면 지도 화면 안의 핀만 — app.js updatePulse) */
 .pin.cat-on::before, .stay-pin.cat-on::before {
   background: radial-gradient(circle closest-side, transparent 62%, color-mix(in srgb, var(--c) 55%, transparent) 68%, transparent 100%);
-  animation: bokeh-glow 2s ease-in-out infinite;
+  opacity: .9;
 }
-/* 바깥 링: 1.0배 → 1.85배로 퍼지며 투명해지는 잔상 */
 .pin.cat-on::after, .stay-pin.cat-on::after {
   background: radial-gradient(circle closest-side, transparent 60%, color-mix(in srgb, var(--c) 45%, transparent) 72%, transparent 100%);
-  animation: bokeh-pulse 2s ease-in-out infinite;
+  transform: scale(1.35); opacity: .35;
 }
+/* 안쪽 링: 밝기를 유지하며 살짝 숨쉬기 · 바깥 링: 1.0배 → 1.85배로 퍼지며 투명해지는 잔상 */
+.pin.cat-pulse::before, .stay-pin.cat-pulse::before { animation: bokeh-glow 2s ease-in-out infinite; }
+.pin.cat-pulse::after, .stay-pin.cat-pulse::after { animation: bokeh-pulse 2s ease-in-out infinite; }
 @keyframes bokeh-glow { 0%, 100% { opacity: .75; } 50% { opacity: 1; } }
 @keyframes bokeh-pulse { 0% { transform: scale(1); opacity: .7; } 100% { transform: scale(1.85); opacity: 0; } }
 /* 동작 줄이기: 깜빡임 없이 고정된 반투명 후광 링만 */
 @media (prefers-reduced-motion: reduce) {
-  .pin.cat-on::before, .pin.cat-on::after, .stay-pin.cat-on::before, .stay-pin.cat-on::after { animation: none; }
-  .pin.cat-on::before, .stay-pin.cat-on::before { opacity: .9; }
-  .pin.cat-on::after, .stay-pin.cat-on::after { transform: scale(1.35); opacity: .35; }
+  .pin.cat-pulse::before, .pin.cat-pulse::after, .stay-pin.cat-pulse::before, .stay-pin.cat-pulse::after { animation: none; }
 }
+/* 고른 종류가 0곳일 때 안내 (필터 바 아래, 지도를 가리지 않게 작게) */
+.cat-empty {
+  margin: 0; max-width: 260px; padding: 6px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; line-height: 1.4;
+  background: color-mix(in srgb, var(--paper) 94%, transparent); border: 1px solid var(--line); color: var(--sub); box-shadow: var(--shadow);
+}
+
+/* ───────── 2차: 외부 지도 길찾기 ───────── */
+.dir-links { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 2px 0 6px; }
+.dir-links .dir-label { font-size: 12px; font-weight: 700; color: var(--sub); margin-right: 2px; }
+.dir-links a {
+  display: inline-flex; align-items: center; min-height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--paper); color: var(--ink); font-size: 12px; font-weight: 600; text-decoration: none; white-space: nowrap;
+}
+.dir-links a:hover { border-color: var(--accent); color: var(--brand-text, var(--accent)); }
+.map-place .dir-links { margin: 0; flex: 1 1 100%; order: 2; }
+.map-place .dir-links a { background: var(--soft); border: 0; padding: 0 9px; }
+.map-place .dir-links .dir-label { display: none; }
+
+/* ───────── 2차: 타임라인 메모 2줄 · 시간 겹침 ───────── */
+.item:not(.dock-card) .item-sub {
+  white-space: pre-line; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: anywhere;
+}
+.item.open:not(.dock-card) .item-sub { display: none; }
+.time-warn { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 2px; }
+.time-warn .tw-badge {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 11.5px; font-weight: 700;
+  color: var(--accent-ink); background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.time-warn button {
+  height: 26px; padding: 0 9px; border-radius: 7px; border: 1px solid var(--line); background: var(--paper); color: var(--ink);
+  font-size: 12px; font-weight: 600; user-select: none; -webkit-user-select: none;
+}
+.time-warn button:hover { border-color: var(--accent); }
+.item:has(.time-warn) .tl-box { box-shadow: inset 3px 0 0 var(--accent); }
+
+/* ───────── 2차: 체크리스트 일괄 삭제 실행 취소 토스트 ───────── */
+#toast.has-action { display: flex; align-items: center; gap: 10px; pointer-events: auto; }
+#toast:not(.show) { pointer-events: none; }
+.toast-act {
+  flex: none; border: 0; border-radius: 8px; padding: 6px 10px; background: color-mix(in srgb, var(--paper) 16%, transparent);
+  color: var(--accent); font-weight: 700; font-size: 13px; user-select: none; -webkit-user-select: none;
+}
+.dark .toast-act, [data-theme="dark"] .toast-act { color: var(--accent-ink); }
+
+/* ───────── 2차: 체크리스트 탭 축약 라벨 (400px 이하) ───────── */
+.check-tabs .lbl-tiny { display: none; }
+@media (max-width: 400px) {
+  .check-tabs button { font-size: 11.5px; letter-spacing: -0.02em; gap: 2px; padding: 0 2px; }
+  .check-tabs .lbl-short { display: none; }
+  .check-tabs .lbl-tiny { display: inline; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* ───────── 2차: 375px 이하 머리 바 — 여행 이름이 가로 45% 이상 ───────── */
+@media (max-width: 375px) {
+  .topbar { gap: 2px; padding-inline: 6px; }
+  .brand { padding: 4px 2px; }
+  .actions { gap: 2px; }
+  .lang-switch { gap: 3px; }
+  .lang-switch button { min-width: 18px; }
+  .tripsw { min-width: 45%; }
+  .tripsw summary { padding: 0 4px 0 8px; font-size: 13px; }
+}
+
+/* ───────── 2차: 모바일 지도 높이 — 한 손 스크롤이 지도에 갇히지 않게 ───────── */
+@media (max-width: 767px) {
+  .mapwrap { height: clamp(240px, 44vh, 340px); min-height: 240px; }
+}
+
+/* ───────── 2차: 가계부 통화별 합계 · 동행자 정산 ───────── */
+.cur-totals {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 10px 0 0; padding: 9px 12px; border-radius: 12px;
+  background: var(--soft); font-size: 13px; font-variant-numeric: tabular-nums;
+}
+.cur-totals > span:first-child { font-weight: 700; color: var(--sub); font-size: 12px; }
+.cur-totals small { color: var(--mute); }
+.cur-totals i { font-style: normal; color: var(--mute); }
+.cur-totals .eq { margin-left: auto; color: var(--sub); }
+.cur-totals .eq b { color: var(--ink); }
+.share-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; }
+.share-row .payer { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--sub); }
+.share-row .payer select { height: 34px; }
+.share-row .chipset { margin: 0; align-items: center; }
+.share-row .split-lbl { font-size: 12.5px; color: var(--sub); margin-right: 2px; }
+.split-edit { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 0; padding: 0; border: 0; flex: 2 1 200px; }
+.split-edit legend { font-size: 12px; color: var(--sub); padding: 0; margin-bottom: 4px; }
+.split-edit label { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+details.settle > summary { display: flex; align-items: center; gap: 8px; list-style: none; cursor: pointer; }
+details.settle > summary::-webkit-details-marker { display: none; }
+details.settle > summary h3 { margin: 0; }
+details.settle > summary::after { content: '▾'; margin-left: auto; color: var(--mute); }
+details.settle:not([open]) > summary::after { content: '▸'; }
+details.settle[open] > summary { margin-bottom: 10px; }
+.members { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; padding: 0; list-style: none; }
+.members li { display: inline-flex; align-items: center; gap: 2px; padding: 0 2px 0 10px; height: 30px; border-radius: 15px; background: var(--soft); font-size: 13px; font-weight: 600; }
+.members li .icon { min-width: 26px; min-height: 26px; font-size: 11px; }
+#memberForm { margin-bottom: 10px; max-width: 360px; }
+#memberForm input { height: 36px; }
+.settle-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.settle-table th, .settle-table td { padding: 6px 4px; border-bottom: 1px solid var(--line); text-align: right; }
+.settle-table th:first-child, .settle-table td:first-child { text-align: left; }
+.settle-table th { font-size: 12px; color: var(--mute); font-weight: 600; }
+.settle-table .plus { color: var(--ok); font-weight: 700; }
+.settle-table .minus { color: var(--accent-ink); font-weight: 700; }
+details.settle h4 { margin: 14px 0 6px; font-size: 13px; }
+details.settle h4 small { color: var(--mute); font-weight: 500; margin-left: 4px; }
+.transfers { margin: 0 0 10px; padding: 0; list-style: none; display: grid; gap: 4px; }
+.transfers li { display: flex; align-items: center; gap: 6px; padding: 7px 10px; border-radius: 10px; background: var(--soft); font-size: 13px; }
+.transfers li span { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ───────── 2차: 오프라인 SVG 동선 미니맵 ───────── */
+.mini-map { position: absolute; inset: 0; z-index: 650; display: flex; flex-direction: column; background: var(--soft); }
+.mini-map svg { flex: 1; width: 100%; min-height: 0; }
+.mini-hint { flex: 1 1 0; min-width: 0; color: var(--sub); font-size: 12px; line-height: 1.35; }
+/* 미니맵이 떠 있으면 안내 띠는 한 줄로: 설명 + 다시 시도 */
+#tileError.with-mini { flex-wrap: nowrap; padding: 6px 8px 6px 12px; }
+#tileError.with-mini > span { display: none; }
+#tileError.with-mini #tileRetry { order: 2; flex: none; }
+.mini-map polyline { opacity: .9; }
+.mini-map .mm-pin { cursor: pointer; }
+.mini-map .mm-pin:focus-visible circle { stroke: var(--ink); stroke-width: 3; }
+.mini-map text { font: 700 10px/1 inherit; fill: #fff; font-family: inherit; }
+.mini-map .mm-km { fill: var(--sub); font-weight: 600; paint-order: stroke; stroke: var(--soft); stroke-width: 3px; }
+.mini-map .mm-north path { fill: var(--accent); }
+.mini-map .mm-north text { fill: var(--ink); font-size: 11px; }
+
+/* ───────── 2차: 여행 핸드북 (인쇄) ───────── */
+.hb-overview { margin-bottom: 24px; break-inside: avoid-page; }
+.hb-overview h2 { font-size: 16px; margin: 0 0 8px; padding-left: 10px; border-left: 4px solid #D94E34; }
+.hb-overview h3 { font-size: 13px; margin: 14px 0 6px; color: #333; }
+.hb-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 6px 16px; margin: 0; }
+.hb-facts div { display: flex; gap: 8px; font-size: 12.5px; }
+.hb-facts dt { color: #666; min-width: 44px; }
+.hb-facts dd { margin: 0; font-weight: 600; }
+.hb-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.hb-table th, .hb-table td { border-bottom: 1px solid #e5e5e5; padding: 6px 4px; text-align: left; vertical-align: top; }
+.hb-table th { color: #666; font-weight: 600; }
+.hb-table .memo { white-space: pre-wrap; color: #333; }
+.hb-table .addr { color: #777; }
+@media print {
+  body.print-auto #print { display: block !important; }
+  .print-page table { page-break-inside: auto; }
+  .print-page tr { break-inside: avoid; }
+}
+/* 미니맵에서는 종류 필터가 의미 없으니 칩은 접는다 (그림 자리 확보) */
+.mapwrap:has(.mini-map:not([hidden])) .pin-legend { display: none; }

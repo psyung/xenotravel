@@ -229,6 +229,24 @@ export function summarize(trip) {
   };
 }
 
+/**
+ * 통화별 합계: 현지 돈으로 적은 것과 원화로 적은 것을 따로 더한다 (기록한 통화 그대로).
+ * → { local: 현지 통화 합계, krw: 원화로 적은 합계, localCount, krwCount }
+ */
+export function currencyTotals(trip) {
+  const out = { local: 0, krw: 0, localCount: 0, krwCount: 0 };
+  for (const e of trip.expenses ?? []) {
+    if (e.cur === 'KRW') {
+      out.krw += Number(e.amount) || 0;
+      out.krwCount++;
+    } else {
+      out.local += Number(e.amount) || 0;
+      out.localCount++;
+    }
+  }
+  return out;
+}
+
 /** 예산 상태: unset(예산 없음) · within(남음) · reached(딱 맞게 다 씀) · over(초과) */
 export function budgetState(total, spent) {
   if (!(total > 0)) return 'unset';

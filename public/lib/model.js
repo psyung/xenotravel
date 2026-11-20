@@ -198,7 +198,8 @@ const localizeField = (value, map, lang) => (isI18nMap(map) && Object.values(map
  * 프리셋은 { ko, en, zh, ja } 맵으로 저장하고, 사용자가 직접 고친 문자열은 원문 그대로 둔다.
  */
 export function localizePresets(trip, lang) {
-  if (!trip || !PRESET_LANGS.includes(lang)) return false;
+  // isUserModified === true: 샘플을 사용자가 고친 여행. 화면 글자만 번역하고 여행 내용은 그대로 둔다.
+  if (!trip || !PRESET_LANGS.includes(lang) || trip.isUserModified === true) return false;
   let changed = false;
   const set = (obj, key, map) => {
     const next = localizeField(obj[key], map, lang);
@@ -943,4 +944,128 @@ export function tripNotices(trip) {
   const outside = (trip.flights ?? []).filter((f) => trip.startDate && (f.departAt.slice(0, 10) < trip.startDate || f.departAt.slice(0, 10) > trip.endDate));
   if (outside.length) out.push(t('여행 기간 밖 항공편 {n}개는 일정에 안 보여요', { n: outside.length }));
   return out;
+}
+
+/* ───────── 외부 지도 길찾기 (구글·애플, 중국 본토는 고덕·바이두 추가) ───────── */
+
+/** 중국 본토인지 (홍콩·마카오·대만 제외). 나라 코드가 있으면 그것을, 없으면 좌표로 어림한다. */
+export function inMainlandChina(p) {
+  if (!p || !Number.isFinite(p.lat) || !Number.isFinite(p.lng)) return false;
+  const { lat, lng } = p;
+  if (lat < 18 || lat > 53.6 || lng < 73.5 || lng > 135) return false;
+  if (lat > 22.13 && lat < 22.57 && lng > 113.5 && lng < 114.45) return false; // 홍콩·마카오
+  if (lat > 21.8 && lat < 25.4 && lng > 119.9 && lng < 122.1) return false; // 대만
+  if (lat > 37.5 && lng > 124.6) return false; // 한반도·일본 쪽
+  if (lat < 22.5 && lng > 102 && lng < 108) return false; // 베트남 북부
+  if ((lat > 46.5 && lng > 87.7 && lng < 116) || (lat > 42.6 && lng > 96 && lng < 111.5)) return false; // 몽골 (나라 코드가 없을 때의 어림값)
+  return true;
+}
+/** 여행이 중국 본토인가: 여행 나라 코드 → 여행지 중심 좌표 */
+export function tripInMainlandChina(trip) {
+  if (trip?.country) return trip.country === 'cn';
+  return inMainlandChina(trip?.center);
+}
+
+// WGS-84(GPS) → GCJ-02(중국 지도 좌표). 고덕지도는 GCJ-02를 쓰므로 그대로 넣으면 수백 m 어긋난다.
+const GCJ_A = 6378245.0;
+const GCJ_EE = 0.00669342162296594323;
+function gcjDelta(lat, lng) {
+  const x = lng - 105;
+  const y = lat - 35;
+  let dLat = -100 + 2 * x + 3 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
+  dLat += ((20 * Math.sin(6 * x * Math.PI) + 20 * Math.sin(2 * x * Math.PI)) * 2) / 3;
+  dLat += ((20 * Math.sin(y * Math.PI) + 40 * Math.sin((y / 3) * Math.PI)) * 2) / 3;
+  dLat += ((160 * Math.sin((y / 12) * Math.PI) + 320 * Math.sin((y * Math.PI) / 30)) * 2) / 3;
+  let dLng = 300 + x + 2 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
+  dLng += ((20 * Math.sin(6 * x * Math.PI) + 20 * Math.sin(2 * x * Math.PI)) * 2) / 3;
+  dLng += ((20 * Math.sin(x * Math.PI) + 40 * Math.sin((x / 3) * Math.PI)) * 2) / 3;
+  dLng += ((150 * Math.sin((x / 12) * Math.PI) + 300 * Math.sin((x / 30) * Math.PI)) * 2) / 3;
+  const rad = (lat / 180) * Math.PI;
+  const magic = 1 - GCJ_EE * Math.sin(rad) ** 2;
+  const sq = Math.sqrt(magic);
+  return {
+    lat: (dLat * 180) / (((GCJ_A * (1 - GCJ_EE)) / (magic * sq)) * Math.PI),
+    lng: (dLng * 180) / ((GCJ_A / sq) * Math.cos(rad) * Math.PI),
+  };
+}
+export function wgsToGcj(p) {
+  if (!inMainlandChina(p)) return { lat: p.lat, lng: p.lng };
+  const d = gcjDelta(p.lat, p.lng);
+  return { lat: p.lat + d.lat, lng: p.lng + d.lng };
+}
+const fix6 = (n) => Number(n.toFixed(6));
+
+/**
+ * 장소까지 외부 지도 길찾기 링크. from(직전 장소)이 있으면 출발지로 넣는다.
+ * → [{ id: 'google'|'apple'|'amap'|'baidu', label, url }]
+ */
+export function directionsLinks(to, from = null, { china = false } = {}) {
+  const has = (p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lng);
+  if (!has(to)) return [];
+  const origin = has(from) && routeLeg(from, to) ? from : null;
+  const out = [
+    { id: 'google', label: 'Google Maps', url: `https://www.google.com/maps/dir/?api=1${origin ? `&origin=${ll(origin)}` : ''}&destination=${ll(to)}&travelmode=transit` },
+    { id: 'apple', label: 'Apple Maps', url: `https://maps.apple.com/?${origin ? `saddr=${ll(origin)}&` : ''}daddr=${ll(to)}&dirflg=r` },
+  ];
+  if (china) {
+    const name = (p) => encodeURIComponent(String(p.name ?? '').replace(/,/g, ' ').slice(0, 40));
+    const g = (p) => {
+      const c = wgsToGcj(p);
+      return `${fix6(c.lng)},${fix6(c.lat)},${name(p)}`;
+    };
+    out.push({ id: 'amap', label: '高德地图', url: `https://uri.amap.com/navigation?${origin ? `from=${g(origin)}&` : ''}to=${g(to)}&mode=bus&src=xenotravel&callnative=1` });
+    const b = (p) => `latlng:${p.lat},${p.lng}|name:${name(p)}`;
+    out.push({
+      id: 'baidu',
+      label: '百度地图',
+      url: origin
+        ? `https://api.map.baidu.com/direction?origin=${b(origin)}&destination=${b(to)}&mode=transit&region=${name(to) || 'China'}&coord_type=wgs84&output=html&src=xenotravel`
+        : `https://api.map.baidu.com/marker?location=${to.lat},${to.lng}&title=${name(to)}&content=${name(to)}&coord_type=wgs84&output=html&src=xenotravel`,
+    });
+  }
+  return out;
+}
+
+/* ───────── 시간 겹침 ───────── */
+const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
+export const toMinutes = (hhmm) => {
+  const m = HHMM.exec(hhmm ?? '');
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+};
+const fromMinutes = (n) => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
+
+/**
+ * 하루 안에서 시간이 꼬인 장소 id 집합.
+ * 시간을 정한 장소끼리 순서대로 비교해, 앞 장소와 같은 시각이거나 더 이른 시각이면 겹침으로 본다.
+ * after: 그날 비행기 도착 같은 'HH:MM' 하한 (그보다 이른 장소도 겹침), before: 그날 출국 비행기 출발 'HH:MM' 상한.
+ */
+export function timeConflicts(items, { after = '', before = '' } = {}) {
+  const out = new Set();
+  let prev = toMinutes(after);
+  const end = toMinutes(before);
+  for (const it of items ?? []) {
+    const m = toMinutes(it.time);
+    if (m == null) continue;
+    if ((prev != null && m <= prev) || (end != null && m >= end)) out.add(it.id);
+    prev = prev == null ? m : Math.max(prev, m);
+  }
+  return out;
+}
+
+/**
+ * index번째 장소부터 시간을 정한 장소들을 minutes분씩 미룬다 (23:59를 넘기지 않는다).
+ * 바뀐 개수를 돌려준다.
+ */
+export function shiftTimesFrom(items, index, minutes = 30) {
+  let n = 0;
+  for (const it of (items ?? []).slice(Math.max(0, index))) {
+    const m = toMinutes(it.time);
+    if (m == null) continue;
+    const next = fromMinutes(Math.min(23 * 60 + 59, m + minutes));
+    if (next !== it.time) {
+      it.time = next;
+      n++;
+    }
+  }
+  return n;
 }
