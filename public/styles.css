@@ -1571,4 +1571,29 @@ body.picking .leaflet-bottom.leaflet-right { opacity: .4; pointer-events: none; 
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 22%, transparent), 0 0 10px color-mix(in srgb, var(--c) 35%, transparent);
 }
 .pin.cat-off, .stay-pin.cat-off { opacity: .25; }
-.pin.cat-on, .stay-pin.cat-on { opacity: 1; transform: scale(1.15); }
+.pin.cat-on, .stay-pin.cat-on { opacity: 1; transform: scale(1.15); position: relative; }
+/* 보케 잔상 펄스: 코어 핀은 그대로 두고, 가운데가 비어 있는 2중 빛망울을 겹친다.
+   가운데 투명 구간(코어 반지름 14px / 22px ≈ 64%) 덕분에 코어 색·숫자가 흐려지지 않는다.
+   애니메이션은 transform·opacity만 써서 핀 여러 개가 동시에 반짝여도 합성 단계에서 끝난다. */
+.pin.cat-on::before, .pin.cat-on::after, .stay-pin.cat-on::before, .stay-pin.cat-on::after {
+  content: ''; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px;
+  border-radius: 50%; pointer-events: none;
+}
+/* 안쪽 링: 은은하게 밝기를 유지하며 살짝 숨쉬기 */
+.pin.cat-on::before, .stay-pin.cat-on::before {
+  background: radial-gradient(circle closest-side, transparent 62%, color-mix(in srgb, var(--c) 55%, transparent) 68%, transparent 100%);
+  animation: bokeh-glow 2s ease-in-out infinite;
+}
+/* 바깥 링: 1.0배 → 1.85배로 퍼지며 투명해지는 잔상 */
+.pin.cat-on::after, .stay-pin.cat-on::after {
+  background: radial-gradient(circle closest-side, transparent 60%, color-mix(in srgb, var(--c) 45%, transparent) 72%, transparent 100%);
+  animation: bokeh-pulse 2s ease-in-out infinite;
+}
+@keyframes bokeh-glow { 0%, 100% { opacity: .75; } 50% { opacity: 1; } }
+@keyframes bokeh-pulse { 0% { transform: scale(1); opacity: .7; } 100% { transform: scale(1.85); opacity: 0; } }
+/* 동작 줄이기: 깜빡임 없이 고정된 반투명 후광 링만 */
+@media (prefers-reduced-motion: reduce) {
+  .pin.cat-on::before, .pin.cat-on::after, .stay-pin.cat-on::before, .stay-pin.cat-on::after { animation: none; }
+  .pin.cat-on::before, .stay-pin.cat-on::before { opacity: .9; }
+  .pin.cat-on::after, .stay-pin.cat-on::after { transform: scale(1.35); opacity: .35; }
+}

@@ -221,7 +221,7 @@ const UNSET_COLOR = '#94a3b8'; // 종류 보기에서 종류를 안 정한 장�
 const byCategory = () => prefs.pinColor === 'category';
 /** 핀 색: 일차별(동선 선과 같은 색) 또는 종류별(관광·맛집·카페·쇼핑) */
 const pinColorOf = (it, listColor) => (byCategory() ? M.CATEGORIES[it.category]?.color ?? UNSET_COLOR : listColor);
-const stayPinHtml = () => `<div class="stay-pin${catFilterClass('stay')}"${byCategory() ? ` style="background:${M.STAY_COLOR};border-color:${M.STAY_COLOR};color:#fff"` : ''}><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg></div>`;
+const stayPinHtml = () => `<div class="stay-pin${catFilterClass('stay')}"${byCategory() ? ` style="--c:${M.STAY_COLOR};background:${M.STAY_COLOR};border-color:${M.STAY_COLOR};color:#fff"` : ''}><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg></div>`;
 /** 종류별 필터: 고른 종류 핀만 또렷하게, 나머지는 흐리게 */
 const catFilterClass = (cat) => (byCategory() && ui.catFilter ? (ui.catFilter === cat ? ' cat-on' : ' cat-off') : '');
 const catLabel = (k) => (M.CATEGORIES[k] ? t(M.CATEGORIES[k].label) : '');
