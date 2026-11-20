@@ -263,6 +263,52 @@ export function money(amount, code) {
   return `${c.symbol}${n.toLocaleString(locale(), { maximumFractionDigits: digits })}`;
 }
 
+/* ───────── 기준 통화 (C1) ─────────
+ * trip.budget.base = 'KRW' | 'USD' | … (없으면 KRW). 지출은 계속 원화(krw)로 저장하고, 합계·정산을 보여 줄 때만 기준 통화로 바꾼다.
+ * 기준 통화가 현지 통화면 현지 환율(krwPerUnit)을, 그 밖이면 baseKrwPerUnit(기준 통화 1단위가 몇 원)을 쓴다.
+ * 환율을 아직 모르면 원화로 보여 준다.
+ */
+export const BASE_CHOICES = ['KRW', 'USD', 'EUR', 'JPY', 'CNY', 'TWD'];
+export const baseCode = (budget) => (CURRENCIES[budget?.base] ? budget.base : 'KRW');
+const INT_CODES = new Set(['KRW', 'JPY', 'VND']);
+export function krwPerBase(budget) {
+  const code = baseCode(budget);
+  if (code === 'KRW') return 1;
+  const r = code === budget?.currency ? budget.krwPerUnit : budget?.baseKrwPerUnit;
+  return r > 0 ? r : null;
+}
+/** 원화 금액 → 기준 통화 숫자 (환율을 모르면 null) */
+export function toBase(krw, budget) {
+  const r = krwPerBase(budget);
+  return r ? (Number(krw) || 0) / r : null;
+}
+/** 기준 통화 숫자 → 원화 (환율을 모르면 그대로 원화로 본다) */
+export function fromBase(value, budget) {
+  const r = krwPerBase(budget) ?? 1;
+  return Math.round((Number(value) || 0) * r);
+}
+/** 원화 금액을 기준 통화로 표시: KRW·JPY는 정수, 그 밖은 소수점 2자리. 같은 기호(¥) 통화는 코드를 붙인다 */
+export function baseMoney(krw, budget) {
+  const code = baseCode(budget);
+  const v = toBase(krw, budget);
+  if (code === 'KRW' || v == null) return won(krw);
+  const c = CURRENCIES[code];
+  const opts = INT_CODES.has(code) ? { maximumFractionDigits: 0 } : { minimumFractionDigits: 2, maximumFractionDigits: 2 };
+  const sign = v < 0 ? '-' : '';
+  const text = `${sign}${c.symbol}${Math.abs(INT_CODES.has(code) ? Math.round(v) : v).toLocaleString(locale(), opts)}`;
+  const shared = Object.entries(CURRENCIES).some(([k, x]) => k !== code && x.symbol === c.symbol);
+  return shared ? `${text} ${code}` : text;
+}
+/** 기준 통화 바꾸기. 바뀌었으면 true */
+export function setBase(trip, code) {
+  const b = ensureBudget(trip);
+  const next = CURRENCIES[code] ? code : 'KRW';
+  if (baseCode(b) === next) return false;
+  if (next === 'KRW') delete b.base;
+  else b.base = next;
+  return true;
+}
+
 /** 같은 기호를 쓰는 통화(엔 ¥ · 위안 ¥)도 구분되게 코드를 붙인다: "¥100 CNY" */
 export function moneyCode(amount, code) {
   const sym = CURRENCIES[code]?.symbol;

@@ -66,7 +66,6 @@ const TILES = {
   dark: [`${ESRI}/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`, `${ESRI}/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`],
 };
 const TILE_OPTS = {
-  crossOrigin: true, // CORS로 받아야 서비스 워커가 오프라인용으로 저장할 수 있다 (Esri 타일은 CORS 허용)
   maxZoom: 19,
   maxNativeZoom: 16,
   attribution: 'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors',
@@ -177,9 +176,15 @@ $('#tileRetry').addEventListener('click', () => {
   $('#tileError').hidden = true;
   baseTiles.eachLayer((l) => l.redraw());
 });
+// 완전 오프라인이면 타일을 기다리지 않고 바로 SVG 동선 미니맵으로 (B10: 타일은 서비스 워커에 저장하지 않는다)
+addEventListener('offline', () => setTilesDown(true));
 addEventListener('online', () => {
-  if (ui.tilesDown) baseTiles.eachLayer((l) => l.redraw());
+  if (!ui.tilesDown) return;
+  setTilesDown(false);
+  $('#tileError').hidden = true;
+  baseTiles.eachLayer((l) => l.redraw());
 });
+if (!navigator.onLine) queueMicrotask(() => setTilesDown(true));
 
 /* ───────── 오프라인 SVG 동선 미니맵 ─────────
  * 바탕 타일을 인터넷으로도, 저장해 둔 것으로도 못 받으면 지도 대신 보여 준다.
@@ -332,7 +337,8 @@ const UNSET_COLOR = '#94a3b8'; // 종류 보기에서 종류를 안 정한 장�
 const byCategory = () => prefs.pinColor === 'category';
 /** 핀 색: 일차별(동선 선과 같은 색) 또는 종류별(관광·맛집·카페·쇼핑) */
 const pinColorOf = (it, listColor) => (byCategory() ? M.CATEGORIES[it.category]?.color ?? UNSET_COLOR : listColor);
-const stayPinHtml = () => `<div class="stay-pin${catFilterClass('stay')}"${byCategory() ? ` style="--c:${M.STAY_COLOR};background:${M.STAY_COLOR};border-color:${M.STAY_COLOR};color:#fff"` : ''}><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg></div>`;
+/** 숙소 핀. inFocus=false(고른 일차의 숙소가 아님)면 종류 강조 없이 흐림으로 둔다 (B1) */
+const stayPinHtml = (inFocus = true) => `<div class="stay-pin${inFocus ? catFilterClass('stay') : byCategory() && ui.catFilter ? ' cat-off' : ''}"${byCategory() ? ` style="--c:${M.STAY_COLOR};background:${M.STAY_COLOR};border-color:${M.STAY_COLOR};color:#fff"` : ''}><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg></div>`;
 /** 종류별 필터: 고른 종류 핀만 또렷하게, 나머지는 흐리게 */
 const catFilterClass = (cat) => (byCategory() && ui.catFilter ? (ui.catFilter === cat ? ' cat-on cat-pulse' : ' cat-off') : '');
 /* 보케 펄스 부하 제한: 좁은 화면(767px 이하)에서 강조 핀이 15개 이상이면 지금 지도 화면 안의 핀만 반짝이고,
@@ -358,12 +364,16 @@ function renderPinLegend(empty = '') {
       <button type="button" data-pin="category" aria-pressed="${byCategory()}" class="${byCategory() ? 'active' : ''}">${esc(t('종류별'))}</button>
     </div>${
       byCategory()
-        ? `<div class="legend" role="group" aria-label="${esc(t('종류별'))}">${[...Object.entries(M.CATEGORIES), ['stay', { label: '숙소', color: M.STAY_COLOR }]]
+        ? `<div class="legend${legendOpen() ? '' : ' folded'}" role="group" aria-label="${esc(t('종류별'))}">${[...Object.entries(M.CATEGORIES), ['stay', { label: '숙소', color: M.STAY_COLOR }]]
+            .filter(([k]) => legendOpen() || ui.catFilter === k)
             .map(([k, c]) => `<button type="button" class="cat-chip${ui.catFilter === k ? ' on' : ''}" data-cat-filter="${k}" aria-pressed="${ui.catFilter === k}" style="--c:${c.color}"><i></i>${esc(t(c.label))}</button>`)
-            .join('')}</div>${empty ? `<p class="cat-empty" role="status">${esc(empty)}</p>` : ''}`
+            .join('')}<button type="button" class="legend-toggle" data-legend-toggle aria-expanded="${legendOpen()}" title="${esc(legendOpen() ? t('범례 접기') : t('범례 펼치기'))}" aria-label="${esc(legendOpen() ? t('범례 접기') : t('범례 펼치기'))}">${legendOpen() ? '▴' : `${esc(t('범례'))} ▾`}</button></div>${empty ? `<p class="cat-empty" role="status">${esc(empty)}</p>` : ''}`
         : ''
     }`;
 }
+
+/** 종류별 범례 펼침 (지도를 넓게 보려고 접어 둘 수 있다, 이 브라우저에 기억) */
+const legendOpen = () => prefs.legendOpen !== false;
 
 /** 종류별 필터로 고른 종류가 지금 보이는 범위(고른 일차 또는 전체)에 몇 곳인지 */
 function catFilterCount() {
@@ -379,8 +389,10 @@ function catFilterCount() {
 }
 function catEmptyText() {
   if (!byCategory() || !ui.catFilter || catFilterCount()) return '';
-  const name = ui.catFilter === 'stay' ? t('숙소') : catLabel(ui.catFilter);
-  return trip.days.some((d) => d.id === ui.focusList)
+  const day = trip.days.some((d) => d.id === ui.focusList);
+  if (ui.catFilter === 'stay') return day ? t('이 일차에 등록된 숙소가 없어요') : t('이 여행에 등록된 숙소가 없어요');
+  const name = catLabel(ui.catFilter);
+  return day
     ? t('이 일차에 등록된 {cat} 장소가 없어요', { cat: name })
     : t('이 여행에 등록된 {cat} 장소가 없어요', { cat: name });
 }
@@ -420,7 +432,8 @@ function renderMap({ fit = false } = {}) {
     l.items.forEach((it, i) => {
       const n = preview ? preview.indexOf(it) + 1 : i + 1;
       const m = L.marker([it.lat, it.lng], {
-        icon: pinIcon(l.isDay ? n : '•', pinColorOf(it, color), dim, catFilterClass(M.CATEGORIES[it.category] ? it.category : 'etc').trim()),
+        // 일차 흐림이 종류 강조보다 우선: 고른 일차 밖 핀은 강조·펄스 없이 흐림 그대로 (B1)
+        icon: pinIcon(l.isDay ? n : '•', pinColorOf(it, color), dim, dim ? '' : catFilterClass(M.CATEGORIES[it.category] ? it.category : 'etc').trim()),
         zIndexOffset: dim ? 0 : 1000,
       }).addTo(layer);
       const detail = [l.label, l.isDay ? t('{n}번째', { n }) : '', it.time].filter(Boolean).join(' · ');
@@ -430,10 +443,12 @@ function renderMap({ fit = false } = {}) {
       if (!dim) bounds.push([it.lat, it.lng]);
     });
   });
+  const focusIdx = trip.days.findIndex((d) => d.id === ui.focusList);
+  const focusStays = focusIdx >= 0 ? new Set(Object.values(M.dayStays(trip, focusIdx)).filter((x) => x?.id).map((x) => x.id)) : null;
   for (const s of trip.stays) {
     const { checkIn, checkOut } = M.stayDates(trip, s);
     const m = L.marker([s.lat, s.lng], {
-      icon: L.divIcon({ className: '', html: stayPinHtml(), iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -12] }),
+      icon: L.divIcon({ className: '', html: stayPinHtml(!focusStays || focusStays.has(s.id)), iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -12] }),
       zIndexOffset: 1500,
     }).addTo(layer);
     const detail = `${t('숙소')} · ${t('{n}박', { n: s.nights })}${checkIn ? ` · ${M.formatDate(checkIn)} ~ ${M.formatDate(checkOut)}` : ''}`;
@@ -1342,10 +1357,12 @@ function detailHtml(x, { stay = false } = {}) {
 /* ───────── 장소 비용 ─────────
  * 예정 비용("¥1,200")은 카드 이름 옆에, 결제하면 "결제 ₩10,800"으로 바뀐다. 결제·취소는 편집 창과 오늘 카드에서.
  */
+/** 원화(krw)로 저장된 금액을 이 여행의 기준 통화로 보여 준다 (C1) */
+const bm = (krw) => B.baseMoney(krw, trip?.budget);
 const tripCurrency = () => trip.budget?.currency ?? B.guessCurrency(trip.destination, trip.country);
 function costTagHtml(it) {
   const paid = trip.expenses?.length ? B.placeExpense(trip, it.id) : null;
-  if (paid) return `<span class="cost-tag paid" title="${esc(t('가계부에 기록됨'))}">${esc(t('결제 {amount}', { amount: paid.krw == null ? B.moneyCode(paid.amount, trip.budget.currency) : B.won(paid.krw) }))}</span>`;
+  if (paid) return `<span class="cost-tag paid" title="${esc(t('가계부에 기록됨'))}">${esc(t('결제 {amount}', { amount: paid.krw == null ? B.moneyCode(paid.amount, trip.budget.currency) : bm(paid.krw) }))}</span>`;
   if (!(it.cost?.price > 0)) return '';
   const code = it.cost.cur === 'KRW' ? 'KRW' : tripCurrency();
   return `<span class="cost-tag" title="${esc(t('예정 비용'))}">${esc(B.moneyCode(it.cost.price, code))}</span>`;
@@ -1366,13 +1383,13 @@ function costEditorHtml(it) {
       }</span></label>
       ${
         paid
-          ? `<span class="paid-note">${esc(t('가계부에 {amount} 기록됨', { amount: paid.krw == null ? B.moneyCode(paid.amount, b.currency) : B.won(paid.krw) }))} <button type="button" data-action="unpay">${esc(t('결제 취소'))}</button></span>`
+          ? `<span class="paid-note">${esc(t('가계부에 {amount} 기록됨', { amount: paid.krw == null ? B.moneyCode(paid.amount, b.currency) : bm(paid.krw) }))} <button type="button" data-action="unpay">${esc(t('결제 취소'))}</button></span>`
           : `<button type="button" class="pay-btn" data-action="pay">${esc(t('결제 완료로 기록'))}</button>`
       }
     </div>`;
 }
 
-function itemHtml(it, i, isDay, leg = null, listItems = null, overlap = false) {
+function itemHtml(it, i, isDay, leg = null, listItems = null, overlap = '') {
   const open = ui.openItem === it.id;
   const sub = esc(it.memo || it.address); // 접힌 카드는 메모를 2줄까지만 (CSS line-clamp). 시간은 타임라인 왼쪽에 따로 보인다
   const pos = listItems ? listItems.indexOf(it) : i;
@@ -1395,7 +1412,7 @@ function itemHtml(it, i, isDay, leg = null, listItems = null, overlap = false) {
       <button class="icon" data-action="locate" title="${esc(t('지도에서 보기'))}" aria-label="${esc(t('{name} 지도에서 보기', { name: it.name }))}">◎</button>
       ${open ? `<button class="icon collapse" data-action="toggle" title="${esc(t('접기'))}" aria-label="${esc(t('접기'))}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button>` : ''}
     </div>
-    ${overlap ? timeWarnHtml() : ''}
+    ${overlap ? timeWarnHtml(overlap, dayFlightIdOf(it)) : ''}
     ${
       open && ui.readonly
         ? detailHtml(it)
@@ -1431,18 +1448,33 @@ function itemHtml(it, i, isDay, leg = null, listItems = null, overlap = false) {
   </li>`;
 }
 
-/** 시간 겹침 배지 + 이후 일정 30분씩 밀기 */
-function timeWarnHtml() {
+/**
+ * 시간 겹침 배지 (B7). 원인에 따라 다르게 안내한다.
+ *   order  → "시간 겹침 확인" + 이후 일정 30분씩 밀기
+ *   flight → "항공편 시간 확인" + 항공편 보기 / 일정 시간 수정 (밀면 귀국편과 더 멀어질 수 있어 밀기 버튼은 없다)
+ */
+function timeWarnHtml(kind, flightId) {
+  if (kind === 'flight') {
+    return `<div class="time-warn flight" role="note"><span class="tw-badge">${esc(t('항공편 시간 확인'))}</span>${
+      ui.readonly ? '' : `${flightId ? `<button type="button" data-action="flight-edit" data-flight="${esc(flightId)}">${esc(t('항공편 시간 보기'))}</button>` : ''}<button type="button" data-action="edit-time">${esc(t('일정 시간 수정'))}</button>`
+    }<small>${esc(t('항공편 도착 전이나 출발 후로 잡혀 있어요'))}</small></div>`;
+  }
   return `<div class="time-warn" role="note"><span class="tw-badge">${esc(t('시간 겹침 확인'))}</span>${
     ui.readonly ? '' : `<button type="button" data-action="push-30" title="${esc(t('이 장소부터 시간을 정한 일정을 30분씩 늦춰요'))}">${esc(t('이후 일정 30분씩 밀기'))}</button>`
   }</div>`;
+}
+/** 그 장소가 있는 날의 항공편 (출발편 우선) id */
+function dayFlightIdOf(it) {
+  const i = trip.days.findIndex((d) => d.items.includes(it));
+  if (i < 0) return '';
+  return (dayFlights(i, 'bottom')[0] ?? dayFlights(i, 'top')[0])?.flight.id ?? '';
 }
 /** 그날 시간이 꼬인 장소 id. 그날 비행기 도착 시각보다 이르거나, 귀국 비행기 출발 이후인 장소도 포함 */
 function dayTimeConflicts(dayIndex) {
   const hhmm = (v) => (v ? v.slice(11, 16) : '');
   const arrive = dayFlights(dayIndex, 'top').filter(({ role }) => role !== 'depart').map(({ flight }) => hhmm(flight.arriveAt)).filter(Boolean).sort().at(-1) ?? '';
   const leave = dayFlights(dayIndex, 'bottom').filter(({ role }) => role !== 'arrive').map(({ flight }) => hhmm(flight.departAt)).filter(Boolean).sort()[0] ?? '';
-  return M.timeConflicts(trip.days[dayIndex]?.items, { after: arrive, before: leave });
+  return M.timeConflictKinds(trip.days[dayIndex]?.items, { after: arrive, before: leave });
 }
 
 /* ───────── 항공편 ───────── */
@@ -1677,7 +1709,7 @@ function dayBodyHtml(l) {
   return `<div class="timeline" style="--c:${l.color}">
       ${flightRowsHtml(l.dayIndex, 'top')}
       ${st.start ? stayRowHtml(st.start, l.dayIndex, 'start', st) : ''}
-      <ol class="items" data-list="${l.id}" data-empty="${esc(ui.readonly ? t('아직 정한 곳이 없어요') : t('장소를 검색하거나 여기로 끌어오세요'))}">${l.items.map((it, j) => itemHtml(it, j, true, legTo(off + j), l.items, overlaps.has(it.id))).join('')}</ol>
+      <ol class="items" data-list="${l.id}" data-empty="${esc(ui.readonly ? t('아직 정한 곳이 없어요') : t('장소를 검색하거나 여기로 끌어오세요'))}">${l.items.map((it, j) => itemHtml(it, j, true, legTo(off + j), l.items, overlaps.get(it.id) ?? '')).join('')}</ol>
       ${st.end ? stayRowHtml(st.end, l.dayIndex, 'end', st, legTo(route.length - 1)) : ''}
       ${flightRowsHtml(l.dayIndex, 'bottom')}
     </div>`;
@@ -2077,6 +2109,11 @@ $('#days').addEventListener('click', (e) => {
     const found = M.findItem(trip, id);
     if (!found) return;
     locateMapPlace(found.item);
+  } else if (action === 'edit-time') {
+    ui.openItem = id;
+    ui.openStay = null;
+    renderDays();
+    $(`.item[data-id="${CSS.escape(id)}"] [data-field="time"]`)?.focus();
   } else if (action === 'push-30') {
     const found = M.findItem(trip, id);
     if (!found || ui.readonly) return;
@@ -2152,7 +2189,7 @@ $('#days').addEventListener('click', (e) => {
     B.ensureBudget(trip);
     const r = B.payPlace(trip, id, { amount, cur, today: TODAY });
     if (!r) return;
-    saved(commit(), r.expense.krw == null ? t('가계부에 기록했어요. 원화는 환율을 받으면 계산해요') : t('가계부에 {amount} 기록했어요', { amount: B.won(r.expense.krw) }));
+    saved(commit(), r.expense.krw == null ? t('가계부에 기록했어요. 원화는 환율을 받으면 계산해요') : t('가계부에 {amount} 기록했어요', { amount: bm(r.expense.krw) }));
   } else if (action === 'wx-ref') {
     ui.wxRefOpen ??= new Set();
     const dayId = btn.dataset.dayId;
@@ -2316,6 +2353,13 @@ $('#days').addEventListener('change', (e) => {
 });
 
 $('#pinLegend').addEventListener('click', (e) => {
+  if (e.target.closest('[data-legend-toggle]')) {
+    prefs.legendOpen = !legendOpen();
+    savePrefs();
+    renderPinLegend(catEmptyText());
+    $('#pinLegend [data-legend-toggle]')?.focus();
+    return;
+  }
   const cat = e.target.closest('[data-cat-filter]')?.dataset.catFilter;
   if (cat) {
     ui.catFilter = ui.catFilter === cat ? null : cat; // 같은 칩을 다시 누르면 해제
@@ -3027,15 +3071,17 @@ $('#page-home').addEventListener('click', (e) => {
     sample.country = 'jp';
     sample.isUserModified = false; // 고치기 전까지는 언어를 바꾸면 샘플 내용도 그 언어로
     sample.presetI18n = { title: presetMap('도쿄 3박 4일 샘플'), destination: presetMap('도쿄') };
+    // 종류를 고르게 넣어 두어 처음 온 사람도 '종류별' 필터를 바로 눌러 볼 수 있게 한다 (관광·맛집·카페·쇼핑·기타·숙소)
     const days = [
-      [[k('센소지'), 35.7148, 139.7967], [k('도쿄 스카이트리'), 35.7101, 139.8107]],
-      [[k('메이지 신궁'), 35.6764, 139.6993], [k('시부야 스크램블 교차로'), 35.6595, 139.7005]],
-      [[k('츠키지 장외시장'), 35.6655, 139.7707], [k('도쿄 타워'), 35.6586, 139.7454]],
-      [[k('도쿄역'), 35.6812, 139.7671]],
+      [[k('센소지'), 35.7148, 139.7967, 'sight'], [k('도쿄 스카이트리'), 35.7101, 139.8107, 'sight'], [k('블루보틀 커피 기요스미시라카와'), 35.6807, 139.7967, 'cafe']],
+      [[k('메이지 신궁'), 35.6764, 139.6993, 'sight'], [k('시부야 스크램블 교차로'), 35.6595, 139.7005, 'shop']],
+      [[k('츠키지 장외시장'), 35.6655, 139.7707, 'food'], [k('도쿄 타워'), 35.6586, 139.7454, 'sight']],
+      [[k('도쿄역'), 35.6812, 139.7671, 'etc']],
     ];
     days.forEach((places, i) => {
-      places.forEach(([name, lat, lng]) => M.addItem(sample, sample.days[i].id, { name: t(name), nameI18n: presetMap(name), lat, lng }));
+      places.forEach(([name, lat, lng, category]) => M.addItem(sample, sample.days[i].id, { name: t(name), nameI18n: presetMap(name), lat, lng, category }));
     });
+    M.addStay(sample, { name: t(k('도쿄역 근처 호텔 (샘플)')), nameI18n: presetMap('도쿄역 근처 호텔 (샘플)'), lat: 35.6797, lng: 139.7702 }, 0, 3);
     B.ensureBudget(sample);
     switchTrip(sample, { save: true });
   }
@@ -3245,7 +3291,12 @@ function showTab(tab) {
     b.classList.toggle('active', b.dataset.tab === tab);
     b.setAttribute('aria-pressed', String(b.dataset.tab === tab));
   });
-  if (tab === 'map') setTimeout(() => { map.invalidateSize(); renderMap({ fit: !ui.keepView && !ui.candidate }); ui.keepView = false; }, 0);
+  if (tab === 'map') setTimeout(() => {
+    map.invalidateSize();
+    renderMap({ fit: !ui.keepView && !ui.candidate });
+    ui.keepView = false;
+    if (pickViewport.matches) revealMap(); // 모바일 지도 탭: 지도가 화면을 채우도록 맞춘다 (B5)
+  }, 0);
 }
 $$('.mtabs button').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
@@ -3426,7 +3477,7 @@ $('#today').addEventListener('click', (e) => {
     B.ensureBudget(trip);
     const r = B.payPlace(trip, b.dataset.id, { today: TODAY });
     if (!r) return;
-    saved(commit(), r.expense.krw == null ? t('가계부에 기록했어요. 원화는 환율을 받으면 계산해요') : t('가계부에 {amount} 기록했어요', { amount: B.won(r.expense.krw) }));
+    saved(commit(), r.expense.krw == null ? t('가계부에 기록했어요. 원화는 환율을 받으면 계산해요') : t('가계부에 {amount} 기록했어요', { amount: bm(r.expense.krw) }));
   }
   else if (act === 'share') copyText(M.dayShareText(trip, Number(b.dataset.day)), t('오늘 일정을 복사했어요. 카톡에 붙여넣으세요'));
   else if (act === 'expense') {
@@ -3441,7 +3492,7 @@ function renderNotice() {
   const list = ui.readonly ? [] : M.tripNotices(trip);
   const total = trip.budget?.total;
   const plan = total ? B.combinePlans(C.planned(trip), B.placePlanned(trip)).total : 0;
-  if (!ui.readonly && total && plan > total) list.push(t('예상 비용({plan})이 예산({total})보다 {diff} 많아요', { plan: B.won(plan), total: B.won(total), diff: B.won(plan - total) }));
+  if (!ui.readonly && total && plan > total) list.push(t('예상 비용({plan})이 예산({total})보다 {diff} 많아요', { plan: bm(plan), total: bm(total), diff: bm(plan - total) }));
   const el = $('#notice');
   el.hidden = !list.length;
   const noStay = !ui.readonly && !(trip.stays ?? []).length && trip.days.length > 1;
@@ -3690,7 +3741,7 @@ function barRows(map, defs, max) {
     .sort((a, b) => b.v - a.v);
   if (!rows.length) return `<p class="empty-note">${esc(t('기록이 생기면 보여요'))}</p>`;
   return `<div class="bars">${rows
-    .map((r) => `<div class="bar-row"><span class="lbl">${esc(t(r.d.label))}</span><span class="bar" aria-hidden="true"><i style="width:${(r.v / max) * 100}%"></i></span><span class="v">${B.won(r.v)}</span></div>`)
+    .map((r) => `<div class="bar-row"><span class="lbl">${esc(t(r.d.label))}</span><span class="bar" aria-hidden="true"><i style="width:${(r.v / max) * 100}%"></i></span><span class="v">${bm(r.v)}</span></div>`)
     .join('')}</div>`;
 }
 
@@ -3705,7 +3756,7 @@ function planRows(spent, planned) {
       const over = pl && sp > pl;
       return `<div class="bar-row plan-row"><span class="lbl">${esc(t(B.EXPENSE_CATS[k].label))}</span>
         <span class="bar${over ? ' over' : ''}" aria-hidden="true"><i style="width:${(sp / max) * 100}%"></i>${pl ? `<em style="left:${(pl / max) * 100}%"></em>` : ''}</span>
-        <span class="v">${B.won(sp)}<small>${pl ? ` / ${B.won(pl)}` : ''}</small></span></div>`;
+        <span class="v">${bm(sp)}<small>${pl ? ` / ${bm(pl)}` : ''}</small></span></div>`;
     })
     .join('')}</div><p class="fine">${esc(t('막대는 쓴 돈, 세로 눈금은 장소·체크리스트 예상이에요.'))}</p>`;
 }
@@ -3716,9 +3767,9 @@ function budgetTileHtml(b, s) {
   const pct = b.total ? Math.min(999, Math.round((s.spent / b.total) * 100)) : 0;
   const tile = {
     unset: { cls: 'neutral', label: t('남은 예산'), value: '—', note: t('예산을 넣으면 계산해요') },
-    within: { cls: 'ok', label: t('남은 예산'), value: B.won(s.left), note: t('{p}% 사용', { p: pct }) },
-    reached: { cls: 'warn', label: t('예산 도달'), value: B.won(0), note: t('예산을 다 썼어요 (100%)') },
-    over: { cls: 'hot', label: t('예산 초과'), value: B.won(-s.left), note: t('{p}% 사용', { p: pct }) },
+    within: { cls: 'ok', label: t('남은 예산'), value: bm(s.left), note: t('{p}% 사용', { p: pct }) },
+    reached: { cls: 'warn', label: t('예산 도달'), value: bm(0), note: t('예산을 다 썼어요 (100%)') },
+    over: { cls: 'hot', label: t('예산 초과'), value: bm(-s.left), note: t('{p}% 사용', { p: pct }) },
   }[state];
   return `<div class="kpi ${tile.cls}" data-state="${state}"><span>${esc(tile.label)}</span><b>${tile.value}</b><small>${esc(tile.note)}</small></div>`;
 }
@@ -3764,12 +3815,12 @@ function drawBudget(el) {
         : ''
     }
     <div class="grid3 kpis kpis4">
-      <label class="kpi"><span>${esc(t('1인 예산 (원)'))}</span><input id="bTotal" inputmode="numeric" value="${b.total ? num(b.total) : ''}" placeholder="${esc(t('예: 800,000'))}"></label>
+      <label class="kpi"><span>${esc(t('1인 예산 ({code})', { code: shownBase(b) }))}</span><input id="bTotal" inputmode="decimal" value="${b.total ? budgetInputValue(b) : ''}" placeholder="${esc(shownBase(b) === 'KRW' ? t('예: 800,000') : t('예: 600'))}"></label>
       <button class="kpi plan${b.total && plan.total > b.total ? ' hot' : ''}" data-b="to-check" title="${esc(t('장소의 예상 비용과 체크리스트 가격이 여기에 잡혀요'))}">
-        <span>${esc(t('예상 (장소·체크리스트)'))}</span><b>${plan.priced ? B.won(plan.total) : '—'}</b>
-        <small>${plan.priced ? (b.total && plan.total > b.total ? esc(t('예산보다 {diff} 많아요', { diff: B.won(plan.total - b.total) })) : `${esc(t('{n}개 항목', { n: plan.priced }))}${plan.noRate ? ` · ${esc(t('환율 미정 {n}개', { n: plan.noRate }))}` : ''}`) : esc(t('장소나 체크리스트에 가격 넣기 →'))}</small>
+        <span>${esc(t('예상 (장소·체크리스트)'))}</span><b>${plan.priced ? bm(plan.total) : '—'}</b>
+        <small>${plan.priced ? (b.total && plan.total > b.total ? esc(t('예산보다 {diff} 많아요', { diff: bm(plan.total - b.total) })) : `${esc(t('{n}개 항목', { n: plan.priced }))}${plan.noRate ? ` · ${esc(t('환율 미정 {n}개', { n: plan.noRate }))}` : ''}`) : esc(t('장소나 체크리스트에 가격 넣기 →'))}</small>
       </button>
-      <div class="kpi"><span>${esc(t('쓴 돈'))}</span><b>${B.won(s.spent)}</b><small>${esc(t('{n}건', { n: trip.expenses.length }))}${s.pending.count ? ` · <span class="pend">${esc(t('환율 미정 {n}건 ({amount})', { n: s.pending.count, amount: B.moneyCode(s.pending.amount, b.currency) }))}</span>` : ''}</small></div>
+      <div class="kpi"><span>${esc(t('쓴 돈'))}</span><b>${bm(s.spent)}</b><small>${esc(t('{n}건', { n: trip.expenses.length }))}${s.pending.count ? ` · <span class="pend">${esc(t('환율 미정 {n}건 ({amount})', { n: s.pending.count, amount: B.moneyCode(s.pending.amount, b.currency) }))}</span>` : ''}</small></div>
       ${budgetTileHtml(b, s)}
     </div>
     ${currencyTotalsHtml(b, s)}
@@ -3792,6 +3843,7 @@ function drawBudget(el) {
             : ''
         }
       </div>
+      ${baseRowHtml(b)}
       ${ui.rateError ? `<p class="form-error" role="alert">${esc(t('환율을 받아오지 못했어요. 인터넷 연결을 확인하고 다시 받거나, 환율을 직접 입력해 주세요. 그동안 적은 지출은 현지 돈으로 저장되고 원화는 “환율 미정”으로 표시돼요.'))} <button class="linkbtn" data-b="rate">${esc(t('다시 시도'))}</button></p>` : ''}
       <div class="chipset" role="group" aria-label="${esc(t('분류'))}">${Object.entries(B.EXPENSE_CATS)
         .map(([k, c]) => `<button class="${f.cat === k ? 'on' : ''}" aria-pressed="${f.cat === k}" data-b="cat" data-v="${k}">${esc(t(c.label))}</button>`)
@@ -3816,7 +3868,7 @@ function drawBudget(el) {
       <div class="box">
         <h3>${esc(t('날짜별'))}</h3>
         <div class="daybars" role="list">${dayKeys
-          .map((k) => `<div role="listitem" title="${esc(dayLabel(k))} ${B.won(s.byDay[k] ?? 0)}" aria-label="${esc(dayLabel(k))} ${B.won(s.byDay[k] ?? 0)}"><i style="height:${((s.byDay[k] ?? 0) / dayMax) * 100}%"></i>${esc(dayShort(k))}</div>`)
+          .map((k) => `<div role="listitem" title="${esc(dayLabel(k))} ${bm(s.byDay[k] ?? 0)}" aria-label="${esc(dayLabel(k))} ${bm(s.byDay[k] ?? 0)}"><i style="height:${((s.byDay[k] ?? 0) / dayMax) * 100}%"></i>${esc(dayShort(k))}</div>`)
           .join('')}</div>
         ${hasOut ? `<p class="fine">${esc(t('‘일정 외’는 여행 기간을 줄여 사라진 날의 지출이에요. 원래 날짜로 남아 있고 합계에 들어가요.'))}</p>` : ''}
         <h3 style="margin-top:16px">${esc(t('결제 수단'))}</h3>${barRows(s.byPay, B.PAYMENTS, Math.max(1, ...Object.values(s.byPay)))}
@@ -3832,12 +3884,14 @@ function drawBudget(el) {
                 if (ui.editExpense === e.id && !ui.readonly) return expenseEditHtml(e);
                 const c = B.EXPENSE_CATS[e.cat] ?? B.EXPENSE_CATS.etc;
                 const pay = B.PAYMENTS[e.pay] ?? B.PAYMENTS.card;
-                const orig = e.cur === 'KRW' ? '' : B.moneyCode(e.amount, b.currency);
+                // 적은 통화가 지금 보여 주는 기준 통화와 다르면 원래 금액을 함께 (원화로 적었는데 기준 통화가 달러인 경우 등)
+                const origCode = e.cur === 'KRW' ? 'KRW' : b.currency;
+                const orig = origCode === shownBase(b) ? '' : origCode === 'KRW' ? B.won(e.amount) : B.moneyCode(e.amount, b.currency);
                 const link = e.checkId ? t('체크리스트') : e.placeId ? t('장소') : '';
                 const who = payerLabel(e);
                 return `<li>
                   <span class="rec-main"><b>${esc(e.memo || t(c.label))}</b><small>${esc(B.expenseDayLabel(trip, e))} · ${esc(t(c.label))} · ${esc(t(pay.label))}${link ? ` · ${esc(link)}` : ''}${who ? ` · ${esc(who)}` : ''}</small></span>
-                  <span class="rec-amt">${e.krw == null ? `<span class="pend">${esc(t('환율 미정'))}</span>` : B.won(e.krw)}${orig ? `<small>${esc(orig)}</small>` : ''}</span>
+                  <span class="rec-amt">${e.krw == null ? `<span class="pend">${esc(t('환율 미정'))}</span>` : bm(e.krw)}${orig ? `<small>${esc(orig)}</small>` : ''}</span>
                   <span class="rec-acts"><button class="icon" data-b="edit" data-id="${e.id}" title="${esc(t('수정'))}" aria-label="${esc(t('{name} 수정', { name: e.memo || t(c.label) }))}">✎</button><button class="icon" data-b="del" data-id="${e.id}" title="${esc(t('삭제'))}" aria-label="${esc(t('{name} 삭제', { name: e.memo || t(c.label) }))}">✕</button></span></li>`;
               })
               .join('')}</ul>`
@@ -3848,6 +3902,27 @@ function drawBudget(el) {
   </div>`;
 }
 
+/* ───────── 기준 통화 (C1) ───────── */
+/** 지금 실제로 보여 주는 기준 통화 (환율을 모르면 원화) */
+const shownBase = (b) => (B.krwPerBase(b) ? B.baseCode(b) : 'KRW');
+function budgetInputValue(b) {
+  const v = B.toBase(b.total, b);
+  return v == null ? num(b.total) : num(v, { maximumFractionDigits: shownBase(b) === 'KRW' || shownBase(b) === 'JPY' ? 0 : 2 });
+}
+function baseRowHtml(b) {
+  const code = B.baseCode(b);
+  const choices = [...new Set([...B.BASE_CHOICES, b.currency])];
+  const rate = B.krwPerBase(b);
+  const note = code === 'KRW'
+    ? ''
+    : rate
+      ? `<span class="fine">${B.CURRENCIES[code].unit} ${esc(code)} = ${B.won(rate * B.CURRENCIES[code].unit)}</span>`
+      : `<span class="pend">${esc(t('기준 통화 환율 미정 · 원화로 표시 중'))}</span> ${ui.readonly ? '' : `<button class="pill" data-b="rate">${esc(t('환율 받기'))}</button>`}`;
+  return `<div class="base-row"><label><span>${esc(t('기준 통화'))}</span><select id="bBase" class="inp" aria-label="${esc(t('기준 통화'))}">${choices
+    .map((c) => `<option value="${c}"${c === code ? ' selected' : ''}>${c} ${esc(t(B.CURRENCIES[c].name))}</option>`)
+    .join('')}</select></label>${note}<small class="fine">${esc(t('합계·예산·정산을 이 통화로 보여 줘요'))}</small></div>`;
+}
+
 /* ───────── 통화별 합계 · 동행자 정산 ───────── */
 function currencyTotalsHtml(b, s) {
   if (!trip.expenses.length || b.currency === 'KRW') return '';
@@ -3856,7 +3931,7 @@ function currencyTotalsHtml(b, s) {
     c.localCount ? `${B.moneyCode(c.local, b.currency)} <small>(${esc(t('{n}건', { n: c.localCount }))})</small>` : '',
     c.krwCount ? `${B.won(c.krw)} <small>(${esc(t('{n}건', { n: c.krwCount }))})</small>` : '',
   ].filter(Boolean);
-  return `<p class="cur-totals"><span>${esc(t('통화별 합계'))}</span> ${parts.join(' <i aria-hidden="true">+</i> ')} <span class="eq">= ${esc(t('원화 환산'))} <b>${B.won(s.spent)}</b>${s.pending.count ? ` <span class="pend">${esc(t('환율 미정 {n}건 제외', { n: s.pending.count }))}</span>` : ''}</span></p>`;
+  return `<p class="cur-totals"><span>${esc(t('통화별 합계'))}</span> ${parts.join(' <i aria-hidden="true">+</i> ')} <span class="eq">= ${esc(t('{code} 환산', { code: shownBase(b) }))} <b>${bm(s.spent)}</b>${s.pending.count ? ` <span class="pend">${esc(t('환율 미정 {n}건 제외', { n: s.pending.count }))}</span>` : ''}</span></p>`;
 }
 
 /** 지출 입력: 동행이 2명 이상이면 낸 사람과 나눠 낼 사람을 고른다 */
@@ -3899,10 +3974,10 @@ function settleBoxHtml() {
     .join('');
   const body = st
     ? `<table class="settle-table"><thead><tr><th>${esc(t('이름'))}</th><th>${esc(t('낸 돈'))}</th><th>${esc(t('부담'))}</th><th>${esc(t('차액'))}</th></tr></thead><tbody>${st.people
-        .map((p) => `<tr><td>${esc(p.name)}</td><td>${B.won(p.paid)}</td><td>${B.won(p.share)}</td><td class="${p.net > 0 ? 'plus' : p.net < 0 ? 'minus' : ''}">${p.net > 0 ? '+' : p.net < 0 ? '−' : ''}${B.won(Math.abs(p.net))}</td></tr>`)
+        .map((p) => `<tr><td>${esc(p.name)}</td><td>${bm(p.paid)}</td><td>${bm(p.share)}</td><td class="${p.net > 0 ? 'plus' : p.net < 0 ? 'minus' : ''}">${p.net > 0 ? '+' : p.net < 0 ? '−' : ''}${bm(Math.abs(p.net))}</td></tr>`)
         .join('')}</tbody></table>
       <h4>${esc(t('보낼 돈'))} <small>${esc(t('최소 {n}번 송금', { n: st.transfers.length }))}</small></h4>
-      ${st.transfers.length ? `<ul class="transfers">${st.transfers.map((x) => `<li><b>${esc(x.from)}</b> → <b>${esc(x.to)}</b><span>${B.won(x.amount)}</span></li>`).join('')}</ul>` : `<p class="empty-note">${esc(t('주고받을 돈이 없어요'))}</p>`}
+      ${st.transfers.length ? `<ul class="transfers">${st.transfers.map((x) => `<li><b>${esc(x.from)}</b> → <b>${esc(x.to)}</b><span>${bm(x.amount)}</span></li>`).join('')}</ul>` : `<p class="empty-note">${esc(t('주고받을 돈이 없어요'))}</p>`}
       ${st.noPayer || st.noRate ? `<p class="fine">${[st.noPayer ? t('결제자를 정하지 않은 지출 {n}건은 빠졌어요', { n: st.noPayer }) : '', st.noRate ? t('환율 미정 지출 {n}건은 빠졌어요', { n: st.noRate }) : ''].filter(Boolean).map(esc).join(' · ')}</p>` : ''}
       <button type="button" class="btn" data-b="settle-copy">${esc(t('정산 결과 복사'))}</button>`
     : `<p class="empty-note">${esc(t('동행자를 2명 이상 넣으면 지출마다 낸 사람과 나눠 낼 사람을 고르고, 누가 누구에게 얼마를 보내면 되는지 계산해요.'))}</p>`;
@@ -3980,14 +4055,28 @@ function updateKrwPreview() {
 
 async function fetchRate({ quiet = false } = {}) {
   const b = trip.budget;
-  if (b.currency === 'KRW') return;
+  const base = B.baseCode(b);
+  const needBase = base !== 'KRW' && base !== b.currency;
+  if (b.currency === 'KRW' && !needBase) return;
   const forTrip = trip;
   try {
     const r = await fetch(RATE_API, { signal: AbortSignal.timeout(8000) });
     const data = await r.json();
+    if (trip !== forTrip) return;
+    if (needBase) {
+      const bp = data?.rates?.[base];
+      if (bp > 0) {
+        b.baseKrwPerUnit = 1 / bp;
+        b.baseRateAt = new Date().toISOString();
+      } else if (b.currency === 'KRW') throw new Error('no rate');
+    }
+    if (b.currency === 'KRW') {
+      ui.rateError = false;
+      saved(commit({ auto: quiet }), quiet ? '' : t('기준 통화 환율을 받았어요: 1 {code} = {krw}', { code: base, krw: B.won(b.baseKrwPerUnit) }));
+      return;
+    }
     const per = data?.rates?.[b.currency];
     if (!(per > 0)) throw new Error('no rate');
-    if (trip !== forTrip) return;
     b.krwPerUnit = 1 / per;
     b.rateSource = 'auto';
     b.rateAt = new Date().toISOString();
@@ -4028,7 +4117,7 @@ function addExpenseFromForm() {
   $('#bAmount').value = '';
   $('#bMemo').value = '';
   updateKrwPreview();
-  toast(e.krw == null ? t('{amount} 기록했어요. 원화는 환율을 받으면 계산해요', { amount: B.moneyCode(e.amount, b.currency) }) : t('{amount} 기록했어요', { amount: B.won(e.krw) }), e.krw == null ? 3200 : 2200);
+  toast(e.krw == null ? t('{amount} 기록했어요. 원화는 환율을 받으면 계산해요', { amount: B.moneyCode(e.amount, b.currency) }) : t('{amount} 기록했어요', { amount: bm(e.krw) }), e.krw == null ? 3200 : 2200);
   $('#bAmount')?.focus();
 }
 
@@ -4078,7 +4167,7 @@ $('#page-budget').addEventListener('click', (e) => {
     $('#memberName')?.focus();
   } else if (act === 'settle-copy') {
     const st = S.settlement(trip);
-    if (st) copyText(S.settlementText(trip, st, B.won), t('정산 결과를 복사했어요. 메신저에 붙여넣으세요'));
+    if (st) copyText(S.settlementText(trip, st, bm), t('정산 결과를 복사했어요. 메신저에 붙여넣으세요'));
   } else if (act === 'edit-cancel') {
     const id = ui.editExpense;
     ui.editExpense = null;
@@ -4184,10 +4273,10 @@ $('#page-budget').addEventListener('change', (e) => {
     const v = B.parseAmount(e.target.value);
     if (v != null && !(v >= 0 && v <= B.MAX_AMOUNT)) {
       toast(t('예산은 0 이상 {max} 이하 숫자로 넣어 주세요', { max: num(B.MAX_AMOUNT) }), 3200);
-      e.target.value = b.total ? num(b.total) : '';
+      e.target.value = b.total ? budgetInputValue(b) : '';
       return;
     }
-    b.total = Math.max(0, Math.round(v || 0));
+    b.total = Math.max(0, B.fromBase(v || 0, b)); // 저장은 원화
     commit();
   } else if (e.target.id === 'bRate') {
     const v = B.parseAmount(e.target.value);
@@ -4207,6 +4296,12 @@ $('#page-budget').addEventListener('change', (e) => {
     fetchRate({ quiet: true });
   } else if (e.target.id === 'bDay') {
     budgetForm().day = Number(e.target.value);
+  } else if (e.target.id === 'bBase') {
+    if (!B.setBase(trip, e.target.value)) return;
+    const b2 = trip.budget;
+    saved(commit(), t('기준 통화를 {code}(으)로 바꿨어요', { code: B.baseCode(b2) }));
+    if (!B.krwPerBase(b2)) fetchRate({ quiet: true });
+    $('#bBase')?.focus();
   } else if (e.target.id === 'bPayer') {
     budgetForm().payer = e.target.value;
   }
@@ -4328,7 +4423,7 @@ function drawChecks(el) {
     </ul>
     ${
       plan.priced
-        ? `<div class="plan-bar"><span>${esc(t('체크리스트 예상'))} <b>${B.won(plan.total)}</b>${plan.noRate ? ` <small>(${esc(t('환율이 없어 {n}개 빠짐', { n: plan.noRate }))})</small>` : ''}</span><button class="linkbtn" data-c="to-budget">${esc(t('가계부에서 보기 →'))}</button></div>`
+        ? `<div class="plan-bar"><span>${esc(t('체크리스트 예상'))} <b>${bm(plan.total)}</b>${plan.noRate ? ` <small>(${esc(t('환율이 없어 {n}개 빠짐', { n: plan.noRate }))})</small>` : ''}</span><button class="linkbtn" data-c="to-budget">${esc(t('가계부에서 보기 →'))}</button></div>`
         : ''
     }
     <div class="check-tabs" role="group" aria-label="${esc(t('체크리스트'))}">${groups.map(([g, def]) => {
@@ -4351,7 +4446,7 @@ function drawChecks(el) {
           <div class="cprog" aria-hidden="true"><i style="width:${p.total ? (p.done / p.total) * 100 : 0}%"></i></div>
           <ul class="checks">${list.map(checkRowHtml).join('')}</ul>
           ${list.length ? '' : `<p class="empty-note">${esc(t('아직 항목이 없어요. 아래에서 추가하세요.'))}</p>`}
-          ${sum ? `<p class="check-sum">${esc(t('예상 합계'))} <b>${B.won(sum)}</b></p>` : ''}
+          ${sum ? `<p class="check-sum">${esc(t('예상 합계'))} <b>${bm(sum)}</b></p>` : ''}
           ${g === 'shop' ? picksHtml() : ''}
           <form class="addrow" data-group="${g}"><input name="text" data-draft="add-${g}" placeholder="${esc(t(def.placeholder))}" aria-label="${esc(t(def.placeholder))}" maxlength="80" autocomplete="off"><button>${esc(t('추가'))}</button></form>
         </section>`;
@@ -4389,7 +4484,7 @@ $('#page-check').addEventListener('change', (e) => {
   const r = C.toggleCheck(trip, id, TODAY);
   const res = commit();
   $(`#page-check [data-c="toggle"][data-id="${CSS.escape(id)}"]`)?.focus();
-  if (r.expense) saved(res, `${r.expense.krw == null ? t('가계부에 기록했어요. 원화는 환율을 받으면 계산해요') : t('가계부에 {amount} 기록했어요', { amount: B.won(r.expense.krw) })} · ${t('금액이 달랐다면 ‘결제’를 눌러 고치세요')}`, 3500);
+  if (r.expense) saved(res, `${r.expense.krw == null ? t('가계부에 기록했어요. 원화는 환율을 받으면 계산해요') : t('가계부에 {amount} 기록했어요', { amount: bm(r.expense.krw) })} · ${t('금액이 달랐다면 ‘결제’를 눌러 고치세요')}`, 3500);
   else if (linked) saved(res, t('체크를 풀었어요. 가계부 지출은 그대로 남겼어요'));
 });
 async function changeCheckGroup(group, action) {
@@ -4502,8 +4597,14 @@ $('#page-check').addEventListener('click', (e) => {
     for (const tab of $$('.check-tabs button')) tab.setAttribute('aria-pressed', String(tab.dataset.group === g));
     for (const panel of $$('.check-grid > section')) panel.dataset.active = String(panel.id === `check-panel-${g}`);
   } else if (act === 'del') {
-    C.removeCheck(trip, btn.dataset.id);
-    commit();
+    const c = trip.checks.find((x) => x.id === btn.dataset.id);
+    if (!c) return;
+    const kept = C.linkedExpense(trip, c.id) ? 1 : 0;
+    const undo = checksUndo([c]);
+    C.removeCheck(trip, c.id);
+    if (commit().ok) {
+      toast(kept ? t('"{text}" 삭제됨 (가계부 지출 1건은 유지됨)', { text: c.text }) : t('"{text}" 삭제됨', { text: c.text }), 5000, { label: t('실행 취소'), run: undo });
+    }
   } else if (act === 'price') {
     const c = trip.checks.find((x) => x.id === btn.dataset.id);
     ui.editPrice = btn.dataset.id;
@@ -4552,9 +4653,9 @@ $('#page-check').addEventListener('focusout', (e) => {
 });
 
 /* ───────── 공유 링크 ─────────
- * 보내기: 짧은 링크 서버가 있는 곳(server.js)에서만 일정 사본을 서버에 맡기고 /s/<id>를 받는다.
- *   서버가 없는 곳(정적 호스팅, 지금 배포)에서는 서버로 보내지 않고 사본을 URL # 뒤에 담은 긴 링크를 만든다.
- *   (# 뒤는 브라우저가 서버로 보내지 않는다)
+ * 보내기: 일정 사본을 URL # 뒤에 압축해 담은 링크를 만든다 (# 뒤는 브라우저가 서버로 보내지 않는다).
+ *   짧은 링크 서버(/api/share)는 배포 전이라 부르지 않는다. 링크 길이는 게이지로 보여 주고(메신저 한도 2,000자),
+ *   길면 메모 제외나 공유용 일정 파일을 권한다.
  * 받기: /s/<id> 또는 #s=… 로 열리면 보기 전용으로 보여주고, 원하면 "내 여행으로 저장"으로 사본을 만든다.
  */
 const shareDialog = $('#shareDialog');
@@ -4563,34 +4664,26 @@ const appBase = () => new URL('./', document.baseURI).href; // /s/<id> 페이지
 ui.share = null;
 let shareRequest = 0;
 
-/** 짧은 링크 서버가 있는지 먼저 묻는다 (없으면 일정 사본을 아무 데도 보내지 않는다) */
-let shareServer = null;
-async function hasShareServer() {
-  if (shareServer != null) return shareServer;
-  try {
-    const r = await fetch(new URL('api/share', appBase()), { signal: AbortSignal.timeout(3000) });
-    shareServer = r.ok && (await r.json())?.ok === true;
-  } catch {
-    shareServer = false;
-  }
-  return shareServer;
+// 짧은 링크 서버(/api/share)는 아직 배포하지 않았다 (B9). 없는 주소를 불러 404를 내지 않도록 바로 압축 링크(#s=)를 만든다.
+async function createShareUrl(code) {
+  return shareUrl(appBase(), code);
 }
 
-async function createShareUrl(code) {
-  if (await hasShareServer()) {
-    try {
-      const r = await fetch(new URL('api/share', appBase()), {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ code }),
-        signal: AbortSignal.timeout(5000),
-      });
-      if (r.ok) return new URL((await r.json()).path, appBase()).href;
-    } catch {
-      /* 서버 문제 → 긴 링크 */
-    }
-  }
-  return shareUrl(appBase(), code);
+/* 공유 링크 길이 게이지 (B9): 2,000자를 넘기 전에 미리 알려 메모 제외·파일 저장을 고를 수 있게 한다 */
+const SHARE_LIMIT = 2000;
+const SHARE_NEAR = 1600;
+function renderShareGauge(len) {
+  const el = $('#shareGauge');
+  if (len == null) return void (el.hidden = true);
+  const state = len > SHARE_LIMIT ? 'over' : len > SHARE_NEAR ? 'near' : 'ok';
+  el.dataset.state = state;
+  $('i', el).style.width = `${Math.min(100, (len / SHARE_LIMIT) * 100)}%`;
+  const n = { len: num(len), max: num(SHARE_LIMIT) };
+  $('#shareGaugeText').textContent =
+    state === 'ok' ? t('{len} / {max}자 · 메신저 전송 안전', n)
+      : state === 'near' ? t('{len} / {max}자 · 거의 찼어요. 메모를 빼거나 파일로 보내면 안전해요', n)
+      : t('{len} / {max}자 · 메신저에서 잘릴 수 있어요', n);
+  el.hidden = false;
 }
 
 async function updateShare() {
@@ -4603,6 +4696,7 @@ async function updateShare() {
   $('#shareLink').textContent = t('링크 만드는 중…');
   for (const id of ['shareCopy', 'shareCopyLink', 'shareNative']) $(`#${id}`).disabled = true;
   for (const id of ['shareLong', 'shareTooLong', 'shareFile', 'shareError']) $(`#${id}`).hidden = true;
+  renderShareGauge(null);
   ui.share = null;
   try {
     const code = await encodeShare(source, { includePrivate });
@@ -4611,8 +4705,10 @@ async function updateShare() {
     ui.share = { url, title, line, code, includePrivate, message: shareMessage({ ...source, title }, url) };
     $('#shareLink').textContent = url;
     $('#shareLong').hidden = !url.includes('#s=');
-    const tooLong = !$('#shareLong').hidden && url.length > 2000;
-    $('#shareTooLong').hidden = $('#shareFile').hidden = !tooLong;
+    const tooLong = url.length > SHARE_LIMIT;
+    $('#shareTooLong').hidden = !tooLong;
+    $('#shareFile').hidden = false; // 길이와 상관없이 파일로도 보낼 수 있게
+    renderShareGauge(url.length);
     for (const id of ['shareCopy', 'shareCopyLink', 'shareNative']) $(`#${id}`).disabled = false;
   } catch {
     if (request !== shareRequest || !shareDialog.open) return;
@@ -4629,7 +4725,7 @@ async function updateShare() {
 function saveShareFile() {
   const current = ui.share;
   if (!current || !trip) return;
-  downloadJson(sharedCopy(trip, { includePrivate: current.includePrivate }));
+  downloadJson(sharedCopy(trip, { includePrivate: current.includePrivate }), { kind: 'share' });
 }
 
 /** 복사. 클립보드가 막혀 있으면 직접 복사 창을 연다 (공유면 일정 파일로도 보낼 수 있게). */

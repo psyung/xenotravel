@@ -2,15 +2,12 @@
 // 여행 데이터 자체는 localStorage에 있으므로 여기서는 "앱 파일"만 챙긴다.
 //  - 우리 파일: 인터넷이 되면 항상 새로 받고(개발 중 수정이 바로 보이게), 안 되면 저장해 둔 것
 //  - CDN 라이브러리: 버전이 고정이라 저장해 둔 것을 먼저 쓴다
-//  - 지도 타일: 한 번 본 타일을 저장해 두고 먼저 쓴다 (Cache-First, 최대 MAX_TILES장 · 오래된 것부터 지움)
-//    → 지하철·로밍 음영에서도 미리 본 지역은 바탕 지도가 보인다. 둘 다 실패하면 앱이 SVG 동선 미니맵으로 바꾼다.
+//  - 지도 타일(Esri): 이용 약관상 오프라인 장기 저장을 하지 않는다. 브라우저 기본 HTTP 캐시만 쓰고,
+//    오프라인이면 앱이 일정 좌표로 그린 SVG 동선 미니맵을 보여 준다. (예전 버전이 저장한 타일 캐시는 activate에서 지운다)
 //  - 검색·날씨·환율 API: 저장하지 않는다 (날씨는 앱이 따로 저장)
-const VERSION = 'v9';
+const VERSION = 'v10';
 const APP = `xenotravel-app-${VERSION}`;
 const LIBS = `xenotravel-libs-${VERSION}`;
-const TILES = 'xenotravel-tiles-v1'; // 앱을 고쳐도 지우지 않는다 (타일 주소는 그대로)
-const TILE_HOSTS = ['server.arcgisonline.com'];
-const MAX_TILES = 600;
 
 // test/pwa.test.js가 public/의 앱 파일이 빠짐없이 들어 있는지 검사한다 (일반 스크립트라 export 없음).
 const APP_FILES = [
@@ -73,7 +70,7 @@ if (sw?.registration) {
   sw.addEventListener('activate', (event) => {
     event.waitUntil(
       (async () => {
-        for (const key of await caches.keys()) if (key.startsWith('xenotravel-') && ![APP, LIBS, TILES].includes(key)) await caches.delete(key);
+        for (const key of await caches.keys()) if (key.startsWith('xenotravel-') && ![APP, LIBS].includes(key)) await caches.delete(key);
         await sw.clients.claim();
       })(),
     );
@@ -88,10 +85,8 @@ if (sw?.registration) {
       event.respondWith(networkFirst(req));
     } else if (LIB_HOSTS.includes(url.hostname)) {
       event.respondWith(cacheFirst(req));
-    } else if (TILE_HOSTS.includes(url.hostname)) {
-      event.respondWith(tileFirst(req));
     }
-    // 나머지(검색·날씨·환율 API)는 브라우저 기본 동작
+    // 나머지(지도 타일, 검색·날씨·환율 API)는 브라우저 기본 동작
   });
 }
 
@@ -119,23 +114,3 @@ async function cacheFirst(req) {
   return res;
 }
 
-/** 지도 타일: 저장해 둔 것 먼저, 없으면 받아서 저장 (CORS 응답만 — 불투명 응답은 저장 공간을 크게 차지한다) */
-async function tileFirst(req) {
-  const cache = await caches.open(TILES);
-  const hit = await cache.match(req.url);
-  if (hit) return hit;
-  const res = await fetch(req);
-  if (res.ok && res.type !== 'opaque') {
-    await cache.put(req.url, res.clone());
-    trimTiles(cache);
-  }
-  return res;
-}
-
-let tilePuts = 0;
-/** 상한을 넘으면 먼저 저장한 타일부터 지운다 (25장마다 한 번 검사) */
-async function trimTiles(cache) {
-  if (++tilePuts % 25) return;
-  const keys = await cache.keys();
-  for (const key of keys.slice(0, Math.max(0, keys.length - MAX_TILES))) await cache.delete(key);
-}

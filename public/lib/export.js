@@ -28,8 +28,14 @@ export function exportXlsx(trip) {
   XLSX.writeFile(wb, `${safeFileName(trip.title)}.xlsx`);
 }
 
-export function downloadJson(trip) {
-  download(JSON.stringify(trip, null, 2), 'application/json', `${safeFileName(trip.title)}.xenotravel.json`);
+/** 일정 파일 이름: xenotravel-backup-{여행명}-{날짜}.json (전체 백업) / xenotravel-share-{여행명}-{날짜}.json (공유용 사본) */
+export function jsonFileName(trip, kind = 'backup', now = new Date()) {
+  const d = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  return `xenotravel-${kind === 'share' ? 'share' : 'backup'}-${safeFileName(trip.title)}-${d}.json`;
+}
+
+export function downloadJson(trip, { kind = 'backup' } = {}) {
+  download(JSON.stringify(trip, null, 2), 'application/json', jsonFileName(trip, kind));
 }
 
 function download(content, type, filename) {

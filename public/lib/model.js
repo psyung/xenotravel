@@ -215,6 +215,7 @@ export function localizePresets(trip, lang) {
   for (const list of [...(trip.days ?? []).map((d) => d.items), trip.inbox ?? []]) {
     for (const it of list) if (it.nameI18n) set(it, 'name', it.nameI18n);
   }
+  for (const st of trip.stays ?? []) if (st.nameI18n) set(st, 'name', st.nameI18n);
   return changed;
 }
 
@@ -507,6 +508,8 @@ function clampNights(trip, startIndex, nights) {
 }
 
 export function addStay(trip, place, startIndex = 0, nights = DEFAULT_NIGHTS) {
+  // 샘플 숙소 같은 내장 프리셋만 4개 국어 이름을 가진다 (localizePresets)
+  const i18n = isI18nMap(place.nameI18n) ? { nameI18n: { ...place.nameI18n } } : {};
   trip.stays ??= [];
   const start = Math.max(0, Math.min(Math.round(Number(startIndex) || 0), trip.days.length - 1));
   const base = createItem(place);
@@ -520,6 +523,7 @@ export function addStay(trip, place, startIndex = 0, nights = DEFAULT_NIGHTS) {
     memo: base.memo,
     startIndex: start,
     nights: clampNights(trip, start, nights),
+    ...i18n,
   };
   trip.stays.push(stay);
   return stay;
@@ -1039,14 +1043,25 @@ const fromMinutes = (n) => `${String(Math.floor(n / 60)).padStart(2, '0')}:${Str
  * 시간을 정한 장소끼리 순서대로 비교해, 앞 장소와 같은 시각이거나 더 이른 시각이면 겹침으로 본다.
  * after: 그날 비행기 도착 같은 'HH:MM' 하한 (그보다 이른 장소도 겹침), before: 그날 출국 비행기 출발 'HH:MM' 상한.
  */
-export function timeConflicts(items, { after = '', before = '' } = {}) {
-  const out = new Set();
-  let prev = toMinutes(after);
+export function timeConflicts(items, bounds = {}) {
+  return new Set(timeConflictKinds(items, bounds).keys());
+}
+
+/**
+ * 시간 겹침과 그 원인: Map<장소 id, 'order' | 'flight'>
+ *   order  = 앞 장소와 같은 시각이거나 더 이름 → "이후 일정 30분 밀기"로 풀 수 있다
+ *   flight = 그날 도착편 도착 전이거나 출발편(귀국편) 출발 이후 → 밀면 더 나빠질 수 있어 항공편·시간 확인만 안내
+ */
+export function timeConflictKinds(items, { after = '', before = '' } = {}) {
+  const out = new Map();
+  const arrive = toMinutes(after);
   const end = toMinutes(before);
+  let prev = null;
   for (const it of items ?? []) {
     const m = toMinutes(it.time);
     if (m == null) continue;
-    if ((prev != null && m <= prev) || (end != null && m >= end)) out.add(it.id);
+    if ((arrive != null && m < arrive) || (end != null && m >= end)) out.set(it.id, 'flight');
+    else if (prev != null && m <= prev) out.set(it.id, 'order');
     prev = prev == null ? m : Math.max(prev, m);
   }
   return out;

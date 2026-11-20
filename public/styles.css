@@ -1638,11 +1638,13 @@ body.picking .leaflet-bottom.leaflet-right { opacity: .4; pointer-events: none; 
 /* ───────── 2차: 체크리스트 일괄 삭제 실행 취소 토스트 ───────── */
 #toast.has-action { display: flex; align-items: center; gap: 10px; pointer-events: auto; }
 #toast:not(.show) { pointer-events: none; }
+/* 실행 취소 버튼 (B4): 토스트 색을 뒤집은 고대비 필 — 라이트(어두운 토스트) 흰 필·검은 글자, 다크(밝은 토스트) 검은 필·흰 글자.
+   토스트 글자와 같은 대비(약 15:1 이상)라 두 테마 모두 WCAG AA 4.5:1을 넘는다. */
 .toast-act {
-  flex: none; border: 0; border-radius: 8px; padding: 6px 10px; background: color-mix(in srgb, var(--paper) 16%, transparent);
-  color: var(--accent); font-weight: 700; font-size: 13px; user-select: none; -webkit-user-select: none;
+  flex: none; border: 0; border-radius: 8px; padding: 6px 11px; background: var(--paper); color: var(--ink);
+  font-weight: 700; font-size: 13px; user-select: none; -webkit-user-select: none;
 }
-.dark .toast-act, [data-theme="dark"] .toast-act { color: var(--accent-ink); }
+.toast-act:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ───────── 2차: 체크리스트 탭 축약 라벨 (400px 이하) ───────── */
 .check-tabs .lbl-tiny { display: none; }
@@ -1663,10 +1665,23 @@ body.picking .leaflet-bottom.leaflet-right { opacity: .4; pointer-events: none; 
   .tripsw summary { padding: 0 4px 0 8px; font-size: 13px; }
 }
 
-/* ───────── 2차: 모바일 지도 높이 — 한 손 스크롤이 지도에 갇히지 않게 ───────── */
+/* ───────── 모바일 지도 높이 (B5) ─────────
+ * 340px 제한은 일정 목록과 지도가 한 화면에 함께 있을 때만. 모바일 독립 '지도' 탭에서는 머리 바 아래부터 하단 탭바 위까지 채운다. */
 @media (max-width: 767px) {
-  .mapwrap { height: clamp(240px, 44vh, 340px); min-height: 240px; }
+  .layout:not([data-tab="map"]) .mapwrap { height: clamp(240px, 44vh, 340px); min-height: 240px; }
 }
+@media (max-width: 900px) {
+  body { --pbar: calc(62px + env(safe-area-inset-bottom)); } /* 하단 탭바 높이 */
+  .layout[data-tab="map"] .mapwrap { height: calc(100dvh - var(--head) - var(--pbar) - 12px); min-height: 300px; }
+}
+/* 종류별 범례 접기/펼치기 (B5) */
+.legend { position: relative; align-items: center; }
+.legend-toggle {
+  flex: none; margin-left: auto; min-width: 28px; height: 26px; padding: 0 6px; border: 0; border-radius: 7px;
+  background: var(--soft); color: var(--sub); font-size: 11.5px; font-weight: 700; user-select: none; -webkit-user-select: none;
+}
+.legend-toggle:hover { color: var(--ink); }
+.legend.folded { padding: 4px 6px; }
 
 /* ───────── 2차: 가계부 통화별 합계 · 동행자 정산 ───────── */
 .cur-totals {
@@ -1745,3 +1760,16 @@ details.settle h4 small { color: var(--mute); font-weight: 500; margin-left: 4px
 }
 /* 미니맵에서는 종류 필터가 의미 없으니 칩은 접는다 (그림 자리 확보) */
 .mapwrap:has(.mini-map:not([hidden])) .pin-legend { display: none; }
+
+/* ───────── 3차: 시간 겹침(항공편) · 공유 링크 게이지 · 기준 통화 ───────── */
+.time-warn.flight .tw-badge { color: var(--warn); background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.time-warn small { flex-basis: 100%; color: var(--mute); font-size: 11.5px; }
+.share-gauge { display: grid; grid-template-columns: 1fr; gap: 4px; margin: 8px 0 2px; font-size: 12px; color: var(--sub); font-variant-numeric: tabular-nums; }
+.share-gauge .sg-bar { display: block; height: 6px; border-radius: 3px; background: var(--soft); overflow: hidden; }
+.share-gauge .sg-bar i { display: block; height: 100%; border-radius: 3px; background: var(--ok); transition: width .2s; }
+.share-gauge[data-state="near"] .sg-bar i { background: var(--warn); }
+.share-gauge[data-state="over"] .sg-bar i { background: var(--hot, #D94E34); }
+.share-gauge[data-state="over"] { color: var(--hot, #D94E34); font-weight: 600; }
+.base-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 8px 0; font-size: 12.5px; }
+.base-row label { display: flex; align-items: center; gap: 6px; color: var(--sub); }
+.base-row small { flex-basis: 100%; }
