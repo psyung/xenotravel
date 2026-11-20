@@ -69,13 +69,15 @@ setInterval(() => {
 }, 10 * 60_000).unref();
 
 /**
- * 요청 주소. 역방향 프록시 뒤에서는 TRUST_PROXY=1일 때만 X-Forwarded-For를 쓰되,
- * 클라이언트가 써 넣을 수 있는 앞쪽 값이 아니라 믿는 프록시가 마지막에 붙인 값을 쓴다 (GPT 4차 #8)
+ * 요청 주소. 역방향 프록시 뒤에 둘 때만 TRUST_PROXY=<믿는 프록시 단계 수>(보통 1)를 정한다.
+ * 프록시마다 X-Forwarded-For 끝에 받은 주소를 붙이므로, 뒤에서 N번째 값이 믿는 첫 프록시가 본 사용자 주소다.
+ * 클라이언트가 앞쪽에 써 넣은 값은 쓰지 않는다. 원본 서버는 프록시 밖에서 직접 열리지 않게 둔다 (GPT 4차 #8, 5차 #7)
  */
+const TRUSTED_HOPS = Math.max(0, Number.parseInt(process.env.TRUST_PROXY ?? '0', 10) || 0);
 function clientIp(req) {
-  if (process.env.TRUST_PROXY === '1') {
+  if (TRUSTED_HOPS) {
     const hops = String(req.headers['x-forwarded-for'] ?? '').split(',').map((x) => x.trim()).filter(Boolean);
-    if (hops.length) return hops.at(-1);
+    if (hops.length >= TRUSTED_HOPS) return hops.at(-TRUSTED_HOPS);
   }
   return req.socket.remoteAddress;
 }

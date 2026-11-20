@@ -130,7 +130,9 @@ export function openStore(storage = globalThis.localStorage) {
       }
       // 상대가 내 마지막 저장을 못 보고 같은 조상에서 썼다 → 내 저장이 덮어써졌다. 공통 조상 기준으로 다시 합친다
       const chain = remote.chain ?? [];
-      const lost = lastWrite && remote.rev != null && baseRev === lastWrite.rev && !chain.includes(lastWrite.rev) && (lastWrite.prev == null || chain.includes(lastWrite.prev));
+      // 상대 저장 이력(chain)에 내 마지막 저장이 없으면 상대는 그것을 보지 못하고 썼다 → 덮어써졌다.
+      // 공통 조상이 이력에서 밀려나 판별이 애매해도 같은 쪽(내 변경 보존)으로 판단한다 (GPT 5차 #1)
+      const lost = lastWrite && remote.rev != null && baseRev === lastWrite.rev && !chain.includes(lastWrite.rev);
       const merged = mergeStore(lost ? lastWrite.ancestor : base, store.trips, remote.trips, choices);
       if (merged.conflicts.length) return { ok: false, conflicts: merged.conflicts };
       trips = merged.trips;

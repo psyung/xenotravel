@@ -2585,7 +2585,14 @@ async function runSearch({ explicit = false } = {}) {
   }
 }
 
-searchEl.addEventListener('input', () => (ui.resultsFor = null)); // 입력이 바뀌는 순간 보이는 결과는 옛 검색어의 것 (Enter·클릭이 넣지 않게)
+searchEl.addEventListener('input', () => {
+  ui.resultsFor = null; // 입력이 바뀌는 순간 보이는 결과는 옛 검색어의 것 (Enter·클릭이 넣지 않게)
+  if (ui.candidate?.fromSearch != null) {
+    // 검색 결과의 '위치 보기'로 연 지도 후보도 치운다 — 검색어를 되돌려도 옛 후보를 넣지 않게 (GPT 5차 #6)
+    clearCandidate();
+    $('#mapPlace').hidden = true;
+  }
+});
 searchEl.addEventListener('input', debounce(() => runSearch(), 350));
 searchEl.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
@@ -4250,18 +4257,24 @@ function updateKrwPreview() {
   out.textContent = krw != null ? `≈ ${B.won(krw)}` : t('환율 미정 · 원화는 나중에 채워져요');
 }
 
+let rateRequest = 0;
 async function fetchRate({ quiet = false } = {}) {
   const b = trip.budget;
   const base = B.baseCode(b);
+  const local = b.currency;
   const needBase = base !== 'KRW' && base !== b.currency;
   if (b.currency === 'KRW' && !needBase) return;
   const forTrip = trip;
+  const seq = ++rateRequest; // 가장 최근 요청의 결과만 성공·실패를 알린다 (GPT 4차 #7, 5차 #7)
   try {
     const r = await fetch(RATE_API, { signal: AbortSignal.timeout(8000) });
     const data = await r.json();
-    if (trip !== forTrip) return;
-    if (needBase && B.baseCode(b) !== base) return; // 그사이 기준 통화를 바꿨다: 이 응답은 버리고 알리지도 않는다 (GPT 4차 #7)
-    if (needBase) {
+    if (trip !== forTrip || seq !== rateRequest) return;
+    // 기준 환율과 현지 환율은 따로 판단: 그사이 기준 통화만 바뀌었으면 기준 환율은 버리고 현지 환율은 그대로 반영한다
+    const baseStill = B.baseCode(b) === base;
+    if (b.currency !== local) return; // 현지 통화까지 바뀌었으면 이 응답은 버린다
+    if (needBase && !baseStill && b.currency === 'KRW') return; // 원화 여행: 버릴 기준 환율뿐이라 알리지도 않는다
+    if (needBase && baseStill) {
       const bp = data?.rates?.[base];
       if (bp > 0) {
         // 응답이 오는 사이 기준 통화를 또 바꿨으면(USD → EUR) 늦게 온 USD 환율로 EUR 환율을 덮지 않는다 (GPT 3차 #10)
@@ -4286,7 +4299,7 @@ async function fetchRate({ quiet = false } = {}) {
     if (filled) saved(res, t('환율을 받아서 환율 미정이던 {n}건을 원화로 계산했어요', { n: filled }), 3200);
     else if (!quiet) saved(res, t('환율을 받았어요: {rate}', { rate: B.rateLabel(b) }));
   } catch {
-    if (trip !== forTrip) return;
+    if (trip !== forTrip || seq !== rateRequest) return; // 그사이 새 요청이 있었으면 옛 요청의 실패는 알리지 않는다
     ui.rateError = !quiet || ui.rateError;
     if (!quiet && prefs.page === 'budget') renderBudget();
   }
@@ -4939,7 +4952,12 @@ async function updateShare() {
 function saveShareFile() {
   const current = ui.share;
   if (!current || !trip) return;
-  downloadJson(current.copy ?? sharedCopy(trip, { includePrivate: current.includePrivate }), { kind: 'share' });
+  const copy = current.copy ?? sharedCopy(trip, { includePrivate: current.includePrivate });
+  // 받는 쪽 '백업 파일 불러오기' 상한(10MB)을 넘으면 열리지 않는 파일이다 — 메모를 빼도록 안내 (GPT 5차 #2)
+  if (new TextEncoder().encode(JSON.stringify(copy, null, 2)).length > 10 * 1024 * 1024) {
+    return toast(t('일정 파일이 10MB를 넘어 받는 사람이 열 수 없어요. ‘메모·예약번호 제외’를 켜고 다시 저장해 주세요'), 5000);
+  }
+  downloadJson(copy, { kind: 'share' });
 }
 
 /** 복사. 클립보드가 막혀 있으면 직접 복사 창을 연다 (공유면 일정 파일로도 보낼 수 있게). */
@@ -5325,7 +5343,7 @@ function renderDayOps({ focus } = {}) {
 
 /** 대화상자를 연 뒤 일정(날짜·장소 배치)이 바뀌었는지 보는 표식 — 다른 탭 저장 등 */
 const daySig = () => JSON.stringify([
-  trip.days.map((d) => [d.id, d.date, d.items.map((x) => [x.id, x.time])]),
+  trip.days.map((d) => [d.id, d.date, d.items.map((x) => [x.id, x.time, x.name])]), // 미리보기에 보이는 장소 이름도 (GPT 5차 #3)
   // 항공편·숙소도 미리보기 계산과 화면(편명·공항·숙소 이름)에 쓴다 (GPT 3차 #7, 4차 #4)
   (trip.flights ?? []).map((f) => [f.id, f.kind, f.departAt, f.arriveAt, f.flightNo, f.from, f.to]),
   (trip.stays ?? []).map((s) => [s.id, s.startIndex, s.nights, s.name]),

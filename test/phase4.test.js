@@ -447,7 +447,7 @@ test('R1-1·7·14·16: 저장 실패 시 성공 알림 금지 · 일반 알림�
 test('R1-8·12 / R2-11·18: 옛 검색 결과는 Enter·추가 버튼으로 넣지 않고, 결과는 버튼이 있는 일반 목록 + 상태 안내', () => {
   const app = read('app.js');
   assert.match(app, /const p = ui\.resultsFor === searchEl\.value\.trim\(\) \? ui\.results\[ui\.activeResult\] : null;/);
-  assert.match(app, /searchEl\.addEventListener\('input', \(\) => \(ui\.resultsFor = null\)\);/, '입력이 바뀌는 순간 무효');
+  assert.match(app, /searchEl\.addEventListener\('input', \(\) => \{\n  ui\.resultsFor = null;/, '입력이 바뀌는 순간 무효');
   assert.match(app, /if \(ui\.resultsFor !== searchEl\.value\.trim\(\)\) return void runSearch/, '추가 버튼도 같은 검사');
   assert.equal((app.match(/showResults\([^;]*, q\)/g) ?? []).length, 4, '응답은 요청한 검색어에 묶는다');
   assert.doesNotMatch(app, /role="option"/, 'listbox 안에 버튼을 넣지 않는다');
@@ -595,9 +595,12 @@ test('R3-4·7·9·10: 항공편만 있는 날 PDF · 미리보기 표식에 항�
   const app = read('app.js');
   assert.match(app, /if \(!route\.length\) \{\n      div\.remove\(\);/);
   assert.match(app, /\(trip\.flights \?\? \[\]\)\.map\(\(f\) => \[f\.id, f\.kind, f\.departAt, f\.arriveAt, f\.flightNo, f\.from, f\.to\]\)/, '편명·공항도 (4차 #4)');
+  assert.match(app, /d\.items\.map\(\(x\) => \[x\.id, x\.time, x\.name\]\)/, '장소 이름도 (5차 #3)');
   assert.match(app, /\(trip\.stays \?\? \[\]\)\.map\(\(s\) => \[s\.id, s\.startIndex, s\.nights, s\.name\]\)/);
   assert.match(app, /if \(!li\) return;\n  if \(ui\.resultsFor !== searchEl\.value\.trim\(\)\) return void runSearch/);
-  assert.match(app, /if \(needBase && B\.baseCode\(b\) !== base\) return; \/\/ 그사이 기준 통화를 바꿨다/, '버린 응답은 오류도 알리지 않는다 (4차 #7)');
+  assert.match(app, /if \(trip !== forTrip \|\| seq !== rateRequest\) return;\n/, '최신 요청만 성공을 알린다 (5차 #7)');
+  assert.match(app, /if \(trip !== forTrip \|\| seq !== rateRequest\) return; \/\/ 그사이 새 요청이 있었으면 옛 요청의 실패는 알리지 않는다/, '실패도 같은 검사');
+  assert.match(app, /if \(needBase && baseStill\) \{/, '기준 환율과 현지 환율은 따로');
 });
 
 /* ───────── GPT 교차 검수 4차 반영 ───────── */
@@ -624,6 +627,19 @@ test('R4-1·3·8: 버전 이력 200개 · 보낼 때도 같은 크기 상한 · 
   M.addItem(tr, tr.days[0].id, { name: 'A', lat: 1, lng: 1, memo: '가'.repeat(Math.ceil(MAX_INFLATED / 3) + 10) });
   await assert.rejects(encodeShare(tr, { includePrivate: true }), (e) => e.code === 'too-large');
   const server = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
-  assert.match(server, /if \(hops\.length\) return hops\.at\(-1\);/);
+  assert.match(server, /if \(hops\.length >= TRUSTED_HOPS\) return hops\.at\(-TRUSTED_HOPS\);/, '믿는 프록시 단계 수만큼 뒤에서 (5차 #7)');
   assert.match(server, /if \(rate\.size > RATE_KEYS\) rate\.delete/);
+});
+
+/* ───────── GPT 교차 검수 5차 반영 ───────── */
+
+test('R5-5: 일자 순서 되돌리기는 일차 id로 — 원래 날이 지워졌다 새로 생겼으면 지금 자리에 둔다', () => {
+  const tr = tripWith();
+  const r = D.reorderDays(tr, [1, 0, 2, 3]); // Day1 = CD, Day2 = AB
+  // 다른 탭에서 기간을 1일로 줄였다(장소는 보관함으로) 다시 4일로 늘림 → Day2~4는 새 id
+  M.setTripDates(tr, '2026-12-20', '2026-12-20');
+  M.setTripDates(tr, '2026-12-20', '2026-12-23');
+  assert.deepEqual(names(tr), ['CD', '', '', '']);
+  r.undo(tr);
+  assert.deepEqual(names(tr), ['CD', '', '', ''], 'C·D의 원래 날(옛 Day2)이 없으니 지금 자리에, 새 일차로 옮기지 않는다');
 });

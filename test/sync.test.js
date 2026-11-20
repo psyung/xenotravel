@@ -298,3 +298,31 @@ test('GPT 3차 #1: 덮어쓰기를 되살리는 저장이 한 번 실패해도, 
   assert.equal(a.db.save(a.store).ok, true); // 다시 시도
   assert.deepEqual(JSON.parse(storage.getItem(KEY)).trips[id].expenses.map((e) => e.memo).sort(), ['A 점심', 'B 택시']);
 });
+
+test('GPT 5차 #1: 덮어쓴 탭이 이력 길이(200)보다 많이 저장해 공통 조상이 밀려나도 내 변경을 지킨다', () => {
+  const { storage, id, a, b } = twoTabs();
+  const get = storage.getItem;
+  let staleValue = null;
+  storage.getItem = function (k) {
+    if (staleValue != null && k === KEY) {
+      const v = staleValue;
+      staleValue = null;
+      return v;
+    }
+    return get.call(this, k);
+  };
+  const before = storage.getItem(KEY);
+  B.addExpense(a.trip(), { amount: 1200, cat: 'food', day: 0, memo: 'A 점심' });
+  assert.equal(a.db.save(a.store).ok, true);
+  staleValue = before;
+  b.trip().title = 'B0';
+  assert.equal(b.db.save(b.store).ok, true); // A 저장을 덮어씀
+  for (let i = 1; i <= 210; i++) {
+    b.trip().title = `B${i}`;
+    assert.equal(b.db.save(b.store).ok, true);
+  }
+  assert.equal(a.db.save(a.store).ok, true);
+  const saved = JSON.parse(storage.getItem(KEY)).trips[id];
+  assert.deepEqual(saved.expenses.map((e) => e.memo), ['A 점심']);
+  assert.equal(saved.title, 'B210');
+});

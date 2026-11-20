@@ -171,24 +171,27 @@ export function reorderDays(trip, order) {
   const lists = trip.days.map((d) => d.items);
   const original = lists.map((items) => items.map((x) => x.id)); // 바꾸기 전 날마다의 장소 id
   trip.days.forEach((d, i) => (d.items = lists[order[i]]));
-  const placed = new Map(trip.days.flatMap((d, i) => d.items.map((x) => [x.id, i]))); // 이 작업이 둔 날
+  const dayIds = trip.days.map((d) => d.id);
+  const placed = new Map(trip.days.flatMap((d) => d.items.map((x) => [x.id, d.id]))); // 이 작업이 둔 날 (일차 id)
   const placedLists = trip.days.map((d) => d.items.map((x) => x.id)); // 이 작업 직후 날마다의 순서
-  const origDay = new Map(original.flatMap((ids, i) => ids.map((id) => [id, i]))); // 원래 날
+  const origDay = new Map(original.flatMap((ids, i) => ids.map((id) => [id, dayIds[i]]))); // 원래 날 (일차 id)
   return {
     /**
      * 이 작업이 옮긴 장소만 원래 날·순서로 되돌린다. 그 뒤에 새로 넣은 장소는 지금 날에 그대로 두고,
      * 보관함으로 뺀 장소는 다시 끌어오지 않는다 (GPT 2차 #9).
      */
     undo(tr) {
-      if (tr.days.length !== n) return false;
       const byId = new Map(tr.days.flatMap((d) => d.items.map((x) => [x.id, x])));
-      const dayOf = new Map(tr.days.flatMap((d, i) => d.items.map((x) => [x.id, i])));
-      // 이 작업이 둔 자리(placed)에 아직 있는 장소만 되돌린다. 그 뒤 다른 날로 옮긴 장소는 그 이동을 지킨다 (GPT 3차 #8)
-      const back = new Set(original.flat().filter((id) => dayOf.get(id) === placed.get(id) && placed.get(id) !== origDay.get(id)));
+      const dayOf = new Map(tr.days.flatMap((d) => d.items.map((x) => [x.id, d.id])));
+      const alive = new Set(tr.days.map((d) => d.id));
+      // 이 작업이 둔 날(일차 id)에 아직 있고 원래 날이 지금도 있는 장소만 되돌린다.
+      // 그 뒤 다른 날로 옮겼거나, 원래 날이 지워졌다 새로 생겼으면(id가 다름) 지금 자리에 둔다 (GPT 3차 #8, 5차 #5)
+      const back = new Set(original.flat().filter((id) => dayOf.get(id) === placed.get(id) && placed.get(id) !== origDay.get(id) && alive.has(origDay.get(id))));
       const stay = tr.days.map((d) => d.items.filter((x) => !back.has(x.id)));
       const nowAll = tr.days.flatMap((x) => x.items.map((it) => it.id)); // 바꾸기 전에 지금 순서를 고정해 둔다
       tr.days.forEach((d, i) => {
-        const returning = original[i].filter((id) => back.has(id));
+        const oi = dayIds.indexOf(d.id); // 이 일차의 원래 자리 (일차 id로 찾는다)
+        const returning = oi < 0 ? [] : original[oi].filter((id) => back.has(id));
         if (!returning.length) return void (d.items = stay[i]); // 이 작업으로 다른 날에서 돌아올 장소가 없는 날은 그대로 (GPT 4차 #5)
         // 돌아오는 장소끼리의 순서: 그 뒤 같은 날 안에서 바꿨으면(옮겨 간 날에서의 상대 순서가 바뀜) 바뀐 순서를 지킨다
         const nowOrder = nowAll.filter((id) => returning.includes(id));
