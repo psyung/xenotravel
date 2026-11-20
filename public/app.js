@@ -13,9 +13,9 @@ import { loadWeather, weatherSignature } from './lib/weather.js';
 import { t, k, missing as i18nMissing, LANGS, LANG_KEY, getLang, setLang, loadLang, saveLang, locale, num, dayName, shortDate, dateTime, normalizeLang, tripLength } from './lib/i18n.js';
 import { privacySections } from './lib/privacy.js';
 
-const COLORS = ['#3B6FD6', '#E8590C', '#C2255C', '#0B8A6F', '#7048E8', '#1098AD', '#F08C00', '#5C940D'];
+const COLORS = ['#A3432E', '#9C4A28', '#A03754', '#516B53', '#795169', '#576B65', '#82601F', '#626456'];
 const INBOX_COLOR = '#868e96';
-const TREND_COLOR = '#7048e8';
+const TREND_COLOR = '#BF3E26';
 const dayColor = (i) => COLORS[i % COLORS.length];
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -127,7 +127,7 @@ $('#mapLocate').addEventListener('click', () => {
 let locationPoint;
 map.on('locationfound', ({ latlng }) => {
   if (locationPoint) locationPoint.setLatLng(latlng);
-  else locationPoint = L.circleMarker(latlng, { radius: 7, color: '#fff', weight: 3, fillColor: '#3182f6', fillOpacity: 1, interactive: false }).addTo(map);
+  else locationPoint = L.circleMarker(latlng, { radius: 7, color: 'var(--paper)', weight: 3, fillColor: 'var(--accent)', fillOpacity: 1, interactive: false }).addTo(map);
 });
 map.on('locationerror', () => toast(t('현재 위치를 확인하지 못했어요. 브라우저의 위치 권한을 확인해 주세요')));
 
@@ -182,14 +182,17 @@ function syncTiles() {
   baseTiles.getLayers()[0].once('load', drop);
   setTimeout(drop, 4000);
 }
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => withoutTransitions(syncTiles));
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => withoutTransitions(() => {
+  syncTiles();
+  syncBrowserTheme();
+}));
 const layer = L.layerGroup().addTo(map);
 const markers = new Map();
 
 function pinIcon(label, color, dim) {
   return L.divIcon({
     className: '',
-    html: `<div class="pin${dim ? ' dim' : ''}" style="--c:${color}"><span aria-hidden="true">${esc(label)}</span></div>`,
+    html: `<div class="pin${dim ? ' dim' : ''}${color === 'var(--accent)' ? ' brand-pin' : ''}" style="--c:${color}"><span aria-hidden="true">${esc(label)}</span></div>`,
     iconSize: [28, 28],
     iconAnchor: [14, 14],
     popupAnchor: [0, -28],
@@ -249,6 +252,7 @@ function renderMap({ fit = false } = {}) {
   const plan = currentRoutePlan();
   allLists().forEach((l, dayIndex) => {
     const dim = ui.focusList != null && ui.focusList !== l.id;
+    const color = l.isDay && ui.focusList === l.id ? 'var(--accent)' : l.color;
     // 동선 정리 미리 보기 중인 날은 제안 순서로 선과 번호를 그린다 (실선 = 아직 적용 전 제안).
     const preview = plan?.listId === l.id ? plan.ids.map((id) => l.items.find((it) => it.id === id)) : null;
     // 동선: 출발 숙소 → 장소들 → 귀가 숙소
@@ -258,12 +262,12 @@ function renderMap({ fit = false } = {}) {
     if (!dim) [start, end].forEach((s) => s && bounds.push([s.lat, s.lng]));
     if (l.isDay && pts.length > 1) {
       L.polyline(pts, { color: 'var(--paper)', weight: 7, opacity: dim ? 0.12 : 0.9, interactive: false }).addTo(layer);
-      L.polyline(pts, { color: l.color, weight: preview ? 4 : 3, opacity: dim ? 0.18 : 0.9, dashArray: preview ? null : '7 6', interactive: false }).addTo(layer);
+      L.polyline(pts, { color, weight: preview ? 4 : 3, opacity: dim ? 0.18 : 0.95, dashArray: preview ? null : '7 6', interactive: false }).addTo(layer);
     }
     l.items.forEach((it, i) => {
       const n = preview ? preview.indexOf(it) + 1 : i + 1;
       const m = L.marker([it.lat, it.lng], {
-        icon: pinIcon(l.isDay ? n : '•', pinColorOf(it, l.color), dim),
+        icon: pinIcon(l.isDay ? n : '•', pinColorOf(it, color), dim),
         zIndexOffset: dim ? 0 : 1000,
       }).addTo(layer);
       const detail = [l.label, l.isDay ? t('{n}번째', { n }) : '', it.time].filter(Boolean).join(' · ');
@@ -2352,6 +2356,10 @@ $('.menu .menu-pop').addEventListener('click', (e) => {
   else if (action === 'import') $('#importFile').click();
   else if (action === 'delete') deleteTrip(trip.id);
   else if (action === 'flights') openFlights();
+  else if (action === 'share') {
+    $('.menu summary').focus();
+    $('#shareBtn').click();
+  }
   else if (action === 'theme') $('#themeBtn').click();
 });
 
@@ -3219,10 +3227,14 @@ function withoutTransitions(fn) {
   // 새 색으로 한 번 그린 다음 프레임에 원래 전환 효과를 돌려준다
   requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('theme-switching')));
 }
+function syncBrowserTheme() {
+  $('meta[name="theme-color"]').content = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+}
 function applyTheme() {
   const th = prefs.theme;
   if (th === 'light' || th === 'dark') document.documentElement.dataset.theme = th;
   else delete document.documentElement.dataset.theme;
+  syncBrowserTheme();
   const btn = $('#themeBtn');
   btn.classList.toggle('active', th === 'light' || th === 'dark');
   const label = th === 'dark' ? t('어둡게 (누르면 시스템 따라가기)') : th === 'light' ? t('밝게 (누르면 어둡게)') : t('시스템 따라가기 (누르면 밝게)');
@@ -3243,8 +3255,7 @@ $('#themeBtn').addEventListener('click', () => {
 function applyLanguage() {
   const lang = getLang();
   document.documentElement.lang = LANGS[lang].html;
-  $('#langSel').value = lang;
-  $('#langShort').textContent = LANGS[lang].short;
+  syncLanguageSwitch();
   applyStaticI18n();
   refreshDates();
   mapControlsText();
@@ -3270,11 +3281,16 @@ function applyLanguage() {
     showPage(prefs.page, { scroll: false });
   } else showPage('home', { scroll: false });
 }
-$('#langSel').addEventListener('change', (e) => {
-  setLang(e.target.value);
+function syncLanguageSwitch() {
+  for (const button of $$('#langSwitch [data-lang]')) button.setAttribute('aria-pressed', String(button.dataset.lang === getLang()));
+}
+$('#langSwitch').addEventListener('click', (e) => {
+  const button = e.target.closest('[data-lang]');
+  if (!button || button.dataset.lang === getLang()) return;
+  setLang(button.dataset.lang);
   saveLang(); // 저장이 막혀도 이번 화면에서는 바뀐 언어로 계속 쓴다
   applyLanguage();
-  $('#langSel').focus();
+  button.focus({ preventScroll: true });
 });
 
 function renderBadge() {
@@ -3903,31 +3919,16 @@ function savePrice(form) {
   if (c?.price && B.toKrw(c.price, c.cur, trip.budget) == null) saved(r, t('가계부에서 환율을 정하면 원화 예상에 잡혀요'), 3200);
 }
 
-$('#page-check').addEventListener('change', async (e) => {
+$('#page-check').addEventListener('change', (e) => {
   if (e.target.dataset.c !== 'toggle') return;
   const id = e.target.dataset.id;
   const c = trip.checks.find((x) => x.id === id);
   const linked = c?.done ? C.linkedExpense(trip, id) : null;
-  let keepExpense = false;
-  if (linked) {
-    // 체크를 풀면 연결된 지출이 어떻게 되는지 보여주고 고르게 한다
-    const choice = await ask({
-      title: t('체크를 풀까요?'),
-      body: t('"{text}"은(는) 가계부에 {amount} 결제로 기록돼 있어요. 지출도 지울까요, 아니면 이미 낸 돈이라 남겨 둘까요?', { text: c.text, amount: expenseLabel(linked) }),
-      actions: [
-        { value: 'keep', label: t('지출은 남기기') },
-        { value: 'remove', label: t('지출도 지우기'), danger: true, primary: true },
-      ],
-    });
-    if (!choice) return renderChecks(); // 취소: 체크 그대로
-    keepExpense = choice === 'keep';
-  }
-  const r = C.toggleCheck(trip, id, TODAY, { keepExpense });
+  const r = C.toggleCheck(trip, id, TODAY);
   const res = commit();
   $(`#page-check [data-c="toggle"][data-id="${CSS.escape(id)}"]`)?.focus();
   if (r.expense) saved(res, `${r.expense.krw == null ? t('가계부에 기록했어요. 원화는 환율을 받으면 계산해요') : t('가계부에 {amount} 기록했어요', { amount: B.won(r.expense.krw) })} · ${t('금액이 달랐다면 ‘결제’를 눌러 고치세요')}`, 3500);
-  else if (r.removed) saved(res, t('체크를 풀어서 가계부 기록도 지웠어요'));
-  else if (keepExpense) saved(res, t('체크를 풀었어요. 가계부 지출은 그대로 남겼어요'));
+  else if (linked) saved(res, t('체크를 풀었어요. 가계부 지출은 그대로 남겼어요'));
 });
 async function changeCheckGroup(group, action) {
   const id = trip.id;
@@ -3946,19 +3947,17 @@ async function changeCheckGroup(group, action) {
   if (action === 'toggle-group') {
     const next = done.length !== entries.length;
     const expenses = linked(done);
-    let choice;
     if (!next && expenses.length) {
-      choice = await ask({
+      const choice = await ask({
         title: t('전체 해제'),
         body: t('연결된 지출 {n}건: {amounts}', { n: expenses.length, amounts: expenses.map(expenseLabel).join(', ') }),
         actions: [
           { value: 'keep', label: t('체크만 해제'), primary: true },
-          { value: 'remove', label: t('지출도 지우기'), danger: true },
         ],
       });
       if (!choice || !valid()) return;
     }
-    C.setGroupDone(trip, group, next, TODAY, { keepExpense: choice !== 'remove' });
+    C.setGroupDone(trip, group, next, TODAY);
     saved(commit(), next ? t('{n}개를 체크했어요', { n: entries.length - done.length }) : t('{n}개를 해제했어요', { n: done.length }));
     restoreFocus();
     return;
@@ -4557,8 +4556,7 @@ $('#inAppClose').addEventListener('click', () => {
   $('.menu summary').focus();
 });
 ui.storeProblem = store.problem;
-$('#langSel').value = getLang();
-$('#langShort').textContent = LANGS[getLang()].short;
+syncLanguageSwitch();
 document.documentElement.lang = LANGS[getLang()].html;
 applyView();
 applyTheme();

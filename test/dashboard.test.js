@@ -15,7 +15,7 @@ test('일괄 해제 후 재체크와 완료 항목 삭제가 실제 결제액을
   C.setGroupDone(t, 'shop', true, '2026-12-01');
   const expense = C.linkedExpense(t, item.id);
   B.updateExpenseAmount(t, expense.id, 1900);
-  C.setGroupDone(t, 'shop', false, '2026-12-01', { keepExpense: true });
+  C.setGroupDone(t, 'shop', false, '2026-12-01');
   assert.equal(item.done, false);
   C.setGroupDone(t, 'shop', true, '2026-12-01');
   C.setGroupDone(t, 'shop', true, '2026-12-01');
@@ -206,9 +206,10 @@ test('체크리스트 가격 → 가계부 예상, 체크하면 기록, 해제�
   // 여행 중이면 그날로
   assert.equal(C.toggleCheck(t, s2.id, '2026-12-02').expense.day, 1);
   assert.equal(B.summarize(t).spent, 9000 + 5400);
-  // 해제 → 기록 삭제
-  assert.equal(C.toggleCheck(t, a.id).removed, 1);
-  assert.equal(B.summarize(t).spent, 5400);
+  // 해제 후 재체크해도 실제 결제 기록과 합계가 유지된다.
+  assert.equal(C.toggleCheck(t, a.id).check.done, false);
+  assert.equal(C.toggleCheck(t, a.id).expense, null);
+  assert.equal(B.summarize(t).spent, 9000 + 5400);
   // 가격 없는 항목은 체크만
   const plain = C.addCheck(t, 'pack', '여권');
   assert.equal(C.toggleCheck(t, plain.id).expense, null);
