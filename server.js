@@ -10,6 +10,7 @@ import { randomInt } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodeShare, shareSummary, SHORT_ID, CODE_RE } from './public/lib/share.js';
+import { buildCommit, withBuildMeta } from './scripts/build-version.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, 'public');
@@ -24,6 +25,10 @@ const TYPES = {
   '.png': 'image/png',
   '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
+
+// 배포 식별자 (빌드 커밋 7자리): index.html 메타와 /version.json에 넣는다 (Vercel은 scripts/build-version.mjs가 파일로 만든다)
+const COMMIT = buildCommit();
+const BUILT_AT = new Date().toISOString();
 
 const MAX_BODY = 200 * 1024; // 공유 코드 최대 크기 (장소 수천 곳도 들어간다)
 const RATE_MAX = 30; // IP당 시간당 공유 링크 생성 수
@@ -116,13 +121,23 @@ async function sharePage(req, res, id) {
     `<meta property="og:image" content="${esc(`${proto}://${host}/og.png`)}">`,
     `<meta name="twitter:card" content="summary">`,
   ].join('\n  ');
-  html = html
+  html = withBuildMeta(html, COMMIT)
     .replace(/<title>.*?<\/title>/, `<title>${esc(title)} · XenoTravel</title>`)
     .replace(/<meta name="description"[^>]*>/, `<meta name="description" content="${esc(desc)}">`)
     .replace(/^[ \t]*<meta property="og:[^"]+"[^>]*>\r?\n/gm, '')
     .replace('<meta charset="utf-8">', `<meta charset="utf-8">\n  ${meta}`);
   res.writeHead(share ? 200 : 404, { 'content-type': TYPES['.html'], 'cache-control': 'no-cache' });
   res.end(html);
+}
+
+async function notFound(res) {
+  // 없는 주소(잘못된 공유 링크 포함): 네 언어 안내가 든 404 페이지 (Vercel도 같은 public/404.html을 쓴다)
+  try {
+    const body = await readFile(path.join(root, '404.html'));
+    res.writeHead(404, { 'content-type': TYPES['.html'], 'cache-control': 'no-cache' }).end(body);
+  } catch {
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('Not found');
+  }
 }
 
 async function staticFile(res, pathname) {
@@ -132,15 +147,23 @@ async function staticFile(res, pathname) {
     res.writeHead(403).end('Forbidden');
     return;
   }
+  if (pathname === '/version.json') {
+    try {
+      await readFile(file); // 빌드 산출물이 있으면 그대로
+    } catch {
+      return json(res, 200, { commit: COMMIT, builtAt: BUILT_AT });
+    }
+  }
   try {
-    const body = await readFile(file);
+    let body = await readFile(file);
+    if (pathname === '/index.html') body = withBuildMeta(body.toString('utf8'), COMMIT);
     res.writeHead(200, {
       'content-type': TYPES[path.extname(file)] ?? 'application/octet-stream',
       'cache-control': 'no-cache',
     });
     res.end(body);
   } catch {
-    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('Not found');
+    await notFound(res);
   }
 }
 
@@ -162,7 +185,7 @@ http
         return share ? json(res, 200, { code: share.code }) : json(res, 404, { error: '공유 링크를 찾을 수 없어요' });
       }
       m = /^\/s\/([^/]+)\/?$/.exec(pathname);
-      if (m) return await sharePage(req, res, m[1]);
+      if (m) return SHORT_ID.test(m[1]) ? await sharePage(req, res, m[1]) : await notFound(res); // 형식부터 틀린 공유 주소는 바로 404 페이지
       await staticFile(res, pathname);
     } catch (err) {
       console.error(err);

@@ -58,11 +58,25 @@ export function splitOf(trip, e) {
 }
 
 /**
+ * 정수 금액을 n명에게 나눈다: 몫을 똑같이 주고 남는 단위(나머지)는 앞사람부터 1씩 — 합계가 항상 원래 금액과 같다.
+ * 예: 100원 3명 → [34, 33, 33], $10.00(1000센트) 3명 → [334, 333, 333]
+ */
+export function splitUnits(amount, n) {
+  if (!(n > 0)) return [];
+  const a = Math.round(amount);
+  const q = Math.floor(a / n);
+  let r = a - q * n;
+  return Array.from({ length: n }, () => q + (r-- > 0 ? 1 : 0));
+}
+
+/**
  * 정산 결과. 동행이 2명 미만이면 null.
  * → { people: [{ id, name, paid, share, net }], transfers: [{ from, to, amount }], total, counted, noPayer, noRate }
  *   net > 0: 받을 돈, net < 0: 보낼 돈. transfers는 큰 금액끼리 먼저 맞춰 송금 횟수를 줄인다.
+ * unitsOf(e): 지출을 정산 통화의 최소 단위 정수로 (원화는 1원, 달러는 1센트). 없으면 저장된 원화(krw).
+ *   모든 계산을 정수 단위로 하고, 1/N 나머지는 결제자에게 먼저 붙여 (인당 부담 합 = 총액)이 반올림 오차 없이 맞는다.
  */
-export function settlement(trip) {
+export function settlement(trip, { unitsOf = (e) => (e.krw == null ? null : Math.round(Number(e.krw) || 0)) } = {}) {
   const list = members(trip);
   if (list.length < 2) return null;
   const byId = new Map(list.map((m) => [m.id, { id: m.id, name: m.name, paid: 0, share: 0, net: 0 }]));
@@ -75,23 +89,22 @@ export function settlement(trip) {
       noPayer++;
       continue;
     }
-    if (e.krw == null) {
+    const amount = unitsOf(e);
+    if (amount == null) {
       noRate++;
       continue;
     }
-    const amount = Number(e.krw) || 0;
+    // 결제자가 분담에 들어 있으면 나머지 단위를 결제자에게 먼저 (송금액이 늘지 않게)
     const split = splitOf(trip, e);
+    const order = split.includes(e.payer) ? [e.payer, ...split.filter((x) => x !== e.payer)] : split;
+    const parts = splitUnits(amount, order.length);
     byId.get(e.payer).paid += amount;
-    for (const id of split) byId.get(id).share += amount / split.length;
+    order.forEach((id, i) => (byId.get(id).share += parts[i]));
     total += amount;
     counted++;
   }
-  const people = [...byId.values()].map((p) => {
-    const paid = Math.round(p.paid);
-    const share = Math.round(p.share);
-    return { ...p, paid, share, net: paid - share };
-  });
-  return { people, transfers: minTransfers(people), total: Math.round(total), counted, noPayer, noRate };
+  const people = [...byId.values()].map((p) => ({ ...p, net: p.paid - p.share }));
+  return { people, transfers: minTransfers(people), total, counted, noPayer, noRate };
 }
 
 /** 받을 사람·보낼 사람을 큰 금액끼리 맞춘다 (1원 미만 오차는 버린다) */

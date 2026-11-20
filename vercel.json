@@ -1,6 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "buildCommand": "",
-  "outputDirectory": "public"
+  "buildCommand": "node scripts/build-version.mjs",
+  "outputDirectory": "public",
+  "headers": [
+    { "source": "/version.json", "headers": [{ "key": "cache-control", "value": "no-cache" }] },
+    { "source": "/404.html", "headers": [{ "key": "cache-control", "value": "no-cache" }] }
+  ]
 }

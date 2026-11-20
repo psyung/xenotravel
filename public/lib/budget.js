@@ -1,7 +1,9 @@
 // 가계부: 여행 중 쓴 돈 기록. 순수 함수만 둔다.
 // trip.budget = { total, currency, krwPerUnit, rateSource: 'auto'|'manual', rateAt }
 //   total: 1인 예산(원), currency: 현지 통화 코드, krwPerUnit: 현지 통화 1단위가 몇 원인지
-// trip.expenses = [{ id, amount, cur: 'local'|'KRW', krw, cat, pay, day, memo, at }]
+// trip.expenses = [{ id, amount, cur: 'local'|'KRW', krw, cat, pay, day, memo, at, ccy, rate, base?, baseRate? }]
+//   ccy: 적은 통화 코드 (현지 통화를 나중에 바꿔도 이 기록은 원래 통화로 남는다), rate: 적용한 환율(1단위가 몇 원, 원화는 1)
+//   base/baseRate: 기록할 때의 기준 통화와 그 환율(1단위가 몇 원) — 기준 통화 환율을 나중에 바꿔도 이 기록의 환산액은 그대로
 //   day: -1 = 출발 전, 0.. = Day n,  krw: 기록한 순간의 환율로 바꾼 원화 (나중에 환율이 바뀌어도 그대로)
 //   krw: null = 환율을 모를 때(오프라인 등) 현지 돈으로만 적은 것. 환율이 정해지면 fillPendingKrw가 채운다.
 //   date: 여행 기간을 줄여 그 날이 사라졌을 때 남겨 두는 원래 날짜 → '일정 외'로 집계한다
@@ -94,7 +96,30 @@ export function ensureBudget(trip) {
   }
   trip.budget.krwPerUnit = Number(trip.budget.krwPerUnit) || 0;
   trip.expenses ??= [];
+  normalizeExpenses(trip);
   return trip.budget;
+}
+
+/**
+ * 예전 버전 기록·백업 파일 하위 호환: 빠진 칸을 기본값으로 채운다 (여러 번 불러도 같다).
+ * - 결제수단이 없거나 모르는 값이면 카드, 분류는 기타, 날짜는 출발 전
+ * - 적은 통화(ccy)가 없으면 지금 현지 통화, 적용 환율(rate)은 저장된 원화 ÷ 금액 (원화가 없으면 미정 null)
+ */
+export function normalizeExpenses(trip) {
+  const b = trip.budget ?? {};
+  for (const e of trip.expenses ?? []) {
+    if (!e || typeof e !== 'object') continue;
+    if (!PAYMENTS[e.pay]) e.pay = 'card';
+    if (!EXPENSE_CATS[e.cat]) e.cat = 'etc';
+    if (e.cur !== 'KRW') e.cur = 'local';
+    const d = e.day === '' || e.day == null ? NaN : Number(e.day);
+    e.day = Number.isInteger(d) ? d : -1;
+    e.amount = Number(e.amount) || 0;
+    if (e.krw != null) e.krw = Number.isFinite(Number(e.krw)) ? Math.round(Number(e.krw)) : null;
+    if (typeof e.memo !== 'string') e.memo = String(e.memo ?? '');
+    if (!CURRENCIES[e.ccy]) e.ccy = e.cur === 'KRW' ? 'KRW' : CURRENCIES[b.currency] ? b.currency : 'USD';
+    if (e.rate === undefined) e.rate = e.ccy === 'KRW' ? 1 : e.krw != null && e.amount > 0 ? e.krw / e.amount : null;
+  }
 }
 
 /** 첫 기록 전에 통화를 확인해야 하는지 (여행지로 통화를 알 수 없었고, 아직 기록이 없다) */
@@ -157,8 +182,24 @@ export function addExpense(trip, { amount, cur = 'local', cat = 'etc', pay = 'ca
     memo: String(memo ?? '').trim(),
     at: new Date().toISOString(),
   };
+  snapshotRate(e, budget);
   trip.expenses.push(e);
   return e;
+}
+
+/** 기록 시점의 환율을 그 지출에 남긴다 (적은 통화 · 적용 환율 · 기준 통화 환율) */
+function snapshotRate(e, budget) {
+  e.ccy = e.cur === 'KRW' || budget.currency === 'KRW' ? 'KRW' : budget.currency;
+  e.rate = e.ccy === 'KRW' ? 1 : budget.krwPerUnit > 0 ? budget.krwPerUnit : null;
+  const code = baseCode(budget);
+  const r = krwPerBase(budget);
+  if (code !== 'KRW' && r) {
+    e.base = code;
+    e.baseRate = r;
+  } else {
+    delete e.base;
+    delete e.baseRate;
+  }
 }
 
 /** 환율을 몰라 원화가 비어 있는 기록을 지금 환율로 채운다. 채운 개수를 돌려준다. */
@@ -170,6 +211,7 @@ export function fillPendingKrw(trip) {
     const krw = toKrw(e.amount, e.cur, budget);
     if (krw != null) {
       e.krw = krw;
+      snapshotRate(e, budget);
       n++;
     }
   }
@@ -259,8 +301,8 @@ export const won = (n) => `₩${Math.round(Number(n) || 0).toLocaleString(locale
 export function money(amount, code) {
   const c = CURRENCIES[code] ?? CURRENCIES.USD;
   const n = Number(amount) || 0;
-  const digits = code === 'KRW' || code === 'JPY' || code === 'VND' ? 0 : 2;
-  return `${c.symbol}${n.toLocaleString(locale(), { maximumFractionDigits: digits })}`;
+  const digits = fractionDigits(code);
+  return `${c.symbol}${n.toLocaleString(locale(), { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
 }
 
 /* ───────── 기준 통화 (C1) ─────────
@@ -271,6 +313,11 @@ export function money(amount, code) {
 export const BASE_CHOICES = ['KRW', 'USD', 'EUR', 'JPY', 'CNY', 'TWD'];
 export const baseCode = (budget) => (CURRENCIES[budget?.base] ? budget.base : 'KRW');
 const INT_CODES = new Set(['KRW', 'JPY', 'VND']);
+/** 통화별 소수 자리: KRW·JPY·VND는 정수, 그 밖(USD·EUR 등)은 소수점 둘째 자리 */
+export const fractionDigits = (code) => (INT_CODES.has(code) ? 0 : 2);
+/** 금액을 통화의 최소 단위 정수로 (USD 12.345 → 1235센트, JPY 1500.4 → 1500) */
+export const toUnits = (value, code) => Math.round((Number(value) || 0) * 10 ** fractionDigits(code));
+export const fromUnits = (units, code) => units / 10 ** fractionDigits(code);
 export function krwPerBase(budget) {
   const code = baseCode(budget);
   if (code === 'KRW') return 1;
@@ -287,17 +334,63 @@ export function fromBase(value, budget) {
   const r = krwPerBase(budget) ?? 1;
   return Math.round((Number(value) || 0) * r);
 }
+/** 지금 실제로 보여 주는 기준 통화 (기준 통화 환율을 모르면 원화) */
+export const shownBaseCode = (budget) => (krwPerBase(budget) ? baseCode(budget) : 'KRW');
+
+/** 기준 통화 숫자 표시: KRW·JPY는 정수, 그 밖은 소수점 2자리. 같은 기호(¥) 통화는 코드를 붙인다 */
+export function formatMoney(value, code) {
+  const c = CURRENCIES[code] ?? CURRENCIES.KRW;
+  const digits = fractionDigits(code);
+  const v = fromUnits(toUnits(value, code), code); // 표시 자리에서 한 번만 반올림
+  const sign = v < 0 ? '-' : '';
+  const text = `${sign}${c.symbol}${Math.abs(v).toLocaleString(locale(), { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+  if (code === 'KRW') return text;
+  const shared = Object.entries(CURRENCIES).some(([k, x]) => k !== code && x.symbol === c.symbol);
+  return shared ? `${text} ${code}` : text;
+}
+/** 최소 단위 정수 → 표시 (정산처럼 단위로 계산한 값) */
+export const formatUnits = (units, code) => formatMoney(fromUnits(units, code), code);
+
 /** 원화 금액을 기준 통화로 표시: KRW·JPY는 정수, 그 밖은 소수점 2자리. 같은 기호(¥) 통화는 코드를 붙인다 */
 export function baseMoney(krw, budget) {
   const code = baseCode(budget);
   const v = toBase(krw, budget);
   if (code === 'KRW' || v == null) return won(krw);
-  const c = CURRENCIES[code];
-  const opts = INT_CODES.has(code) ? { maximumFractionDigits: 0 } : { minimumFractionDigits: 2, maximumFractionDigits: 2 };
-  const sign = v < 0 ? '-' : '';
-  const text = `${sign}${c.symbol}${Math.abs(INT_CODES.has(code) ? Math.round(v) : v).toLocaleString(locale(), opts)}`;
-  const shared = Object.entries(CURRENCIES).some(([k, x]) => k !== code && x.symbol === c.symbol);
-  return shared ? `${text} ${code}` : text;
+  return formatMoney(v, code);
+}
+
+/**
+ * 지출 하나를 지금 보여 주는 기준 통화의 최소 단위 정수로 (환율 미정이면 null).
+ * 기록할 때 남긴 환율을 우선한다 — 기준 통화 환율을 나중에 바꿔도 과거 지출의 환산액은 그대로.
+ *  1) 적은 통화가 기준 통화면 적은 금액 그대로  2) 같은 기준 통화로 기록했으면 그때 환율  3) 그 밖은 지금 환율
+ */
+export function expenseBaseUnits(e, budget) {
+  const code = shownBaseCode(budget);
+  if (e.krw == null) return null;
+  if (code === 'KRW') return Math.round(Number(e.krw) || 0);
+  const ccy = e.ccy ?? (e.cur === 'KRW' ? 'KRW' : budget.currency);
+  if (ccy === code) return toUnits(e.amount, code);
+  if (e.base === code && e.baseRate > 0) return toUnits(e.krw / e.baseRate, code);
+  return toUnits(toBase(e.krw, budget), code);
+}
+
+/** 쓴 돈 합계(기준 통화 최소 단위) — 기록마다 반올림한 값을 더해 목록 합과 총합이 항상 같다 */
+export function spentUnits(trip, pick = () => true) {
+  const b = ensureBudget(trip);
+  return trip.expenses.filter(pick).reduce((s, e) => s + (expenseBaseUnits(e, b) ?? 0), 0);
+}
+
+/** 결제수단별 합계(기준 통화 최소 단위)와 건수 → { [pay]: { units, count } } */
+export function byPayment(trip) {
+  const b = ensureBudget(trip);
+  const out = {};
+  for (const e of trip.expenses) {
+    const k = PAYMENTS[e.pay] ? e.pay : 'card';
+    out[k] ??= { units: 0, count: 0 };
+    out[k].units += expenseBaseUnits(e, b) ?? 0;
+    out[k].count++;
+  }
+  return out;
 }
 /** 기준 통화 바꾸기. 바뀌었으면 true */
 export function setBase(trip, code) {
@@ -477,9 +570,18 @@ export function updateExpense(trip, id, patch) {
   const cur = patch.cur === 'KRW' ? 'KRW' : patch.cur === 'local' ? 'local' : e.cur;
   if (amount !== e.amount || cur !== e.cur) {
     const p = expenseKrwPreview(trip, e, { amount, cur });
+    const b = ensureBudget(trip);
     e.amount = amount;
     e.cur = cur;
     e.krw = p.krw;
+    // 적용 환율은 이 기록에 남긴 값 그대로 (통화를 바꿨을 때만 새로)
+    if (cur === 'KRW' || b.currency === 'KRW') {
+      e.ccy = 'KRW';
+      e.rate = 1;
+    } else {
+      if (!e.ccy || e.ccy === 'KRW') e.ccy = b.currency;
+      e.rate = p.rate ?? e.rate ?? null;
+    }
   }
   if (patch.memo != null) e.memo = String(patch.memo).trim();
   if (EXPENSE_CATS[patch.cat]) e.cat = patch.cat;

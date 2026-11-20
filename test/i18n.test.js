@@ -108,7 +108,7 @@ test('F04: 날짜·숫자·통화는 언어에 맞게, 금액과 통화 코드�
   I.setLang('en');
   assert.equal(M.formatDate(d), 'Tue, Dec 1');
   assert.equal(M.dayTitle({ date: d }, 0), 'Day 1 · Tue, Dec 1');
-  assert.equal(B.moneyCode(100, 'CNY'), '¥100 CNY');
+  assert.equal(B.moneyCode(100, 'CNY'), '¥100.00 CNY'); // 정수 통화(KRW·JPY·VND) 밖은 소수점 둘째 자리까지 항상 표기
   assert.equal(B.won(1234567), '₩1,234,567');
   I.setLang('zh');
   assert.match(M.formatDate(d), /12月1日/);

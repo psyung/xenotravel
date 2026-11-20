@@ -13,6 +13,9 @@ import { enhanceSuggestions } from './lib/suggestions.js';
 import { loadWeather, weatherSignature } from './lib/weather.js';
 import { t, k, missing as i18nMissing, LANGS, LANG_KEY, getLang, setLang, loadLang, saveLang, locale, num, dayName, shortDate, dateTime, normalizeLang, tripLength, allVersions } from './lib/i18n.js';
 import { privacySections } from './lib/privacy.js';
+import { createUndoStack } from './lib/undo.js';
+import * as D from './lib/dayops.js';
+import { summaryModel, drawSummary, summaryFileName } from './lib/summary.js';
 
 const COLORS = ['#A3432E', '#9C4A28', '#A03754', '#516B53', '#795169', '#576B65', '#82601F', '#626456'];
 const INBOX_COLOR = '#868e96';
@@ -166,6 +169,8 @@ function watchTiles(group) {
     });
     layer.on('tileload', () => {
       fails = 0;
+      // 오프라인 중 HTTP 캐시에서 몇 장 나온 것만으로 미니맵을 거두지 않는다 (온라인 복귀 때 함께 복원)
+      if (!navigator.onLine) return;
       $('#tileError').hidden = true;
       setTilesDown(false);
     });
@@ -180,10 +185,20 @@ $('#tileRetry').addEventListener('click', () => {
 addEventListener('offline', () => setTilesDown(true));
 addEventListener('online', () => {
   if (!ui.tilesDown) return;
+  restoreTiles();
+});
+/**
+ * 온라인 복귀: 미니맵을 거두고 원래 지도 타일을 다시 받는다.
+ * 확대 단계·중심·선택한 일차(ui.focusList)는 그대로 둔다 — 다시 맞추기(fit)를 하지 않는다.
+ */
+function restoreTiles() {
+  const view = { center: map.getCenter(), zoom: map.getZoom() };
   setTilesDown(false);
   $('#tileError').hidden = true;
+  map.invalidateSize({ pan: false });
+  map.setView(view.center, view.zoom, { animate: false });
   baseTiles.eachLayer((l) => l.redraw());
-});
+}
 if (!navigator.onLine) queueMicrotask(() => setTilesDown(true));
 
 /* ───────── 오프라인 SVG 동선 미니맵 ─────────
@@ -367,7 +382,7 @@ function renderPinLegend(empty = '') {
         ? `<div class="legend${legendOpen() ? '' : ' folded'}" role="group" aria-label="${esc(t('종류별'))}">${[...Object.entries(M.CATEGORIES), ['stay', { label: '숙소', color: M.STAY_COLOR }]]
             .filter(([k]) => legendOpen() || ui.catFilter === k)
             .map(([k, c]) => `<button type="button" class="cat-chip${ui.catFilter === k ? ' on' : ''}" data-cat-filter="${k}" aria-pressed="${ui.catFilter === k}" style="--c:${c.color}"><i></i>${esc(t(c.label))}</button>`)
-            .join('')}<button type="button" class="legend-toggle" data-legend-toggle aria-expanded="${legendOpen()}" title="${esc(legendOpen() ? t('범례 접기') : t('범례 펼치기'))}" aria-label="${esc(legendOpen() ? t('범례 접기') : t('범례 펼치기'))}">${legendOpen() ? '▴' : `${esc(t('범례'))} ▾`}</button></div>${empty ? `<p class="cat-empty" role="status">${esc(empty)}</p>` : ''}`
+            .join('')}<button type="button" class="legend-toggle" data-legend-toggle aria-expanded="${legendOpen()}" title="${esc(legendOpen() ? t('범례 접기') : t('범례 펼치기'))}" aria-label="${esc(legendOpen() ? t('범례 접기') : t('범례 펼치기'))}">${legendOpen() ? '▴' : `${esc(t('범례'))} ▾`}</button></div>${empty ? `<p class="cat-empty" role="status">${esc(empty)}${catElsewhere() ? ` <button type="button" class="linkbtn" data-cat-all>${esc(t('전체 일차에서 보기 ({n}곳)', { n: catElsewhere() }))}</button>` : ''}</p>` : ''}`
         : ''
     }`;
 }
@@ -386,6 +401,12 @@ function catFilterCount() {
   }
   const lists = dayIdx >= 0 ? [trip.days[dayIdx].items] : [...trip.days.map((d) => d.items), trip.inbox];
   return lists.flat().filter((it) => (M.CATEGORIES[it.category] ? it.category : 'etc') === cat).length;
+}
+/** 고른 일차에는 없지만 다른 일차(보관함 포함)에는 있는 그 종류 수 — 0건 안내에서 '전체 일차에서 보기'로 바로 넘어간다 */
+function catElsewhere() {
+  if (!byCategory() || !ui.catFilter || !trip.days.some((d) => d.id === ui.focusList)) return 0;
+  if (ui.catFilter === 'stay') return trip.stays.length;
+  return [...trip.days.flatMap((d) => d.items), ...trip.inbox].filter((it) => (M.CATEGORIES[it.category] ? it.category : 'etc') === ui.catFilter).length;
 }
 function catEmptyText() {
   if (!byCategory() || !ui.catFilter || catFilterCount()) return '';
@@ -867,7 +888,7 @@ $('#pickHere').addEventListener('click', () => {
 function revealMap() {
   const wrap = $('.mapwrap');
   const r = wrap.getBoundingClientRect();
-  const head = $('.topbar').offsetHeight;
+  const head = $('.topbar').offsetHeight + ($('#offlineBar').hidden ? 0 : $('#offlineBar').offsetHeight); // 오프라인 안내 띠도 머리 바처럼 위에 붙어 있다
   const bar = pickViewport.matches && !ui.picking ? $('.pagebar').offsetHeight : 0;
   const room = innerHeight - head - bar;
   // 지도가 화면보다 크면 위쪽을 머리 바로 아래에, 아니면 아래쪽이 보이도록
@@ -1359,6 +1380,10 @@ function detailHtml(x, { stay = false } = {}) {
  */
 /** 원화(krw)로 저장된 금액을 이 여행의 기준 통화로 보여 준다 (C1) */
 const bm = (krw) => B.baseMoney(krw, trip?.budget);
+/** 기준 통화 최소 단위 정수(정산·합계) 표시 */
+const bu = (units) => B.formatUnits(units, B.shownBaseCode(trip?.budget));
+/** 정산: 지출마다 기록 시점 환율로 기준 통화 단위를 구해 정수로 나눈다 (1/N 반올림 오차 보정) */
+const settleNow = () => S.settlement(trip, { unitsOf: (e) => B.expenseBaseUnits(e, trip.budget) });
 const tripCurrency = () => trip.budget?.currency ?? B.guessCurrency(trip.destination, trip.country);
 function costTagHtml(it) {
   const paid = trip.expenses?.length ? B.placeExpense(trip, it.id) : null;
@@ -1408,7 +1433,7 @@ function itemHtml(it, i, isDay, leg = null, listItems = null, overlap = '') {
         <span class="item-name">${nameHtml(it)}</span>
         <span class="item-sub">${sub}</span>
       </button>
-      <button class="icon" data-action="duplicate" title="${esc(t('복제'))}" aria-label="${esc(t('{name} 복제', { name: it.name }))}">⧉</button>
+      ${isDay || trip.days.length ? `<button class="icon" data-action="place-ops" title="${esc(t('다른 일차로 이동·복제'))}" aria-label="${esc(t('{name} 다른 일차로 이동·복제', { name: it.name }))}" aria-haspopup="dialog">⇄</button>` : ''}
       <button class="icon" data-action="locate" title="${esc(t('지도에서 보기'))}" aria-label="${esc(t('{name} 지도에서 보기', { name: it.name }))}">◎</button>
       ${open ? `<button class="icon collapse" data-action="toggle" title="${esc(t('접기'))}" aria-label="${esc(t('접기'))}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button>` : ''}
     </div>
@@ -1439,7 +1464,7 @@ function itemHtml(it, i, isDay, leg = null, listItems = null, overlap = '') {
       ${directionsHtml(it)}
       <div class="editor-actions">
         <a href="${M.googleMapsUrl(it)}" target="_blank" rel="noopener">${esc(t('구글맵에서 열기 ↗'))}</a>
-        <span><button data-action="duplicate">${esc(t('복제'))}</button> <button data-action="delete" class="danger">${esc(t('삭제'))}</button></span>
+        <span class="ea-buttons"><button data-action="place-move" aria-haspopup="dialog">${esc(t('다른 일차로 이동'))}</button> <button data-action="place-copy" aria-haspopup="dialog">${esc(t('다른 일차로 복제'))}</button> <button data-action="duplicate">${esc(t('같은 날 복제'))}</button> <button data-action="delete" class="danger">${esc(t('삭제'))}</button></span>
       </div>
     </div>`
         : ''
@@ -1726,6 +1751,8 @@ function dayToolsHtml(l) {
   return `${route}${st.end ? '' : `<button data-action="stay-here" data-day="${l.dayIndex}" title="${esc(t('이 날부터 묵을 숙소 추가'))}">${esc(t('+ 숙소'))}</button>`}${
     movable > 1 ? `<button data-action="route-opt" data-list="${l.id}" title="${esc(t('숙소 기준으로 덜 돌아가는 순서를 찾아요. 시간을 정한 장소는 그대로 둬요'))}">${esc(t('동선 정리'))}</button>` : ''
   }${l.items.length > 1 ? `<button data-action="sort-time" data-list="${l.id}">${esc(t('시간순'))}</button>` : ''}${
+    trip.days.length > 1 ? `<button data-action="day-order" aria-haspopup="dialog" title="${esc(t('여러 날의 장소 묶음 순서를 한 번에 바꿔요 (날짜·숙소·항공편은 그대로)'))}">${esc(t('일자 순서'))}</button>` : ''
+  }${
     trip.days.length > 1
       ? `<span class="swap-wrap"><span class="swap-label" aria-hidden="true">${esc(t('다른 날과 바꾸기'))}</span><select class="day-swap" data-day="${l.dayIndex}" aria-label="${esc(t('이 날 장소를 다른 날과 통째로 바꾸기'))}" title="${esc(t('이 날 장소를 다른 날과 통째로 바꿔요 (날짜·숙소·항공편은 그대로)'))}"><option value="">${esc(t('다른 날과 바꾸기'))}</option>${trip.days
           .map((d, i) => (i === l.dayIndex ? '' : `<option value="${i}">${esc(dayName(i))}${d.date ? ` · ${esc(M.formatDate(d.date))}` : ''}</option>`))
@@ -2211,6 +2238,10 @@ $('#days').addEventListener('click', (e) => {
     $(`[data-action="route-opt"][data-list="${CSS.escape(listId ?? '')}"]`)?.focus({ preventScroll: true });
   } else if (action === 'route-undo') {
     undoRoute();
+  } else if (action === 'place-ops' || action === 'place-move' || action === 'place-copy') {
+    openPlaceOps(id, action === 'place-copy' ? 'copy' : 'move');
+  } else if (action === 'day-order') {
+    openDayOrder();
   } else if (action === 'duplicate') {
     const copy = M.duplicateItem(trip, id);
     if (!copy) return;
@@ -2358,6 +2389,15 @@ $('#pinLegend').addEventListener('click', (e) => {
     savePrefs();
     renderPinLegend(catEmptyText());
     $('#pinLegend [data-legend-toggle]')?.focus();
+    return;
+  }
+  if (e.target.closest('[data-cat-all]')) {
+    // 0건 안내에서 '전체 일차에서 보기': 일차 강조를 풀고 같은 종류를 전체 여행에서 강조한다
+    const cat = ui.catFilter;
+    ui.focusList = null;
+    renderDays();
+    renderMap({ fit: true });
+    $(`#pinLegend [data-cat-filter="${cat}"]`)?.focus();
     return;
   }
   const cat = e.target.closest('[data-cat-filter]')?.dataset.catFilter;
@@ -2714,6 +2754,7 @@ $('#importFile').addEventListener('change', async (e) => {
   try {
     if (file.size > 10 * 1024 * 1024) throw new Error(t('파일이 너무 커요 (10MB 이하)'));
     imported = M.validateTrip(JSON.parse(await file.text()));
+    if (imported.expenses) B.normalizeExpenses(imported); // 예전 백업: 결제수단·통화·적용 환율 기본값
   } catch (err) {
     return void ask({
       title: t('백업 파일을 불러오지 못했어요'),
@@ -2948,7 +2989,21 @@ function renderFooter() {
         <span class="foot-contact">${esc(t('문의'))} <a href="mailto:${CONTACT}">${CONTACT}</a></span>
       </nav>
       <p class="foot-note">${esc(t('일정·가계부는 이 브라우저에만 저장돼요. 다른 기기로 옮길 땐 백업 파일을 쓰세요'))}<span class="edit-only"> · <button type="button" class="linkbtn" data-foot="import">${esc(t('백업 파일 불러오기'))}</button></span></p>
-      <p class="foot-copy">© 2026 XenoTravel. ${esc(t('모든 권리 보유.'))}</p>`;
+      <p class="foot-copy">© 2026 XenoTravel. ${esc(t('모든 권리 보유.'))} <span class="foot-build" title="${esc(t('배포 버전 (커밋)'))}">${esc(t('빌드'))} <code id="buildCommit">${esc(buildCommit)}</code></span></p>`;
+}
+/* 배포 식별자: <meta name="build-commit">(서버·빌드가 넣음) → 없으면 version.json. QA 때 어느 커밋이 떠 있는지 바로 확인한다 */
+let buildCommit = document.querySelector('meta[name="build-commit"]')?.content || 'dev';
+if (!/^[0-9a-f]{7}$/.test(buildCommit)) {
+  fetch(new URL('version.json', document.baseURI), { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((v) => {
+      if (!/^[0-9a-f]{7}$/.test(v?.commit ?? '')) return;
+      buildCommit = v.commit;
+      document.querySelector('meta[name="build-commit"]')?.setAttribute('content', buildCommit);
+      const el = $('#buildCommit');
+      if (el) el.textContent = buildCommit;
+    })
+    .catch(() => {});
 }
 renderFooter();
 $('#siteFoot').addEventListener('click', (e) => {
@@ -3326,6 +3381,29 @@ function toast(text, ms = 2200, action = null) {
   el.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(hide, ms);
+}
+
+/*
+ * 실행 취소 스택 (5초): 연달아 지우거나 옮겨도 앞선 작업의 복구 데이터가 덮어쓰이지 않는다.
+ * 토스트에는 가장 최근 작업과 남은 되돌리기 개수를 보여 주고, 누를 때마다 하나씩 거꾸로 되돌린다.
+ */
+const undoStack = createUndoStack();
+function pushUndo(text, run) {
+  undoStack.push({ text, run, scope: trip?.id });
+  showUndoToast();
+}
+function showUndoToast(prefix = '') {
+  const top = undoStack.peek();
+  if (!top) return;
+  const n = undoStack.size();
+  toast(prefix ? `${prefix} · ${top.text}` : top.text, undoStack.left(), {
+    label: n > 1 ? t('실행 취소 ({n})', { n }) : t('실행 취소'),
+    run: () => {
+      const done = undoStack.undo();
+      if (!done) return;
+      if (undoStack.size()) showUndoToast(t('되돌렸어요'));
+    },
+  });
 }
 
 /** 모달 열기: 닫으면 연 자리로 포커스를 돌려준다 */
@@ -3763,13 +3841,15 @@ function planRows(spent, planned) {
 
 /** 예산 칸: 예산 없음 · 남음 · 딱 맞게 다 씀 · 초과 (문구와 색이 상태와 같게) */
 function budgetTileHtml(b, s) {
-  const state = B.budgetState(b.total, s.spent);
-  const pct = b.total ? Math.min(999, Math.round((s.spent / b.total) * 100)) : 0;
+  // 기준 통화 최소 단위로 계산: 쓴 돈은 기록마다 남긴 환율로 (목록 합 = 합계)
+  const state = B.budgetState(s.totalU, s.spentU);
+  const pct = s.totalU ? Math.min(999, Math.round((s.spentU / s.totalU) * 100)) : 0;
+  const left = s.totalU - s.spentU;
   const tile = {
     unset: { cls: 'neutral', label: t('남은 예산'), value: '—', note: t('예산을 넣으면 계산해요') },
-    within: { cls: 'ok', label: t('남은 예산'), value: bm(s.left), note: t('{p}% 사용', { p: pct }) },
-    reached: { cls: 'warn', label: t('예산 도달'), value: bm(0), note: t('예산을 다 썼어요 (100%)') },
-    over: { cls: 'hot', label: t('예산 초과'), value: bm(-s.left), note: t('{p}% 사용', { p: pct }) },
+    within: { cls: 'ok', label: t('남은 예산'), value: bu(left), note: t('{p}% 사용', { p: pct }) },
+    reached: { cls: 'warn', label: t('예산 도달'), value: bu(0), note: t('예산을 다 썼어요 (100%)') },
+    over: { cls: 'hot', label: t('예산 초과'), value: bu(-left), note: t('{p}% 사용', { p: pct }) },
   }[state];
   return `<div class="kpi ${tile.cls}" data-state="${state}"><span>${esc(tile.label)}</span><b>${tile.value}</b><small>${esc(tile.note)}</small></div>`;
 }
@@ -3793,11 +3873,16 @@ function drawBudget(el) {
   const local = b.currency !== 'KRW';
   const useLocal = local && f.cur === 'local';
   const s = B.summarize(trip);
+  const code = B.shownBaseCode(b);
+  s.spentU = B.spentUnits(trip);
+  s.totalU = code === 'KRW' ? b.total : B.toUnits(B.toBase(b.total, b), code);
   const plan = B.combinePlans(C.planned(trip), B.placePlanned(trip));
   const hasOut = s.byDay.out != null || trip.expenses.some((e) => B.expenseDay(trip, e) === 'out');
   const dayKeys = [-1, ...trip.days.map((_, i) => i), ...(hasOut ? ['out'] : [])];
   const dayMax = Math.max(1, ...dayKeys.map((k) => s.byDay[k] ?? 0));
   const recs = [...trip.expenses].reverse();
+  if (ui.payFilter && !trip.expenses.some((e) => e.pay === ui.payFilter)) ui.payFilter = null;
+  const shown = ui.payFilter ? recs.filter((e) => e.pay === ui.payFilter) : recs;
   const dayLabel = (k) => (k === -1 ? t('출발 전') : k === 'out' ? t('일정 외') : dayName(k));
   const dayShort = (k) => (k === -1 ? t('전') : k === 'out' ? t('외') : `D${k + 1}`);
   const confirmCur = B.needsCurrency(trip);
@@ -3820,7 +3905,7 @@ function drawBudget(el) {
         <span>${esc(t('예상 (장소·체크리스트)'))}</span><b>${plan.priced ? bm(plan.total) : '—'}</b>
         <small>${plan.priced ? (b.total && plan.total > b.total ? esc(t('예산보다 {diff} 많아요', { diff: bm(plan.total - b.total) })) : `${esc(t('{n}개 항목', { n: plan.priced }))}${plan.noRate ? ` · ${esc(t('환율 미정 {n}개', { n: plan.noRate }))}` : ''}`) : esc(t('장소나 체크리스트에 가격 넣기 →'))}</small>
       </button>
-      <div class="kpi"><span>${esc(t('쓴 돈'))}</span><b>${bm(s.spent)}</b><small>${esc(t('{n}건', { n: trip.expenses.length }))}${s.pending.count ? ` · <span class="pend">${esc(t('환율 미정 {n}건 ({amount})', { n: s.pending.count, amount: B.moneyCode(s.pending.amount, b.currency) }))}</span>` : ''}</small></div>
+      <div class="kpi"><span>${esc(t('쓴 돈'))}</span><b>${bu(s.spentU)}</b><small>${esc(t('{n}건', { n: trip.expenses.length }))}${s.pending.count ? ` · <span class="pend">${esc(t('환율 미정 {n}건 ({amount})', { n: s.pending.count, amount: B.moneyCode(s.pending.amount, b.currency) }))}</span>` : ''}</small></div>
       ${budgetTileHtml(b, s)}
     </div>
     ${currencyTotalsHtml(b, s)}
@@ -3877,29 +3962,53 @@ function drawBudget(el) {
 
     <div class="box" style="margin-top:14px">
       <h3>${esc(t('기록'))} <button class="link" data-b="csv"${recs.length ? '' : ' hidden'}>${esc(t('CSV로 받기'))}</button></h3>
+      ${payFilterHtml()}
       ${
-        recs.length
-          ? `<ul class="rec-list">${recs
+        shown.length
+          ? `<ul class="rec-list">${shown
               .map((e) => {
                 if (ui.editExpense === e.id && !ui.readonly) return expenseEditHtml(e);
                 const c = B.EXPENSE_CATS[e.cat] ?? B.EXPENSE_CATS.etc;
                 const pay = B.PAYMENTS[e.pay] ?? B.PAYMENTS.card;
-                // 적은 통화가 지금 보여 주는 기준 통화와 다르면 원래 금액을 함께 (원화로 적었는데 기준 통화가 달러인 경우 등)
-                const origCode = e.cur === 'KRW' ? 'KRW' : b.currency;
-                const orig = origCode === shownBase(b) ? '' : origCode === 'KRW' ? B.won(e.amount) : B.moneyCode(e.amount, b.currency);
+                // 적은 통화가 지금 보여 주는 기준 통화와 다르면 원래 금액과 그때 적용한 환율을 함께
+                const origCode = e.ccy ?? (e.cur === 'KRW' ? 'KRW' : b.currency);
+                const orig = origCode === shownBase(b) ? '' : origCode === 'KRW' ? B.won(e.amount) : B.moneyCode(e.amount, origCode);
+                const rate = origCode !== 'KRW' && e.rate > 0 ? expenseRateLabel(origCode, e.rate) : '';
+                const units = B.expenseBaseUnits(e, b);
                 const link = e.checkId ? t('체크리스트') : e.placeId ? t('장소') : '';
                 const who = payerLabel(e);
                 return `<li>
-                  <span class="rec-main"><b>${esc(e.memo || t(c.label))}</b><small>${esc(B.expenseDayLabel(trip, e))} · ${esc(t(c.label))} · ${esc(t(pay.label))}${link ? ` · ${esc(link)}` : ''}${who ? ` · ${esc(who)}` : ''}</small></span>
-                  <span class="rec-amt">${e.krw == null ? `<span class="pend">${esc(t('환율 미정'))}</span>` : bm(e.krw)}${orig ? `<small>${esc(orig)}</small>` : ''}</span>
+                  <span class="rec-main"><b>${esc(e.memo || t(c.label))}</b><small>${esc(B.expenseDayLabel(trip, e))} · ${esc(t(c.label))} · <span class="pay-tag" data-pay="${esc(e.pay)}">${esc(t(pay.label))}</span>${link ? ` · ${esc(link)}` : ''}${who ? ` · ${esc(who)}` : ''}</small></span>
+                  <span class="rec-amt">${units == null ? `<span class="pend">${esc(t('환율 미정'))}</span>` : bu(units)}${orig ? `<small>${esc(orig)}${rate ? ` · ${esc(rate)}` : ''}</small>` : ''}</span>
                   <span class="rec-acts"><button class="icon" data-b="edit" data-id="${e.id}" title="${esc(t('수정'))}" aria-label="${esc(t('{name} 수정', { name: e.memo || t(c.label) }))}">✎</button><button class="icon" data-b="del" data-id="${e.id}" title="${esc(t('삭제'))}" aria-label="${esc(t('{name} 삭제', { name: e.memo || t(c.label) }))}">✕</button></span></li>`;
               })
               .join('')}</ul>`
-          : `<p class="empty-note">${esc(t('아직 기록된 지출이 없어요. 첫 지출을 추가해 보세요.'))}</p>`
+          : recs.length
+            ? `<p class="empty-note">${esc(t('이 결제수단으로 적은 지출이 없어요'))}</p>`
+            : `<p class="empty-note">${esc(t('아직 기록된 지출이 없어요. 첫 지출을 추가해 보세요.'))}</p>`
       }
     </div>
     <p class="fine">${esc(t('가계부는 이 브라우저에만 저장되고 공유 링크에는 들어가지 않아요. 백업 파일에는 포함돼요. 자동 환율: ExchangeRate-API (하루 1번 갱신).'))}</p>
   </div>`;
+}
+
+/** 기록 시점 환율 표시: "100엔 = 912원" (그 기록에 남긴 환율이라 지금 환율을 바꿔도 그대로) */
+function expenseRateLabel(code, rate) {
+  const c = B.CURRENCIES[code];
+  if (!c) return '';
+  return t('적용 환율 {unit}{name} = {krw}원', { unit: c.unit === 1 ? '1' : c.unit, name: t(c.name), krw: num(+(rate * c.unit).toFixed(2), { maximumFractionDigits: 2 }) });
+}
+
+/** 결제수단 필터 칩: 수단별 건수·합계(기준 통화). 누르면 그 수단 기록만, 다시 누르면 전체 */
+ui.payFilter = null;
+function payFilterHtml() {
+  if (!trip.expenses.length) return '';
+  const by = B.byPayment(trip);
+  const all = B.spentUnits(trip);
+  const chip = (key, label, units, n) => `<button type="button" class="${(ui.payFilter ?? '') === key ? 'on' : ''}" aria-pressed="${(ui.payFilter ?? '') === key}" data-b="pay-filter" data-v="${key}"><span>${esc(label)}</span> <b>${bu(units)}</b> <small>${esc(t('{n}건', { n }))}</small></button>`;
+  const chips = [chip('', t('전체'), all, trip.expenses.length), ...Object.entries(B.PAYMENTS).filter(([k]) => by[k]).map(([k, p]) => chip(k, t(p.label), by[k].units, by[k].count))];
+  const cur = ui.payFilter && by[ui.payFilter];
+  return `<div class="chipset pay-filter" role="group" aria-label="${esc(t('결제수단별 보기'))}">${chips.join('')}</div>${cur ? `<p class="pay-sum" role="status">${esc(t('{pay} 합계', { pay: t(B.PAYMENTS[ui.payFilter].label) }))} <b>${bu(cur.units)}</b> · ${esc(t('{n}건', { n: cur.count }))}</p>` : ''}`;
 }
 
 /* ───────── 기준 통화 (C1) ───────── */
@@ -3931,7 +4040,7 @@ function currencyTotalsHtml(b, s) {
     c.localCount ? `${B.moneyCode(c.local, b.currency)} <small>(${esc(t('{n}건', { n: c.localCount }))})</small>` : '',
     c.krwCount ? `${B.won(c.krw)} <small>(${esc(t('{n}건', { n: c.krwCount }))})</small>` : '',
   ].filter(Boolean);
-  return `<p class="cur-totals"><span>${esc(t('통화별 합계'))}</span> ${parts.join(' <i aria-hidden="true">+</i> ')} <span class="eq">= ${esc(t('{code} 환산', { code: shownBase(b) }))} <b>${bm(s.spent)}</b>${s.pending.count ? ` <span class="pend">${esc(t('환율 미정 {n}건 제외', { n: s.pending.count }))}</span>` : ''}</span></p>`;
+  return `<p class="cur-totals"><span>${esc(t('통화별 합계'))}</span> ${parts.join(' <i aria-hidden="true">+</i> ')} <span class="eq">= ${esc(t('{code} 환산', { code: shownBase(b) }))} <b>${bu(B.spentUnits(trip))}</b>${s.pending.count ? ` <span class="pend">${esc(t('환율 미정 {n}건 제외', { n: s.pending.count }))}</span>` : ''}</span></p>`;
 }
 
 /** 지출 입력: 동행이 2명 이상이면 낸 사람과 나눠 낼 사람을 고른다 */
@@ -3968,16 +4077,16 @@ function payerLabel(e) {
 
 function settleBoxHtml() {
   const list = S.members(trip);
-  const st = S.settlement(trip);
+  const st = settleNow();
   const chips = list
     .map((m) => `<li><span>${esc(m.name)}</span>${ui.readonly ? '' : `<button type="button" class="icon" data-b="member-del" data-id="${esc(m.id)}" aria-label="${esc(t('{name} 빼기', { name: m.name }))}">✕</button>`}</li>`)
     .join('');
   const body = st
     ? `<table class="settle-table"><thead><tr><th>${esc(t('이름'))}</th><th>${esc(t('낸 돈'))}</th><th>${esc(t('부담'))}</th><th>${esc(t('차액'))}</th></tr></thead><tbody>${st.people
-        .map((p) => `<tr><td>${esc(p.name)}</td><td>${bm(p.paid)}</td><td>${bm(p.share)}</td><td class="${p.net > 0 ? 'plus' : p.net < 0 ? 'minus' : ''}">${p.net > 0 ? '+' : p.net < 0 ? '−' : ''}${bm(Math.abs(p.net))}</td></tr>`)
-        .join('')}</tbody></table>
+        .map((p) => `<tr><td>${esc(p.name)}</td><td>${bu(p.paid)}</td><td>${bu(p.share)}</td><td class="${p.net > 0 ? 'plus' : p.net < 0 ? 'minus' : ''}">${p.net > 0 ? '+' : p.net < 0 ? '−' : ''}${bu(Math.abs(p.net))}</td></tr>`)
+        .join('')}</tbody><tfoot><tr><th>${esc(t('합계'))}</th><td>${bu(st.total)}</td><td>${bu(st.people.reduce((n, p) => n + p.share, 0))}</td><td></td></tr></tfoot></table>
       <h4>${esc(t('보낼 돈'))} <small>${esc(t('최소 {n}번 송금', { n: st.transfers.length }))}</small></h4>
-      ${st.transfers.length ? `<ul class="transfers">${st.transfers.map((x) => `<li><b>${esc(x.from)}</b> → <b>${esc(x.to)}</b><span>${bm(x.amount)}</span></li>`).join('')}</ul>` : `<p class="empty-note">${esc(t('주고받을 돈이 없어요'))}</p>`}
+      ${st.transfers.length ? `<ul class="transfers">${st.transfers.map((x) => `<li><b>${esc(x.from)}</b> → <b>${esc(x.to)}</b><span>${bu(x.amount)}</span></li>`).join('')}</ul>` : `<p class="empty-note">${esc(t('주고받을 돈이 없어요'))}</p>`}
       ${st.noPayer || st.noRate ? `<p class="fine">${[st.noPayer ? t('결제자를 정하지 않은 지출 {n}건은 빠졌어요', { n: st.noPayer }) : '', st.noRate ? t('환율 미정 지출 {n}건은 빠졌어요', { n: st.noRate }) : ''].filter(Boolean).map(esc).join(' · ')}</p>` : ''}
       <button type="button" class="btn" data-b="settle-copy">${esc(t('정산 결과 복사'))}</button>`
     : `<p class="empty-note">${esc(t('동행자를 2명 이상 넣으면 지출마다 낸 사람과 나눠 낼 사람을 고르고, 누가 누구에게 얼마를 보내면 되는지 계산해요.'))}</p>`;
@@ -4132,6 +4241,10 @@ $('#page-budget').addEventListener('click', (e) => {
       x.classList.toggle('on', x === btn);
       x.setAttribute('aria-pressed', String(x === btn));
     });
+  } else if (act === 'pay-filter') {
+    ui.payFilter = btn.dataset.v || null;
+    renderBudget();
+    $(`#page-budget [data-b="pay-filter"][data-v="${CSS.escape(btn.dataset.v)}"]`)?.focus();
   } else if (act === 'cur') {
     f.cur = f.cur === 'local' ? 'KRW' : 'local';
     renderBudget();
@@ -4166,8 +4279,8 @@ $('#page-budget').addEventListener('click', (e) => {
     saved(commit(), t('{name}을(를) 동행자에서 뺐어요', { name: m.name }));
     $('#memberName')?.focus();
   } else if (act === 'settle-copy') {
-    const st = S.settlement(trip);
-    if (st) copyText(S.settlementText(trip, st, bm), t('정산 결과를 복사했어요. 메신저에 붙여넣으세요'));
+    const st = settleNow();
+    if (st) copyText(S.settlementText(trip, st, bu), t('정산 결과를 복사했어요. 메신저에 붙여넣으세요'));
   } else if (act === 'edit-cancel') {
     const id = ui.editExpense;
     ui.editExpense = null;
@@ -4426,6 +4539,7 @@ function drawChecks(el) {
         ? `<div class="plan-bar"><span>${esc(t('체크리스트 예상'))} <b>${bm(plan.total)}</b>${plan.noRate ? ` <small>(${esc(t('환율이 없어 {n}개 빠짐', { n: plan.noRate }))})</small>` : ''}</span><button class="linkbtn" data-c="to-budget">${esc(t('가계부에서 보기 →'))}</button></div>`
         : ''
     }
+    ${ui.readonly ? '' : `<div class="preset-cta"><button type="button" class="btn" data-c="presets" aria-haspopup="dialog">${esc(t('스마트 준비물 추천'))}</button><small>${esc(t('여행 성격과 기간에 맞춰 빠진 준비물만 골라 넣어요'))}</small></div>`}
     <div class="check-tabs" role="group" aria-label="${esc(t('체크리스트'))}">${groups.map(([g, def]) => {
       const { done, total } = C.progress(trip, g);
       return `<button data-c="tab" data-group="${g}" aria-controls="check-panel-${g}" aria-pressed="${g === active}" aria-label="${esc(`${t(def.label)} ${done}/${total}`)}" class="${total && done === total ? 'complete' : ''}"><span class="lbl-short">${esc(shortLabels[g])}</span><span class="lbl-tiny" aria-hidden="true">${esc(tinyLabels[g])}</span> <b>${done}/${total}</b></button>`;
@@ -4529,53 +4643,54 @@ async function changeCheckGroup(group, action) {
     return;
   }
   const kept = (checks) => t('기록된 실제 지출 {n}건은 가계부에 남아요', { n: linked(checks).length });
+  // 완료·전체 수는 그룹의 실제 항목에서 다시 센다. 같은 수면 버튼 하나만 (중복 버튼 금지)
+  const opt = C.bulkDeleteOptions(trip, group);
+  const groupName = t(C.CHECK_GROUPS[group].label);
+  const labels = {
+    done: opt.done === opt.total ? t('전체 {n}개 삭제', { n: opt.total }) : t('완료한 {n}개 삭제', { n: opt.done }),
+    all: t('전체 {n}개 삭제', { n: opt.total }),
+  };
   const choice = await ask({
-    title: done.length ? t('완료한 {n}개 항목을 삭제할까요?', { n: done.length }) : t('삭제'),
-    body: done.length ? kept(done) : t('완료한 항목 없음'),
-    actions: [
-      ...(done.length ? [{ value: 'done', label: t('완료한 {n}개 삭제', { n: done.length }), primary: true }] : []),
-      { value: 'all', label: t('전체 {n}개 삭제', { n: entries.length }), danger: true },
-    ],
+    title: opt.options.length === 1
+      ? t('{group}: 전체 {n}개 항목을 삭제할까요?', { group: groupName, n: opt.total })
+      : t('{group}: 완료 {done}개 · 전체 {total}개', { group: groupName, done: opt.done, total: opt.total }),
+    body: opt.options.length === 1
+      ? `${opt.done ? t('모두 완료한 항목이에요.') : t('완료한 항목 없음')} ${kept(entries)}`
+      : `${t('미완료 {n}개가 남아 있어요.', { n: opt.total - opt.done })} ${kept(done)}`,
+    actions: opt.options.map((v) => ({ value: v, label: labels[v], primary: v === 'done' && opt.options.length > 1, danger: v === 'all' || opt.options.length === 1 })),
   });
   if (!choice || !valid()) return;
-  if (choice === 'all') {
+  // 미완료 항목까지 지우는 경우에만 한 번 더 묻는다
+  if (choice === 'all' && opt.done && opt.done < opt.total) {
     const confirmed = await ask({
-      title: t('전체 {n}개 항목을 삭제할까요?', { n: entries.length }),
-      body: kept(entries),
+      title: t('전체 {n}개 항목을 삭제할까요?', { n: opt.total }),
+      body: `${t('미완료 {n}개도 함께 지워져요.', { n: opt.total - opt.done })} ${kept(entries)}`,
       actions: [{ value: 'all', label: t('전체 삭제'), danger: true }],
     });
     if (!confirmed || !valid()) return;
   }
-  const gone = choice === 'all' ? entries : done;
+  const all = choice === 'all' || opt.done === opt.total;
+  const gone = all ? entries : done;
   const keptN = linked(gone).length;
   const undo = checksUndo(gone);
-  const n = choice === 'all' ? C.clearGroup(trip, group) : C.removeDone(trip, group);
-  const msg = choice === 'all'
+  const n = all ? C.clearGroup(trip, group) : C.removeDone(trip, group);
+  const msg = all
     ? keptN ? t('{n}건 삭제됨 (가계부 지출 {m}건은 유지됨)', { n, m: keptN }) : t('{n}건 삭제됨', { n })
     : keptN ? t('체크 완료 {n}건 삭제됨 (가계부 지출 {m}건은 유지됨)', { n, m: keptN }) : t('체크 완료 {n}건 삭제됨', { n });
-  if (commit().ok) toast(msg, 5000, { label: t('실행 취소'), run: undo });
+  if (commit().ok) pushUndo(`${msg} · ${groupName}`, undo);
   restoreFocus();
 }
 
 /**
- * 체크리스트 일괄 삭제 되돌리기: 지우기 직전 상태(순서·가계부 연결)를 기억했다가 지운 항목만 제자리에 되살린다.
- * 그사이 새로 추가하거나 고친 항목은 그대로 둔다.
+ * 체크리스트 삭제 되돌리기: 지우기 직전 자리(앞 항목 기준)와 연결된 가계부 지출을 기억했다가 지운 항목만 되살린다.
+ * 그사이 새로 추가하거나 고친 항목, 다른 삭제의 되돌리기 데이터는 건드리지 않는다 (실행 취소 스택에 따로 쌓인다).
  */
 function checksUndo(gone) {
   const tripId = trip.id;
-  const order = trip.checks.map((c) => c.id);
-  const removed = new Map(gone.map((c) => [c.id, structuredClone(c)]));
-  const links = (trip.expenses ?? []).filter((e) => removed.has(e.checkId)).map((e) => [e.id, e.checkId]);
+  const snap = C.takeChecksSnapshot(trip, gone.map((c) => c.id));
   return () => {
     if (trip?.id !== tripId || ui.readonly) return;
-    const now = new Map(trip.checks.map((c) => [c.id, c]));
-    const restored = order.map((id) => now.get(id) ?? removed.get(id)).filter(Boolean);
-    const known = new Set(order);
-    trip.checks = [...restored, ...trip.checks.filter((c) => !known.has(c.id))];
-    for (const [eid, cid] of links) {
-      const e = trip.expenses.find((x) => x.id === eid);
-      if (e && !e.checkId) e.checkId = cid;
-    }
+    C.restoreChecks(trip, snap);
     saved(commit(), t('삭제를 되돌렸어요'));
   };
 }
@@ -4601,9 +4716,12 @@ $('#page-check').addEventListener('click', (e) => {
     if (!c) return;
     const kept = C.linkedExpense(trip, c.id) ? 1 : 0;
     const undo = checksUndo([c]);
+    const name = C.checkText(c);
+    const groupName = t(C.CHECK_GROUPS[c.group]?.label ?? '');
     C.removeCheck(trip, c.id);
     if (commit().ok) {
-      toast(kept ? t('"{text}" 삭제됨 (가계부 지출 1건은 유지됨)', { text: c.text }) : t('"{text}" 삭제됨', { text: c.text }), 5000, { label: t('실행 취소'), run: undo });
+      const msg = kept ? t('"{text}" 삭제됨 (가계부 지출 1건은 유지됨)', { text: name }) : t('"{text}" 삭제됨', { text: name });
+      pushUndo(`${msg} · ${groupName}`, undo);
     }
   } else if (act === 'price') {
     const c = trip.checks.find((x) => x.id === btn.dataset.id);
@@ -4619,6 +4737,8 @@ $('#page-check').addEventListener('click', (e) => {
     ui.priceCur = ui.priceCur === 'KRW' ? 'local' : 'KRW';
     btn.textContent = ui.priceCur === 'KRW' ? '₩' : B.CURRENCIES[trip.budget.currency].symbol.trim();
     btn.nextElementSibling?.focus();
+  } else if (act === 'presets') {
+    void openPresets();
   } else if (act === 'delete-group' || act === 'toggle-group') {
     void changeCheckGroup(g, act);
   } else if (act === 'to-budget') go('budget');
@@ -4756,6 +4876,7 @@ $('#shareBtn').addEventListener('click', () => {
   $('#shareNative').hidden = !navigator.share;
   showDialog(shareDialog);
   updateShare();
+  renderSummaryPreview();
 });
 $('#shareExcludePrivate').addEventListener('change', updateShare);
 $('#shareFile').addEventListener('click', saveShareFile);
@@ -4767,6 +4888,66 @@ $('#shareNative').addEventListener('click', () => {
   navigator.share({ title, text: `${title}\n${line}`, url }).catch(() => {});
 });
 $('#shareClose').addEventListener('click', () => shareDialog.close());
+
+/* ───────── Phase 4: 일정 요약 이미지 ─────────
+ * 여행명·날짜·일차별 대표 장소·동선 그림을 한 장(PNG)으로. 지도 타일 없이 일정 좌표로 그려서 오프라인에서도 만든다.
+ * 메모·예약번호·가계부·체크리스트는 넣지 않는다. 지금 언어와 화면 밝기(라이트/다크)를 따른다.
+ */
+function summaryCanvas() {
+  const model = summaryModel(trip, { colors: COLORS });
+  return drawSummary(document.createElement('canvas'), model, {
+    theme: isDark() ? 'dark' : 'light',
+    labels: {
+      brand: 'XenoTravel',
+      mapNote: t('일정 좌표로 그린 직선 동선이에요 (지도 타일 없음)'),
+      privacy: t('XenoTravel로 만든 일정 요약 · 메모·예약번호·가계부는 포함하지 않아요'),
+      moreDays: (n) => t('외 {n}일', { n }),
+      morePlaces: (n) => t('외 {n}곳', { n }),
+      noPlaces: t('아직 장소가 없어요'),
+    },
+  });
+}
+const canvasBlob = (canvas) => new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob'))), 'image/png'));
+let summaryPreviewUrl = '';
+async function renderSummaryPreview() {
+  const img = $('#shareImgPreview');
+  try {
+    await document.fonts?.ready;
+    const blob = await canvasBlob(summaryCanvas());
+    if (summaryPreviewUrl) URL.revokeObjectURL(summaryPreviewUrl);
+    summaryPreviewUrl = URL.createObjectURL(blob);
+    img.src = summaryPreviewUrl;
+    img.alt = t('{title} 일정 요약 이미지 미리보기', { title: trip.title });
+    img.hidden = false;
+    const file = new File([blob], summaryFileName(trip), { type: 'image/png' });
+    $('#shareImgSend').hidden = !(navigator.canShare?.({ files: [file] }));
+  } catch {
+    img.hidden = true;
+  }
+}
+$('#shareImgSave').addEventListener('click', async () => {
+  if (!trip) return;
+  try {
+    await document.fonts?.ready;
+    const blob = await canvasBlob(summaryCanvas());
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = summaryFileName(trip);
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast(t('요약 이미지를 저장했어요'));
+  } catch {
+    toast(t('이미지를 만들지 못했어요. 다른 브라우저에서 다시 시도해 주세요'), 3500);
+  }
+});
+$('#shareImgSend').addEventListener('click', async () => {
+  if (!trip) return;
+  try {
+    const blob = await canvasBlob(summaryCanvas());
+    const file = new File([blob], summaryFileName(trip), { type: 'image/png' });
+    await navigator.share({ files: [file], title: trip.title });
+  } catch {}
+});
 
 function setReadonly(on) {
   ui.readonly = on;
@@ -4862,6 +5043,8 @@ $('#inboxDock').addEventListener('click', (e) => {
     const found = M.findItem(trip, id);
     if (!found) return;
     locateMapPlace(found.item);
+  } else if (/^place-(ops|move|copy)$/.test(btn.dataset.action)) {
+    openPlaceOps(id, btn.dataset.action === 'place-copy' ? 'copy' : 'move');
   } else if (btn.dataset.action === 'delete') {
     const found = M.findItem(trip, id);
     if (found && confirm(t('"{name}"을(를) 삭제할까요?', { name: found.item.name }))) {
@@ -4898,6 +5081,324 @@ closeOnBackdrop(flightDialog);
 closeOnBackdrop(newTripDialog);
 closeOnBackdrop(shareDialog);
 closeOnBackdrop(copyDialog);
+
+/* ───────── Phase 4: 다른 일차로 이동·복제 · 일자 순서 바꾸기 ─────────
+ * 확정 전에 대상 일차의 항공편·숙소와 시간 충돌을 미리 보여 준다(D.placementPreview / D.dayOrderPreview).
+ * 실행하면 작업마다 되돌리기를 실행 취소 스택에 쌓는다 — 5초 안에 연달아 한 작업을 하나씩 거꾸로 되돌린다.
+ */
+const dayOpsDialog = $('#dayOpsDialog');
+ui.ops = null; // { kind: 'place', itemId, mode, to } | { kind: 'order', order }
+const dayLabelOf = (i) => `${dayName(i)}${trip.days[i]?.date ? ` · ${M.formatDate(trip.days[i].date)}` : ''}`;
+const conflictName = (kind) => (kind === 'flight' ? t('항공편 시간 확인') : t('시간 겹침'));
+
+function openPlaceOps(itemId, mode = 'move') {
+  const found = M.findItem(trip, itemId);
+  if (!found || ui.readonly) return;
+  const from = trip.days.findIndex((d) => d.id === found.listId);
+  // 기본 대상: 이동이면 다음 날(없으면 전날), 복제면 같은 날 다음 날
+  const to = from < 0 ? 0 : from + 1 < trip.days.length ? from + 1 : Math.max(0, from - 1);
+  ui.ops = { kind: 'place', itemId, mode, to };
+  renderDayOps();
+  showDialog(dayOpsDialog);
+  $('#dayOpsBody input[name="opsDay"]:checked')?.focus();
+}
+
+function openDayOrder() {
+  if (ui.readonly || trip.days.length < 2) return;
+  ui.ops = { kind: 'order', order: trip.days.map((_, i) => i) };
+  renderDayOps();
+  showDialog(dayOpsDialog);
+  $('#dayOpsBody .do-move')?.focus();
+}
+
+function flightsLine(p) {
+  if (!p.flights.length) return `<li class="ok">${esc(t('항공편 없음'))}</li>`;
+  return p.flights
+    .map((f) => {
+      const what = f.role === 'arrive' ? t('{time} 도착', { time: f.time }) : f.role === 'depart' ? t('{time} 출발', { time: f.time }) : t('{time} 출발', { time: f.time });
+      return `<li><svg class="ic" aria-hidden="true"><use href="#i-ticket"/></svg> ${esc(M.flightKind(f.kind))} · ${esc(f.label)} · <b>${esc(what)}</b></li>`;
+    })
+    .join('');
+}
+function staysLine(st) {
+  const name = (s) => (s ? s.name : t('미정'));
+  if (!st.start && !st.end) return `<li>${esc(t('숙소 미정'))}</li>`;
+  return `<li><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg> ${esc(t('출발 {a} → 귀가 {b}', { a: name(st.start), b: name(st.end) }))}</li>`;
+}
+
+function placeOpsHtml(op) {
+  const found = M.findItem(trip, op.itemId);
+  if (!found) return '';
+  const from = trip.days.findIndex((d) => d.id === found.listId);
+  const p = D.placementPreview(trip, op.itemId, op.to, op.mode);
+  const days = trip.days
+    .map((d, i) => {
+      const same = i === from;
+      const disabled = same && op.mode === 'move';
+      const hasFlight = D.dayBounds(trip, i).flights.length;
+      return `<label class="do-day${disabled ? ' off' : ''}"><input type="radio" name="opsDay" value="${i}"${i === op.to ? ' checked' : ''}${disabled ? ' disabled' : ''}>
+        <span class="do-day-name">${esc(dayName(i))}${d.date ? ` · ${esc(shortDate(d.date))}` : ''}</span>
+        <small>${esc(t('{n}곳', { n: d.items.length }))}${hasFlight ? ` · ${esc(t('항공편'))}` : ''}${same ? ` · ${esc(t('지금 날'))}` : ''}</small></label>`;
+    })
+    .join('');
+  const conflicts = p.ok ? p.conflicts : [];
+  const preview = p.ok
+    ? `<section class="do-preview" aria-live="polite">
+        <h3>${esc(t('{day} 미리보기', { day: dayLabelOf(op.to) }))}</h3>
+        <p class="do-pos">${esc(found.item.time ? t('{time} 기준 시간순으로 {n}번째에 들어가요', { time: found.item.time, n: p.index + 1 }) : t('시간이 없어 맨 끝({n}번째)에 들어가요', { n: p.index + 1 }))}</p>
+        <ul class="do-facts">${flightsLine(p)}${staysLine(p.stays)}</ul>
+        ${
+          conflicts.length
+            ? `<ul class="do-conflicts">${conflicts
+                .map((c) => `<li class="${c.kind}${c.isTarget ? ' me' : ''}"><span class="tw-badge">${esc(conflictName(c.kind))}</span> ${esc(c.isTarget ? t('{name} (옮길 장소)', { name: c.name }) : c.name)}</li>`)
+                .join('')}</ul>
+              <p class="do-warn" role="status">${esc(p.added ? t('확정하면 시간 충돌이 {n}건 새로 생겨요. 그래도 진행할 수 있고, 5초 안에 되돌릴 수 있어요.', { n: p.added }) : t('이미 있던 시간 충돌이에요. 새로 생기는 충돌은 없어요.'))}</p>`
+            : `<p class="do-ok" role="status">✓ ${esc(t('항공편·기존 일정과 시간 충돌이 없어요'))}</p>`
+        }
+      </section>`
+    : '';
+  return `<div class="pin-seg do-mode" role="group" aria-label="${esc(t('이동 또는 복제'))}">
+      <button type="button" data-ops-mode="move" aria-pressed="${op.mode === 'move'}" class="${op.mode === 'move' ? 'active' : ''}">${esc(t('이동'))}</button>
+      <button type="button" data-ops-mode="copy" aria-pressed="${op.mode === 'copy'}" class="${op.mode === 'copy' ? 'active' : ''}">${esc(t('복제'))}</button>
+    </div>
+    <p class="fine do-what"><b>${esc(found.item.name)}</b>${from >= 0 ? ` · ${esc(t('지금 {day}', { day: dayName(from) }))}` : ` · ${esc(t('장소 보관함'))}`}</p>
+    <fieldset class="do-days"><legend>${esc(op.mode === 'move' ? t('옮길 날') : t('복제할 날'))}</legend>${days}</fieldset>
+    ${preview}`;
+}
+
+function orderOpsHtml(op) {
+  const p = D.dayOrderPreview(trip, op.order);
+  const n = op.order.length;
+  const rows = p.days
+    .map((d, i) => {
+      const moved = d.from !== d.to;
+      return `<li class="do-row${moved ? ' moved' : ''}" data-from="${d.from}">
+        <span class="do-slot">${esc(dayLabelOf(i))}</span>
+        <span class="drag do-drag" aria-hidden="true">⋮⋮</span>
+        <span class="do-block"><b>${esc(d.firstName || t('장소 없음'))}</b><small>${esc(d.count > 1 ? t('외 {n}곳', { n: d.count - 1 }) : d.count ? '' : '')}${moved ? ` · ${esc(t('원래 {day}', { day: dayName(d.from) }))}` : ''}</small>
+          ${d.conflicts.length ? `<span class="do-row-warn">${d.conflicts.map((c) => `<span class="tw-badge ${c.kind}" title="${esc(c.name)}">${esc(conflictName(c.kind))}</span>`).join('')}</span>` : ''}</span>
+        <span class="do-arrows">
+          <button type="button" class="do-move" data-dir="-1" data-i="${i}"${i ? '' : ' disabled'} aria-label="${esc(t('{day} 장소 묶음을 하루 앞으로', { day: dayName(i) }))}">↑</button>
+          <button type="button" class="do-move" data-dir="1" data-i="${i}"${i < n - 1 ? '' : ' disabled'} aria-label="${esc(t('{day} 장소 묶음을 하루 뒤로', { day: dayName(i) }))}">↓</button>
+        </span>
+      </li>`;
+    })
+    .join('');
+  return `<p class="fine">${esc(t('날짜·숙소·항공편은 그대로 두고 각 날의 장소 묶음 순서를 바꿔요. 끌거나 ↑↓ 버튼으로 옮기세요.'))}</p>
+    <ol class="do-order" aria-label="${esc(t('일자 순서'))}">${rows}</ol>
+    <p class="${p.added ? 'do-warn' : 'do-ok'}" role="status" aria-live="polite">${esc(
+      !p.changed ? t('순서를 바꾸면 여기서 충돌을 미리 알려 줘요') : p.added ? t('확정하면 항공편·시간 충돌이 {n}건 새로 생겨요. 그래도 진행할 수 있고, 5초 안에 되돌릴 수 있어요.', { n: p.added }) : `✓ ${t('새로 생기는 항공편·시간 충돌이 없어요')}`,
+    )}</p>`;
+}
+
+let orderSortable = null;
+function renderDayOps({ focus } = {}) {
+  const op = ui.ops;
+  if (!op || !trip) return;
+  orderSortable?.destroy();
+  orderSortable = null;
+  if (op.kind === 'place') {
+    const found = M.findItem(trip, op.itemId);
+    if (!found) return void dayOpsDialog.close();
+    $('#dayOpsTitle').textContent = op.mode === 'move' ? t('다른 일차로 이동') : t('다른 일차로 복제');
+    $('#dayOpsBody').innerHTML = placeOpsHtml(op);
+    const ok = op.mode === 'move' ? trip.days[op.to]?.id !== found.listId : Boolean(trip.days[op.to]);
+    $('#dayOpsActions').innerHTML = `<button type="button" class="btn ghost" data-ops="cancel">${esc(t('취소'))}</button><button type="button" class="btn primary" data-ops="apply"${ok ? '' : ' disabled'}>${esc(op.mode === 'move' ? t('{day}(으)로 이동', { day: dayName(op.to) }) : t('{day}에 복제', { day: dayName(op.to) }))}</button>`;
+  } else {
+    $('#dayOpsTitle').textContent = t('일자 순서 바꾸기');
+    $('#dayOpsBody').innerHTML = orderOpsHtml(op);
+    const changed = op.order.some((x, i) => x !== i);
+    $('#dayOpsActions').innerHTML = `<button type="button" class="btn ghost" data-ops="cancel">${esc(t('취소'))}</button>${changed ? `<button type="button" class="btn" data-ops="reset">${esc(t('처음대로'))}</button>` : ''}<button type="button" class="btn primary" data-ops="apply"${changed ? '' : ' disabled'}>${esc(t('이 순서로 바꾸기'))}</button>`;
+    // 끌어서 순서 바꾸기 (마우스·터치 모두 SortableJS). 날짜 칸(.do-slot)은 그대로 두고 장소 묶음만 옮긴 것으로 계산한다
+    orderSortable = new Sortable($('#dayOpsBody .do-order'), {
+      handle: '.do-drag',
+      animation: 150,
+      ghostClass: 'ghost-item',
+      delay: 120,
+      delayOnTouchOnly: true,
+      onEnd: (e) => {
+        if (e.oldIndex === e.newIndex) return;
+        const next = [...op.order];
+        const [x] = next.splice(e.oldIndex, 1);
+        next.splice(e.newIndex, 0, x);
+        op.order = next;
+        renderDayOps();
+      },
+    });
+  }
+  if (focus) $(focus, dayOpsDialog)?.focus();
+}
+
+function applyDayOps() {
+  const op = ui.ops;
+  if (!op || ui.readonly) return;
+  const tripId = trip.id;
+  if (op.kind === 'place') {
+    const found = M.findItem(trip, op.itemId);
+    if (!found) return;
+    const name = found.item.name;
+    const res = op.mode === 'move' ? D.moveToDay(trip, op.itemId, op.to) : D.copyToDay(trip, op.itemId, op.to);
+    if (!res) return;
+    ui.openItem = null;
+    ui.routePlan = ui.routeUndo = null;
+    dayOpsDialog.close();
+    if (!commit().ok) return;
+    $(`.item[data-id="${CSS.escape(res.item.id)}"]`)?.classList.add('flash');
+    const msg = op.mode === 'move' ? t('"{name}" → {day}(으)로 옮겼어요', { name, day: dayName(op.to) }) : t('"{name}"을(를) {day}에 복제했어요', { name, day: dayName(op.to) });
+    pushUndo(msg, () => {
+      if (trip?.id !== tripId || ui.readonly) return;
+      if (res.undo(trip)) saved(commit(), t('되돌렸어요'));
+    });
+  } else {
+    const res = D.reorderDays(trip, op.order);
+    if (!res) return;
+    ui.routePlan = ui.routeUndo = null;
+    dayOpsDialog.close();
+    if (!commit().ok) return;
+    pushUndo(t('일자 순서를 바꿨어요'), () => {
+      if (trip?.id !== tripId || ui.readonly) return;
+      if (res.undo(trip)) saved(commit(), t('되돌렸어요'));
+    });
+  }
+}
+
+dayOpsDialog.addEventListener('click', (e) => {
+  const op = ui.ops;
+  if (!op) return;
+  const mode = e.target.closest('[data-ops-mode]')?.dataset.opsMode;
+  if (mode && op.kind === 'place') {
+    op.mode = mode;
+    const from = trip.days.findIndex((d) => d.id === M.findItem(trip, op.itemId)?.listId);
+    if (mode === 'move' && op.to === from) op.to = from + 1 < trip.days.length ? from + 1 : Math.max(0, from - 1);
+    return renderDayOps({ focus: `[data-ops-mode="${mode}"]` });
+  }
+  const mv = e.target.closest('.do-move');
+  if (mv && op.kind === 'order') {
+    const i = Number(mv.dataset.i);
+    const dir = Number(mv.dataset.dir);
+    op.order = D.moveInOrder(op.order, i, dir);
+    const j = i + dir;
+    renderDayOps();
+    // 옮긴 묶음의 같은 방향 버튼으로 포커스 (끝에 닿으면 반대 버튼)
+    ($(`.do-move[data-i="${j}"][data-dir="${dir}"]:not(:disabled)`, dayOpsDialog) ?? $(`.do-move[data-i="${j}"]:not(:disabled)`, dayOpsDialog))?.focus();
+    return;
+  }
+  const act = e.target.closest('[data-ops]')?.dataset.ops;
+  if (act === 'cancel') dayOpsDialog.close();
+  else if (act === 'reset' && op.kind === 'order') {
+    op.order = trip.days.map((_, i) => i);
+    renderDayOps({ focus: '.do-move' });
+  } else if (act === 'apply') applyDayOps();
+});
+dayOpsDialog.addEventListener('change', (e) => {
+  if (e.target.name !== 'opsDay' || ui.ops?.kind !== 'place') return;
+  ui.ops.to = Number(e.target.value);
+  renderDayOps({ focus: `input[name="opsDay"][value="${ui.ops.to}"]` });
+});
+dayOpsDialog.addEventListener('close', () => {
+  orderSortable?.destroy();
+  orderSortable = null;
+  ui.ops = null;
+});
+closeOnBackdrop(dayOpsDialog);
+
+
+/* ───────── Phase 4: 스마트 체크리스트 추천 ─────────
+ * 여행 성격(출장·휴양·쇼핑·도시 관광·아이 동반)과 기간을 고르면 data/checklist-presets.json에서 맞는 준비물을 고른다.
+ * 이미 있는 항목은 자동으로 빼고 미리보기로 보여 주며, 사용자가 체크한 것만 추가한다 (기존 항목·체크·지출은 그대로).
+ */
+const presetDialog = $('#presetDialog');
+let presetData = null;
+ui.preset = null; // { type, days, off: Set(뺄 id) }
+async function loadPresets() {
+  presetData ??= await fetch(new URL('data/checklist-presets.json', document.baseURI)).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))));
+  return presetData;
+}
+async function openPresets() {
+  if (ui.readonly || !trip) return;
+  try {
+    await loadPresets();
+  } catch {
+    return toast(t('추천 목록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요'), 3500);
+  }
+  const days = Math.max(1, trip.days.length);
+  ui.preset = { type: ui.preset?.tripId === trip.id ? ui.preset.type : 'city', days, off: new Set(), tripId: trip.id };
+  renderPresets();
+  showDialog(presetDialog);
+  $('#presetBody [name="pType"]:checked')?.focus();
+}
+const presetLabel = (map) => map?.[getLang()] ?? map?.ko ?? '';
+function renderPresets({ focus } = {}) {
+  const st = ui.preset;
+  if (!st || !presetData) return;
+  const { items, skipped } = C.presetCandidates(trip, presetData, { type: st.type, days: st.days });
+  const dur = C.durationKey(st.days);
+  const chosen = items.filter((it) => !st.off.has(it.id));
+  const groups = Object.keys(C.CHECK_GROUPS).filter((g) => items.some((it) => it.group === g));
+  $('#presetBody').innerHTML = `
+    <fieldset class="chipset preset-types"><legend>${esc(t('여행 성격'))}</legend>${Object.entries(presetData.types)
+      .map(([k2, label]) => `<label class="${st.type === k2 ? 'on' : ''}"><input type="radio" name="pType" value="${esc(k2)}"${st.type === k2 ? ' checked' : ''}>${esc(presetLabel(label))}</label>`)
+      .join('')}</fieldset>
+    <fieldset class="chipset preset-days"><legend>${esc(t('기간'))} <small>${esc(t('이 여행은 {n}일이에요', { n: trip.days.length }))}</small></legend>${Object.entries(presetData.durations)
+      .map(([k2, d]) => `<label class="${dur === k2 ? 'on' : ''}"><input type="radio" name="pDays" value="${d.min}"${dur === k2 ? ' checked' : ''}>${esc(presetLabel(d))}</label>`)
+      .join('')}</fieldset>
+    <section class="preset-preview" aria-live="polite">
+      <h3>${esc(t('미리보기 · {n}개 추천', { n: items.length }))}</h3>
+      ${
+        items.length
+          ? groups
+              .map((g) => `<div class="pp-group"><h4>${esc(t(C.CHECK_GROUPS[g].label))}</h4><ul>${items
+                .filter((it) => it.group === g)
+                .map((it) => `<li><label><input type="checkbox" name="pItem" value="${esc(it.id)}"${st.off.has(it.id) ? '' : ' checked'}> <span>${esc(it.text)}</span></label></li>`)
+                .join('')}</ul></div>`)
+              .join('')
+          : `<p class="empty-note">${esc(t('새로 넣을 추천 항목이 없어요. 이미 다 준비돼 있어요.'))}</p>`
+      }
+      ${skipped.length ? `<p class="fine pp-skipped">${esc(t('이미 있는 {n}개는 뺐어요: {list}', { n: skipped.length, list: skipped.map((x) => x.text).join(', ') }))}</p>` : ''}
+      <p class="fine">${esc(t('기존 항목의 이름·체크·가격·가계부 연결은 바뀌지 않아요.'))}</p>
+    </section>`;
+  $('#presetActions').innerHTML = `<button type="button" class="btn ghost" data-p="cancel">${esc(t('취소'))}</button><button type="button" class="btn primary" data-p="add"${chosen.length ? '' : ' disabled'}>${esc(t('선택한 {n}개 추가', { n: chosen.length }))}</button>`;
+  if (focus) $(focus, presetDialog)?.focus();
+}
+presetDialog.addEventListener('change', (e) => {
+  const st = ui.preset;
+  if (!st) return;
+  if (e.target.name === 'pType') {
+    st.type = e.target.value;
+    st.off.clear();
+    renderPresets({ focus: `[name="pType"][value="${CSS.escape(st.type)}"]` });
+  } else if (e.target.name === 'pDays') {
+    st.days = Number(e.target.value);
+    st.off.clear();
+    renderPresets({ focus: `[name="pDays"][value="${st.days}"]` });
+  } else if (e.target.name === 'pItem') {
+    e.target.checked ? st.off.delete(e.target.value) : st.off.add(e.target.value);
+    const n = $$('[name="pItem"]:checked', presetDialog).length;
+    const btn = $('[data-p="add"]', presetDialog);
+    btn.disabled = !n;
+    btn.textContent = t('선택한 {n}개 추가', { n });
+  }
+});
+presetDialog.addEventListener('click', (e) => {
+  const act = e.target.closest('[data-p]')?.dataset.p;
+  const st = ui.preset;
+  if (act === 'cancel') presetDialog.close();
+  else if (act === 'add' && st && trip?.id === st.tripId && !ui.readonly) {
+    const ids = $$('[name="pItem"]:checked', presetDialog).map((x) => x.value);
+    const added = C.addPresetItems(trip, presetData, ids, { type: st.type, days: st.days });
+    presetDialog.close();
+    if (!added.length || !commit().ok) return;
+    const tripId = trip.id;
+    const gone = new Set(added.map((c) => c.id));
+    pushUndo(t('추천 준비물 {n}개를 추가했어요', { n: added.length }), () => {
+      if (trip?.id !== tripId || ui.readonly) return;
+      // 추가한 항목만 뺀다 (그사이 체크했거나 가격을 넣었으면 지출 연결은 removeCheck 규칙대로 남긴다)
+      for (const id of gone) C.removeCheck(trip, id);
+      saved(commit(), t('되돌렸어요'));
+    });
+  }
+});
+closeOnBackdrop(presetDialog);
 
 /* ───────── 개인정보처리방침 (메인 푸터) ─────────
  * 지금 언어로 연다. 닫기 버튼·Esc·바깥 누르기로 닫고, 닫으면 연 링크로 포커스를 돌려준다. 본문만 스크롤된다.
@@ -5128,6 +5629,14 @@ function syncOnline() {
   const off = !navigator.onLine;
   document.body.classList.toggle('offline', off);
   $('#offlineBar').hidden = !off;
+  // 모바일 '지도' 탭은 화면 높이에 맞춰 그리므로 안내 띠 높이만큼 줄인다 (띠가 지도 조작부를 가리지 않게)
+  document.body.style.setProperty('--offbar', off ? `${$('#offlineBar').offsetHeight}px` : '0px');
+  if (pickViewport.matches && $('.layout')?.dataset.tab === 'map' && prefs.page === 'plan') {
+    requestAnimationFrame(() => {
+      map.invalidateSize({ pan: false });
+      revealMap();
+    });
+  }
 }
 addEventListener('online', () => {
   syncOnline();

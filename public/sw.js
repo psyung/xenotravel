@@ -22,9 +22,11 @@ const APP_FILES = [
   'icons/icon-180.png',
   'data/trends.json',
   'data/trends-i18n.json',
+  'data/checklist-presets.json',
   'lib/budget.js',
   'lib/checklist.js',
   'lib/datepicker.js',
+  'lib/dayops.js',
   'lib/export.js',
   'lib/geo.js',
   'lib/i18n.js',
@@ -36,8 +38,10 @@ const APP_FILES = [
   'lib/share.js',
   'lib/store.js',
   'lib/suggestions.js',
+  'lib/summary.js',
   'lib/sync.js',
   'lib/trends.js',
+  'lib/undo.js',
   'lib/weather.js',
 ];
 

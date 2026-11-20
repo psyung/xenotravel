@@ -37,7 +37,8 @@ test('B9·B10: /api/share를 부르지 않고, Esri 타일을 서비스 워커�
 
 test('B8: 파비콘은 밝은 원형 배지를 내장하고, 헤더 인라인 로고는 투명 배경 그대로', () => {
   const svg = read('icons/logo-xeno-route.svg');
-  assert.match(svg, /<circle cx="16" cy="16" r="15" fill="#FAF9F6" stroke="#E4E4E7"/);
+  // Phase 4: 흰 탭에서도 배지 윤곽이 보이게 테두리를 진하게 (#E4E4E7 → #A1A1AA, 1.5px). 배경 배지는 그대로 #FAF9F6
+  assert.match(svg, /<circle cx="16" cy="16" r="15(\.\d+)?" fill="#FAF9F6" stroke="#A1A1AA" stroke-width="1\.5"/);
   assert.doesNotMatch(svg, /prefers-color-scheme/);
   const header = /<span class="logo">([\s\S]*?)<\/span>/.exec(read('index.html'))[1];
   assert.doesNotMatch(header, /#FAF9F6/);

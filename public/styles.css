@@ -758,7 +758,7 @@ dialog#flightDialog { width: min(520px, calc(100vw - 32px)); }
 .foot-copy { margin: 8px 0 0; color: var(--mute); }
 
 /* 보기 전용 */
-body.readonly .search, body.readonly .drag, body.readonly [data-action="duplicate"], body.readonly [data-action="delete"],
+body.readonly .search, body.readonly .drag, body.readonly [data-action="duplicate"], body.readonly [data-action="delete"], body.readonly [data-action^="place-"], body.readonly [data-action="day-order"],
 body.readonly .move-to, body.readonly .dock-hint, body.readonly #flightsBtn, body.readonly .edit-only,
 body.readonly .pnav, body.readonly .pagebar { display: none !important; }
 body.readonly .trip-title { pointer-events: none; }
@@ -1654,15 +1654,24 @@ body.picking .leaflet-bottom.leaflet-right { opacity: .4; pointer-events: none; 
   .check-tabs .lbl-tiny { display: inline; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 }
 
-/* ───────── 2차: 375px 이하 머리 바 — 여행 이름이 가로 45% 이상 ───────── */
+/* ───────── 375px 이하 머리 바 (Phase 4 QA) ─────────
+ * 세 구역(로고 · 여행 이름 · [⋯ | KO EN 中 日])을 grid 칸으로 나눠 누르는 영역이 절대 겹치지 않게 한다.
+ * 가운데 여행 이름 칸만 줄어들고(말줄임), 로고·메뉴·언어 버튼은 고정 폭(언어 버튼 24px = WCAG 2.5.8 최소 크기)이다.
+ * 언어 버튼 사이 간격은 0으로 두고 폭 안에 여백을 넣어, 인접 버튼의 터치 영역이 맞닿기만 하고 포개지지 않는다. */
 @media (max-width: 375px) {
-  .topbar { gap: 2px; padding-inline: 6px; }
-  .brand { padding: 4px 2px; }
-  .actions { gap: 2px; }
-  .lang-switch { gap: 3px; }
-  .lang-switch button { min-width: 18px; }
-  .tripsw { min-width: 45%; }
-  .tripsw summary { padding: 0 4px 0 8px; font-size: 13px; }
+  .topbar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 4px; padding-inline: 6px; }
+  body[data-page="home"] .topbar, body.readonly .topbar { grid-template-columns: minmax(0, 1fr) auto; }
+  .topbar > .pnav { display: none; }
+  .brand { padding: 4px 2px; min-width: 0; }
+  .tripsw { min-width: 0; }
+  .tripsw summary { width: 100%; height: 38px; padding: 0 2px 0 7px; gap: 2px; font-size: 13px; }
+  .tripsw .chev { width: 14px; height: 14px; flex: none; }
+  /* 긴 여행 이름은 한 줄에서 잘리지 않고 두 줄까지 보인다 */
+  #curTrip { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; line-height: 1.15; overflow-wrap: anywhere; word-break: keep-all; }
+  .actions { gap: 4px; margin-left: 0; }
+  .menu > summary { margin-right: 2px; }
+  .lang-switch { gap: 0; }
+  .lang-switch button { min-width: 24px; width: 24px; min-height: 44px; padding: 0; font-size: 12px; }
 }
 
 /* ───────── 모바일 지도 높이 (B5) ─────────
@@ -1773,3 +1782,112 @@ details.settle h4 small { color: var(--mute); font-weight: 500; margin-left: 4px
 .base-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 8px 0; font-size: 12.5px; }
 .base-row label { display: flex; align-items: center; gap: 6px; color: var(--sub); }
 .base-row small { flex-basis: 100%; }
+
+/* ───────── Phase 4: QA 잔여 결함 ───────── */
+/* 0건 안내·긴 라벨: 네 언어 모두 카드 밖으로 나가지 않고 줄바꿈 (CJK는 단어 단위) */
+.cat-empty { overflow-wrap: anywhere; word-break: keep-all; }
+.cat-empty .linkbtn { display: inline; padding: 0; min-height: 0; font-size: inherit; font-weight: 700; color: var(--brand-text, var(--accent)); text-decoration: underline; text-underline-offset: 2px; }
+.legend .cat-chip { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: left; line-height: 1.2; }
+/* 배포 식별자 (푸터) */
+.foot-build { white-space: nowrap; }
+.foot-build code { font: 600 11.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 2px 5px; border-radius: 5px; background: var(--soft); color: var(--sub); font-variant-numeric: tabular-nums; }
+/* 정산 합계 줄 */
+.settle-table tfoot th, .settle-table tfoot td { border-top: 1px solid var(--line); font-weight: 700; padding-top: 6px; }
+.settle-table td, .settle-table th { font-variant-numeric: tabular-nums; }
+/* 결제수단 필터·합계 */
+.pay-filter { margin: 4px 0 6px; }
+.pay-filter button { height: auto; min-height: 32px; display: inline-flex; align-items: baseline; gap: 4px; padding: 4px 10px; flex-wrap: wrap; }
+.pay-filter button b { font-variant-numeric: tabular-nums; font-weight: 700; }
+.pay-filter button small { font-weight: 500; opacity: .8; }
+.pay-sum { margin: 0 0 6px; font-size: 13px; color: var(--sub); }
+.pay-sum b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.rec-amt small { overflow-wrap: anywhere; }
+
+/* ───────── Phase 4: 다른 일차로 이동·복제 / 일자 순서 ───────── */
+dialog.dayops-dialog { width: min(520px, calc(100vw - 32px)); }
+.dayops-dialog .do-mode { margin-bottom: 10px; box-shadow: none; }
+.dayops-dialog .do-mode button { min-height: 36px; padding: 0 16px; font-size: 13px; }
+.dayops-dialog .do-what { margin: 0 0 10px; overflow-wrap: anywhere; }
+.do-days { border: 0; margin: 0 0 12px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.do-days legend { padding: 0; margin-bottom: 6px; font-size: 12.5px; font-weight: 700; color: var(--sub); }
+.do-day { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; align-items: center; min-height: 48px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; background: var(--paper); }
+.do-day:has(input:checked) { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.do-day:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.do-day.off { opacity: .5; cursor: not-allowed; }
+.do-day input { grid-row: span 2; margin: 0; accent-color: var(--ink); }
+.do-day-name { font-weight: 700; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.do-day small { color: var(--mute); font-size: 11.5px; }
+.do-preview { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--soft); }
+.do-preview h3 { margin: 0 0 4px; font-size: 13.5px; }
+.do-pos { margin: 0 0 8px; font-size: 12.5px; color: var(--sub); }
+.do-facts, .do-conflicts { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; font-size: 12.5px; }
+.do-facts li { display: flex; align-items: center; gap: 6px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.do-facts .ic { width: 15px; height: 15px; flex: none; color: var(--sub); }
+.do-conflicts li { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; overflow-wrap: anywhere; }
+.do-conflicts li.me { font-weight: 700; }
+.do-conflicts .tw-badge, .do-row-warn .tw-badge {
+  display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 6px; font-size: 11px; font-weight: 700; white-space: nowrap;
+  color: var(--accent-ink); background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.do-conflicts .flight .tw-badge, .do-row-warn .tw-badge.flight { color: color-mix(in srgb, var(--warn) 55%, var(--ink)); background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.do-warn { margin: 6px 0 0; font-size: 12.5px; font-weight: 600; color: color-mix(in srgb, var(--warn) 55%, var(--ink)); } /* AA 대비: 주황을 글자색 쪽으로 */
+.do-ok { margin: 6px 0 0; font-size: 12.5px; font-weight: 600; color: color-mix(in srgb, var(--ok) 55%, var(--ink)); }
+.do-order { list-style: none; margin: 10px 0 6px; padding: 0; display: grid; gap: 6px; }
+.do-row { display: grid; grid-template-columns: 92px auto minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 56px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+.do-row.moved { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.do-slot { font-size: 12px; font-weight: 700; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.do-drag { cursor: grab; touch-action: none; padding: 10px 4px; color: var(--mute); user-select: none; -webkit-user-select: none; }
+.do-block { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.do-block b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.do-block small { color: var(--mute); font-size: 11.5px; }
+.do-row-warn { display: flex; flex-wrap: wrap; gap: 4px; }
+.do-arrows { display: flex; gap: 4px; }
+.do-arrows button { width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); font-weight: 700; }
+.do-arrows button:disabled { opacity: .35; }
+.do-arrows button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (max-width: 400px) {
+  .do-days { grid-template-columns: 1fr 1fr; }
+  .do-row { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "slot slot slot" "drag block arrows"; row-gap: 2px; }
+  .do-slot { grid-area: slot; }
+  .do-drag { grid-area: drag; }
+  .do-block { grid-area: block; }
+  .do-arrows { grid-area: arrows; }
+}
+.editor-actions .ea-buttons { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+
+/* ───────── Phase 4: 일정 요약 이미지 (공유 창) ───────── */
+.share-image { margin: 14px 0 6px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--soft); }
+.share-image .si-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
+.share-image h3 { margin: 0; font-size: 14px; }
+.share-image small { color: var(--sub); font-size: 12px; overflow-wrap: anywhere; word-break: keep-all; }
+.si-preview { display: block; width: 100%; max-height: 260px; object-fit: contain; object-position: top center; border-radius: 10px; border: 1px solid var(--line); background: var(--paper); margin-bottom: 8px; }
+.si-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.si-actions .btn { flex: 1 1 auto; }
+
+/* ───────── Phase 4: 스마트 체크리스트 추천 ───────── */
+.preset-cta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 12px; }
+.preset-cta small { color: var(--sub); font-size: 12.5px; overflow-wrap: anywhere; }
+dialog.preset-dialog { width: min(520px, calc(100vw - 32px)); }
+.preset-dialog fieldset { border: 0; padding: 0; margin: 0 0 12px; }
+.preset-dialog legend { padding: 0; margin-bottom: 6px; font-size: 12.5px; font-weight: 700; color: var(--sub); }
+.preset-dialog legend small { font-weight: 500; color: var(--mute); margin-left: 4px; }
+.preset-dialog .chipset label {
+  display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--paper); font-weight: 600; font-size: 13px; color: var(--sub); cursor: pointer; user-select: none; -webkit-user-select: none;
+}
+.preset-dialog .chipset label.on, .preset-dialog .chipset label:has(input:checked) { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.preset-dialog .chipset label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.preset-dialog .chipset input { position: absolute; opacity: 0; pointer-events: none; }
+.preset-preview { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--soft); }
+.preset-preview h3 { margin: 0 0 8px; font-size: 13.5px; }
+.pp-group h4 { margin: 8px 0 4px; font-size: 12.5px; color: var(--sub); }
+.pp-group ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.pp-group label { display: flex; align-items: flex-start; gap: 8px; min-height: 36px; padding: 6px 4px; font-size: 13.5px; overflow-wrap: anywhere; cursor: pointer; }
+.pp-group input { margin-top: 2px; accent-color: var(--accent-primary, var(--accent)); width: 18px; height: 18px; flex: none; }
+.pp-skipped { margin-top: 8px; overflow-wrap: anywhere; }
+
+/* 오프라인 안내 띠: 지도 조작부(Leaflet 1000)보다 위에, 모바일 지도 탭 높이에서 띠 높이를 뺀다 */
+.offline-bar { z-index: 1100; color: color-mix(in srgb, var(--warn) 55%, var(--ink)); } /* 글자 대비 AA */
+@media (max-width: 900px) {
+  .layout[data-tab="map"] .mapwrap { height: calc(100dvh - var(--head) - var(--pbar) - 12px - var(--offbar, 0px)); }
+}

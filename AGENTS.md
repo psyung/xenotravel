@@ -16,7 +16,9 @@
 
 작업을 시작하기 전에 아래 문서를 순서대로 확인하세요.
 
-1. **`docs/CODEX_PHASE3_FINAL_POLISH_SPEC.md` *(현재 최우선 활성 지시서)***
+0. **`docs/phase4_qa_fixes_and_core_features.md` *(최신 완료 작업 — Phase 4 QA 잔여 결함 + 핵심 기능 4종)***
+   * 회귀 테스트: `test/phase4.test.js`. 배포 식별자는 `scripts/build-version.mjs`(Vercel buildCommand)가 넣습니다.
+1. **`docs/CODEX_PHASE3_FINAL_POLISH_SPEC.md` *(Phase 3 마감 지시서)***
    * 2차 QA에서 도출된 **잔여 결함 10건(`B1`~`B10`)**과 **보완 2건(`C1` 기준 통화 선택, `C2` 체크리스트 개별 삭제 Undo)**을 정의한 최종 마감 명세서입니다.
 2. **`docs/WARNINGS_AND_GUARDRAILS.md`**
    * 과거 결함의 재발을 막기 위한 절대 금지 규칙과 QA 방어 가드레일입니다.

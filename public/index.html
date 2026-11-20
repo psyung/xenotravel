@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>XenoTravel</title>
+  <meta name="build-commit" content="dev">
   <meta name="description" content="지도에서 여행 일정을 짜고 가계부와 체크리스트를 관리하세요. XenoTravel은 가입 없이 쓰는 여행 플래너입니다.">
   <meta property="og:type" content="website">
   <meta property="og:title" content="XenoTravel">
@@ -333,6 +334,14 @@
         <button type="button" id="shareNative" class="btn" hidden data-i18n="다른 앱으로 보내기">다른 앱으로 보내기</button>
         <button type="button" id="shareCopyLink" class="btn ghost" data-i18n="링크만 복사">링크만 복사</button>
       </div>
+      <section class="share-image" aria-labelledby="shareImgTitle">
+        <div class="si-head"><h3 id="shareImgTitle" data-i18n="일정 요약 이미지">일정 요약 이미지</h3><small data-i18n="여행명·날짜·일차별 대표 장소·동선만 담아요. 메모·예약번호·가계부는 넣지 않아요.">여행명·날짜·일차별 대표 장소·동선만 담아요. 메모·예약번호·가계부는 넣지 않아요.</small></div>
+        <img id="shareImgPreview" class="si-preview" alt="" hidden>
+        <div class="si-actions">
+          <button type="button" id="shareImgSave" class="btn" data-i18n="이미지로 저장">이미지로 저장</button>
+          <button type="button" id="shareImgSend" class="btn ghost" hidden data-i18n="이미지 보내기">이미지 보내기</button>
+        </div>
+      </section>
       <ul class="share-notes">
         <li data-i18n="보기 전용이에요. 받은 사람이 원하면 자기 여행으로 저장해서 고칠 수 있어요.">보기 전용이에요. 받은 사람이 원하면 자기 여행으로 저장해서 고칠 수 있어요.</li>
         <li data-i18n="링크는 지금 일정의 사본이에요. 일정을 고쳤다면 링크를 다시 보내 주세요.">링크는 지금 일정의 사본이에요. 일정을 고쳤다면 링크를 다시 보내 주세요.</li>
@@ -342,6 +351,24 @@
       <div class="dialog-actions">
         <button type="button" id="shareClose" class="btn ghost" data-i18n="닫기">닫기</button>
       </div>
+    </div>
+  </dialog>
+
+  <!-- Phase 4: 다른 일차로 이동·복제 / 일자 순서 바꾸기 (미리보기 → 확정). 내용은 app.js가 채운다 -->
+  <dialog id="dayOpsDialog" class="dayops-dialog" aria-labelledby="dayOpsTitle">
+    <div class="dialog-body">
+      <h2 id="dayOpsTitle"></h2>
+      <div id="dayOpsBody"></div>
+      <div id="dayOpsActions" class="dialog-actions"></div>
+    </div>
+  </dialog>
+
+  <!-- Phase 4: 스마트 체크리스트 추천 (여행 성격·기간 → 미리보기 → 고른 항목만 추가) -->
+  <dialog id="presetDialog" class="preset-dialog" aria-labelledby="presetTitle">
+    <div class="dialog-body">
+      <h2 id="presetTitle" data-i18n="스마트 준비물 추천">스마트 준비물 추천</h2>
+      <div id="presetBody"></div>
+      <div id="presetActions" class="dialog-actions"></div>
     </div>
   </dialog>
 

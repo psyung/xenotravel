@@ -18,22 +18,16 @@
 ## 2. 표준 SVG 코드
 
 ### A. 파비콘 및 PWA 아이콘용 (`public/icons/logo-xeno-route.svg`)
-브라우저 탭 및 OS 다크 모드 설정에 따라 경로 색상이 자동으로 반전됩니다.
+OS·브라우저 테마와 무관하게 같은 대비가 나오도록 밝은 원형 배지를 내장합니다 (Phase 3 B8 → Phase 4 대비 보완).
+배지(`#FAF9F6`)는 다크 탭(`#202124`) 대비 약 16:1, 테두리(`#A1A1AA`, 1.5px)는 흰 탭(`#FFFFFF`)에서도 배지 윤곽을 보이게 합니다.
 
 ```svg
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <style>
-    .route, .origin { stroke: #18181B; }
-    .beacon { fill: #D94E34; }
-    @media (prefers-color-scheme: dark) {
-      .route, .origin { stroke: #F4F4F5; }
-      .beacon { fill: #F2745B; }
-    }
-  </style>
-  <path class="route" d="M9.5 10.5C14.5 10.5 17.5 23.5 23 23.5" stroke-width="3.2" stroke-linecap="round"/>
-  <path class="route" d="M11.3 21.7L19.6 13.4" stroke-width="3.2" stroke-linecap="butt"/>
-  <circle class="origin" cx="9.5" cy="23.5" r="2.6" stroke-width="2.4"/>
-  <circle class="beacon" cx="23.3" cy="9.7" r="3.4"/>
+  <circle cx="16" cy="16" r="15.25" fill="#FAF9F6" stroke="#A1A1AA" stroke-width="1.5"/>
+  <path d="M9.5 10.5C14.5 10.5 17.5 23.5 23 23.5" stroke="#18181B" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M11.3 21.7L19.6 13.4" stroke="#18181B" stroke-width="3.2" stroke-linecap="butt"/>
+  <circle cx="9.5" cy="23.5" r="2.6" stroke="#18181B" stroke-width="2.4"/>
+  <circle cx="23.3" cy="9.7" r="3.4" fill="#D94E34"/>
 </svg>
 ```
 

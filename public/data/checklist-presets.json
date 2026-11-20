@@ -1,0 +1,589 @@
+{
+ "version": 1,
+ "types": {
+  "business": {
+   "ko": "출장",
+   "en": "Business",
+   "zh": "出差",
+   "ja": "出張"
+  },
+  "resort": {
+   "ko": "휴양",
+   "en": "Beach & resort",
+   "zh": "度假",
+   "ja": "リゾート"
+  },
+  "shopping": {
+   "ko": "쇼핑",
+   "en": "Shopping",
+   "zh": "购物",
+   "ja": "ショッピング"
+  },
+  "city": {
+   "ko": "도시 관광",
+   "en": "City sightseeing",
+   "zh": "城市观光",
+   "ja": "街歩き観光"
+  },
+  "family": {
+   "ko": "아이 동반",
+   "en": "With kids",
+   "zh": "带孩子",
+   "ja": "子連れ"
+  }
+ },
+ "durations": {
+  "short": {
+   "ko": "1~3일",
+   "en": "1–3 days",
+   "zh": "1~3天",
+   "ja": "1〜3日",
+   "min": 1,
+   "max": 3
+  },
+  "mid": {
+   "ko": "4~7일",
+   "en": "4–7 days",
+   "zh": "4~7天",
+   "ja": "4〜7日",
+   "min": 4,
+   "max": 7
+  },
+  "long": {
+   "ko": "8일 이상",
+   "en": "8+ days",
+   "zh": "8天以上",
+   "ja": "8日以上",
+   "min": 8,
+   "max": 999
+  }
+ },
+ "items": [
+  {
+   "id": "passport-copy",
+   "group": "todo",
+   "types": [
+    "business",
+    "resort",
+    "shopping",
+    "city",
+    "family"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "여권 사본 · 사진 파일 저장",
+    "en": "Save a copy and photo of your passport",
+    "zh": "保存护照复印件和照片",
+    "ja": "パスポートのコピー・写真を保存"
+   }
+  },
+  {
+   "id": "card-overseas",
+   "group": "todo",
+   "types": [
+    "business",
+    "resort",
+    "shopping",
+    "city",
+    "family"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "해외 결제 카드 · 한도 확인",
+    "en": "Check overseas card payments and limits",
+    "zh": "确认境外刷卡和额度",
+    "ja": "海外決済カード・限度額を確認"
+   }
+  },
+  {
+   "id": "transit-app",
+   "group": "todo",
+   "types": [
+    "city",
+    "shopping",
+    "family",
+    "business"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "현지 교통 앱 · 교통카드 준비",
+    "en": "Set up local transit app or card",
+    "zh": "准备当地交通App或交通卡",
+    "ja": "現地の交通アプリ・ICカードを準備"
+   }
+  },
+  {
+   "id": "meeting-docs",
+   "group": "todo",
+   "types": [
+    "business"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "회의 자료 · 명함 준비",
+    "en": "Prepare meeting materials and business cards",
+    "zh": "准备会议资料和名片",
+    "ja": "会議資料・名刺を準備"
+   }
+  },
+  {
+   "id": "receipts",
+   "group": "todo",
+   "types": [
+    "business"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "출장비 영수증 정리 방법 정하기",
+    "en": "Plan how to keep receipts for expenses",
+    "zh": "确定差旅费收据整理方式",
+    "ja": "出張費の領収書の整理方法を決める"
+   }
+  },
+  {
+   "id": "calendar-tz",
+   "group": "todo",
+   "types": [
+    "business"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "현지 시간대로 일정 알림 맞추기",
+    "en": "Set calendar alerts to local time zone",
+    "zh": "将日程提醒调整为当地时区",
+    "ja": "予定の通知を現地時間に合わせる"
+   }
+  },
+  {
+   "id": "tax-free",
+   "group": "todo",
+   "types": [
+    "shopping"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "면세 · 택스리펀 조건 확인",
+    "en": "Check tax-free and tax refund rules",
+    "zh": "确认免税和退税条件",
+    "ja": "免税・タックスリファンドの条件を確認"
+   }
+  },
+  {
+   "id": "luggage-weight",
+   "group": "todo",
+   "types": [
+    "shopping"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "수하물 무게 한도 확인",
+    "en": "Check baggage weight allowance",
+    "zh": "确认行李重量限额",
+    "ja": "受託手荷物の重量制限を確認"
+   }
+  },
+  {
+   "id": "restaurant-booking",
+   "group": "todo",
+   "types": [
+    "city",
+    "resort"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "인기 식당 · 입장권 예약",
+    "en": "Book popular restaurants and tickets",
+    "zh": "预订热门餐厅和门票",
+    "ja": "人気店・入場券を予約"
+   }
+  },
+  {
+   "id": "resort-transfer",
+   "group": "todo",
+   "types": [
+    "resort"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "공항 ↔ 리조트 픽업 예약",
+    "en": "Book airport–resort transfer",
+    "zh": "预订机场到度假村的接送",
+    "ja": "空港〜リゾートの送迎を予約"
+   }
+  },
+  {
+   "id": "kids-meds",
+   "group": "todo",
+   "types": [
+    "family"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "아이 상비약 · 병원 정보 확인",
+    "en": "Pack kids' medicine and find a local clinic",
+    "zh": "准备儿童常用药并查好医院信息",
+    "ja": "子どもの常備薬・病院情報を確認"
+   }
+  },
+  {
+   "id": "stroller-rules",
+   "group": "todo",
+   "types": [
+    "family"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "유모차 · 카시트 항공 규정 확인",
+    "en": "Check airline rules for strollers and car seats",
+    "zh": "确认婴儿车和安全座椅的航空规定",
+    "ja": "ベビーカー・チャイルドシートの航空規定を確認"
+   }
+  },
+  {
+   "id": "laundry-plan",
+   "group": "todo",
+   "types": [
+    "business",
+    "resort",
+    "shopping",
+    "city",
+    "family"
+   ],
+   "minDays": 6,
+   "text": {
+    "ko": "세탁 가능한 숙소 · 코인 세탁소 확인",
+    "en": "Find laundry at the hotel or a coin laundry",
+    "zh": "确认住宿可洗衣或附近的自助洗衣店",
+    "ja": "洗濯できる宿・コインランドリーを確認"
+   }
+  },
+  {
+   "id": "suit",
+   "group": "pack",
+   "types": [
+    "business"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "정장 · 구김 방지 커버",
+    "en": "Suit and garment bag",
+    "zh": "西装和防皱衣袋",
+    "ja": "スーツ・シワ防止カバー"
+   }
+  },
+  {
+   "id": "laptop",
+   "group": "pack",
+   "types": [
+    "business"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "노트북 · 충전기 · 변환 젠더",
+    "en": "Laptop, charger and adapters",
+    "zh": "笔记本电脑、充电器和转接头",
+    "ja": "ノートPC・充電器・変換アダプタ"
+   }
+  },
+  {
+   "id": "presenter",
+   "group": "pack",
+   "types": [
+    "business"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "발표용 리모컨 · USB",
+    "en": "Presentation clicker and USB drive",
+    "zh": "演示遥控器和U盘",
+    "ja": "プレゼン用リモコン・USB"
+   }
+  },
+  {
+   "id": "swimsuit",
+   "group": "pack",
+   "types": [
+    "resort"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "수영복 · 래시가드",
+    "en": "Swimsuit and rash guard",
+    "zh": "泳衣和防晒泳衣",
+    "ja": "水着・ラッシュガード"
+   }
+  },
+  {
+   "id": "sunscreen",
+   "group": "pack",
+   "types": [
+    "resort",
+    "family",
+    "city"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "선크림 · 선글라스",
+    "en": "Sunscreen and sunglasses",
+    "zh": "防晒霜和墨镜",
+    "ja": "日焼け止め・サングラス"
+   }
+  },
+  {
+   "id": "waterproof-pouch",
+   "group": "pack",
+   "types": [
+    "resort"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "방수팩 · 비치 샌들",
+    "en": "Waterproof pouch and beach sandals",
+    "zh": "防水袋和沙滩拖鞋",
+    "ja": "防水ポーチ・ビーチサンダル"
+   }
+  },
+  {
+   "id": "aloe",
+   "group": "pack",
+   "types": [
+    "resort"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "알로에 젤 (햇볕 화상 대비)",
+    "en": "Aloe gel for sunburn",
+    "zh": "芦荟胶（防晒伤）",
+    "ja": "アロエジェル（日焼け対策）"
+   }
+  },
+  {
+   "id": "foldable-bag",
+   "group": "pack",
+   "types": [
+    "shopping",
+    "city"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "접이식 장바구니 · 보조 가방",
+    "en": "Foldable shopping bag",
+    "zh": "可折叠购物袋",
+    "ja": "折りたたみエコバッグ"
+   }
+  },
+  {
+   "id": "luggage-scale",
+   "group": "pack",
+   "types": [
+    "shopping"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "휴대용 저울",
+    "en": "Portable luggage scale",
+    "zh": "便携行李秤",
+    "ja": "携帯用はかり"
+   }
+  },
+  {
+   "id": "extra-suitcase",
+   "group": "pack",
+   "types": [
+    "shopping"
+   ],
+   "minDays": 4,
+   "text": {
+    "ko": "여분 캐리어 · 압축 파우치",
+    "en": "Spare suitcase or compression pouches",
+    "zh": "备用行李箱或压缩袋",
+    "ja": "予備のスーツケース・圧縮袋"
+   }
+  },
+  {
+   "id": "walking-shoes",
+   "group": "pack",
+   "types": [
+    "city",
+    "shopping",
+    "family"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "편한 운동화",
+    "en": "Comfortable walking shoes",
+    "zh": "舒适的运动鞋",
+    "ja": "歩きやすいスニーカー"
+   }
+  },
+  {
+   "id": "umbrella",
+   "group": "pack",
+   "types": [
+    "city",
+    "shopping",
+    "business",
+    "family"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "접이식 우산",
+    "en": "Compact umbrella",
+    "zh": "折叠伞",
+    "ja": "折りたたみ傘"
+   }
+  },
+  {
+   "id": "snacks-kids",
+   "group": "pack",
+   "types": [
+    "family"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "아이 간식 · 물병",
+    "en": "Snacks and water bottle for kids",
+    "zh": "儿童零食和水壶",
+    "ja": "子どものおやつ・水筒"
+   }
+  },
+  {
+   "id": "kids-entertain",
+   "group": "pack",
+   "types": [
+    "family"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "기내용 장난감 · 태블릿",
+    "en": "Toys or tablet for the flight",
+    "zh": "机上玩具或平板",
+    "ja": "機内用おもちゃ・タブレット"
+   }
+  },
+  {
+   "id": "wet-wipes",
+   "group": "pack",
+   "types": [
+    "family",
+    "resort"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "물티슈 · 지퍼백",
+    "en": "Wet wipes and zip bags",
+    "zh": "湿巾和密封袋",
+    "ja": "ウェットティッシュ・ジップ袋"
+   }
+  },
+  {
+   "id": "extra-clothes",
+   "group": "pack",
+   "types": [
+    "business",
+    "resort",
+    "shopping",
+    "city",
+    "family"
+   ],
+   "minDays": 6,
+   "text": {
+    "ko": "여분 옷 · 세탁 세제 시트",
+    "en": "Extra clothes and laundry sheets",
+    "zh": "备用衣物和洗衣片",
+    "ja": "着替えの追加・洗濯洗剤シート"
+   }
+  },
+  {
+   "id": "meds-long",
+   "group": "pack",
+   "types": [
+    "business",
+    "resort",
+    "shopping",
+    "city",
+    "family"
+   ],
+   "minDays": 8,
+   "text": {
+    "ko": "장기 복용약 넉넉히",
+    "en": "Enough regular medication for a long trip",
+    "zh": "备足长期服用的药物",
+    "ja": "常用薬を多めに"
+   }
+  },
+  {
+   "id": "power-strip",
+   "group": "pack",
+   "types": [
+    "business",
+    "family"
+   ],
+   "minDays": 4,
+   "text": {
+    "ko": "멀티탭 (짧은 것)",
+    "en": "Small power strip",
+    "zh": "小型排插",
+    "ja": "小型の電源タップ"
+   }
+  },
+  {
+   "id": "shopping-list",
+   "group": "shop",
+   "types": [
+    "shopping"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "살 것 목록 · 사이즈 메모",
+    "en": "Shopping list with sizes",
+    "zh": "购物清单和尺码备忘",
+    "ja": "買う物リスト・サイズメモ"
+   }
+  },
+  {
+   "id": "gift-coworkers",
+   "group": "shop",
+   "types": [
+    "business"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "동료 선물 (개별 포장 과자)",
+    "en": "Gifts for coworkers (individually wrapped snacks)",
+    "zh": "给同事的礼物（独立包装零食）",
+    "ja": "同僚へのお土産（個包装のお菓子）"
+   }
+  },
+  {
+   "id": "local-snacks",
+   "group": "shop",
+   "types": [
+    "city",
+    "resort",
+    "family"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "현지 간식 · 기념품",
+    "en": "Local snacks and souvenirs",
+    "zh": "当地零食和纪念品",
+    "ja": "現地のお菓子・お土産"
+   }
+  },
+  {
+   "id": "duty-free",
+   "group": "shop",
+   "types": [
+    "shopping"
+   ],
+   "minDays": 1,
+   "text": {
+    "ko": "면세점 픽업 목록",
+    "en": "Duty-free pickup list",
+    "zh": "免税店提货清单",
+    "ja": "免税店の受け取りリスト"
+   }
+  }
+ ]
+}

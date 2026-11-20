@@ -1,0 +1,192 @@
+// 일차 간 이동·복제와 일자 순서 바꾸기 (Phase 4). 순수 함수만 둔다 — 화면(미리보기·실행 취소)은 app.js.
+// 일차의 날짜·숙소·항공편은 날짜에 붙어 있다. 옮기는 것은 장소(items)뿐이고, 미리보기에서 대상 날의 항공편·숙소와
+// 시간 충돌을 먼저 계산해 보여 준다. 실행한 작업마다 되돌리기 함수를 만들어 실행 취소 스택에 따로 쌓는다.
+import { uid, findItem, flightsOnDate, dayStays, timeConflictKinds, toMinutes } from './model.js';
+
+const hhmm = (v) => (v ? String(v).slice(11, 16) : '');
+
+/** 그날 일정이 들어갈 수 있는 시간 범위: after = 도착편 도착 시각, before = 출발(귀국)편 출발 시각 */
+export function dayBounds(trip, dayIndex) {
+  const date = trip.days[dayIndex]?.date;
+  const flights = date ? flightsOnDate(trip, date) : [];
+  const top = flights.filter(({ flight }) => flight.kind !== 'in');
+  const bottom = flights.filter(({ flight }) => flight.kind === 'in');
+  const after = top.filter(({ role }) => role !== 'depart').map(({ flight }) => hhmm(flight.arriveAt)).filter(Boolean).sort().at(-1) ?? '';
+  const before = bottom.filter(({ role }) => role !== 'arrive').map(({ flight }) => hhmm(flight.departAt)).filter(Boolean).sort()[0] ?? '';
+  return { after, before, flights };
+}
+
+/** 그날 시간 충돌: Map<장소 id, 'order'|'flight'> (app.js의 배지와 같은 규칙) */
+export function dayConflicts(trip, dayIndex, items = trip.days[dayIndex]?.items) {
+  const { after, before } = dayBounds(trip, dayIndex);
+  return timeConflictKinds(items, { after, before });
+}
+
+/** 시간이 있는 장소는 시간 순서 자리에, 없으면 맨 끝에 넣을 위치 */
+export function insertIndex(items, item) {
+  const m = toMinutes(item.time);
+  if (m == null) return items.length;
+  const i = items.findIndex((x) => {
+    const xm = toMinutes(x.time);
+    return xm != null && xm > m;
+  });
+  return i < 0 ? items.length : i;
+}
+
+/** 복제본: 새 id, 다녀옴 표시 없음 (결제 기록은 원본 id에 묶여 있어 복사하지 않는다) */
+function cloneItem(item) {
+  const { visited, ...rest } = structuredClone(item);
+  return { ...rest, id: uid() };
+}
+
+/**
+ * 다른 일차로 옮기기/복제하기 전 미리보기. trip은 바꾸지 않는다.
+ * → { ok, mode, item, from: 원래 일차(보관함이면 -1), to, index: 들어갈 자리, sameDay,
+ *     flights: [{ kind, role, time, label }], stays: { start, end },
+ *     conflicts: [{ id, name, kind, isTarget }] — 넣은 뒤 대상 날에서 생기는 충돌 전부,
+ *     added: 지금은 없는데 새로 생기는 충돌 수, targetConflict: 옮긴 장소 자체의 충돌 종류('' = 없음) }
+ */
+export function placementPreview(trip, itemId, toDay, mode = 'move') {
+  const found = findItem(trip, itemId);
+  const day = trip.days[toDay];
+  if (!found || !day) return { ok: false };
+  const from = trip.days.findIndex((d) => d.id === found.listId);
+  const sameDay = from === toDay;
+  const item = mode === 'copy' ? { ...found.item, id: `${found.item.id}__copy` } : found.item;
+  const base = day.items.filter((x) => x.id !== found.item.id || mode === 'copy');
+  const index = insertIndex(base, item);
+  const next = [...base.slice(0, index), item, ...base.slice(index)];
+  const before = dayConflicts(trip, toDay, day.items);
+  const after = dayConflicts(trip, toDay, next);
+  const names = new Map(next.map((x) => [x.id, x.name]));
+  const conflicts = [...after].map(([id, kind]) => ({ id, name: names.get(id) ?? '', kind, isTarget: id === item.id }));
+  const { flights } = dayBounds(trip, toDay);
+  return {
+    ok: true,
+    mode,
+    item: found.item,
+    from,
+    to: toDay,
+    index,
+    sameDay,
+    flights: flights.map(({ flight, role }) => ({
+      kind: flight.kind,
+      role,
+      time: hhmm(role === 'arrive' ? flight.arriveAt : flight.departAt),
+      label: [flight.flightNo, `${flight.from || '?'}→${flight.to || '?'}`].filter(Boolean).join(' '),
+    })),
+    stays: dayStays(trip, toDay),
+    conflicts,
+    added: [...after.keys()].filter((id) => !before.has(id)).length,
+    targetConflict: after.get(item.id) ?? '',
+  };
+}
+
+/**
+ * 다른 일차로 옮기기. 같은 날이면 아무것도 하지 않는다.
+ * → { item, index, undo(trip) } | null   undo는 원래 목록·자리로 되돌린다 (그사이 지워졌으면 아무것도 안 함)
+ */
+export function moveToDay(trip, itemId, toDay) {
+  const found = findItem(trip, itemId);
+  const day = trip.days[toDay];
+  if (!found || !day || found.listId === day.id) return null;
+  const [item] = found.list.splice(found.index, 1);
+  const index = insertIndex(day.items, item);
+  day.items.splice(index, 0, item);
+  const back = { listId: found.listId, index: found.index };
+  return {
+    item,
+    index,
+    undo(tr) {
+      const now = findItem(tr, itemId);
+      const list = back.listId === 'inbox' ? tr.inbox : tr.days.find((d) => d.id === back.listId)?.items;
+      if (!now || !list) return false;
+      const [it] = now.list.splice(now.index, 1);
+      list.splice(Math.min(back.index, list.length), 0, it);
+      return true;
+    },
+  };
+}
+
+/** 다른 일차(같은 날도 가능)에 복제. → { item: 복제본, index, undo(trip) } | null */
+export function copyToDay(trip, itemId, toDay) {
+  const found = findItem(trip, itemId);
+  const day = trip.days[toDay];
+  if (!found || !day) return null;
+  const copy = cloneItem(found.item);
+  const index = insertIndex(day.items, copy);
+  day.items.splice(index, 0, copy);
+  return {
+    item: copy,
+    index,
+    undo(tr) {
+      const now = findItem(tr, copy.id);
+      if (!now) return false;
+      now.list.splice(now.index, 1);
+      return true;
+    },
+  };
+}
+
+/** order가 0..n-1을 한 번씩 담은 순열인지 */
+export const isPermutation = (order, n) => Array.isArray(order) && order.length === n && new Set(order).size === n && order.every((x) => Number.isInteger(x) && x >= 0 && x < n);
+
+/**
+ * 일자 순서 바꾸기 미리보기. order[i] = 새 i번째 날에 들어갈 지금 일차 번호. trip은 바꾸지 않는다.
+ * → { ok, changed, days: [{ to, from, count, firstName, conflicts: [{name, kind}], flights: n, stays }], added, total }
+ *   added: 지금은 없는데 새로 생기는 충돌 수 (항공편 시간·앞뒤 순서)
+ */
+export function dayOrderPreview(trip, order) {
+  const n = trip.days.length;
+  if (!isPermutation(order, n)) return { ok: false };
+  const nowKeys = new Set(trip.days.flatMap((_, i) => [...dayConflicts(trip, i).keys()].map((id) => `${i}:${id}`)));
+  let added = 0;
+  let total = 0;
+  const days = order.map((from, to) => {
+    const items = trip.days[from].items;
+    const c = dayConflicts(trip, to, items);
+    total += c.size;
+    for (const id of c.keys()) if (!nowKeys.has(`${to}:${id}`)) added++;
+    const names = new Map(items.map((x) => [x.id, x.name]));
+    return {
+      to,
+      from,
+      count: items.length,
+      firstName: items[0]?.name ?? '',
+      conflicts: [...c].map(([id, kind]) => ({ id, name: names.get(id) ?? '', kind })),
+      flights: dayBounds(trip, to).flights.length,
+      stays: dayStays(trip, to),
+    };
+  });
+  return { ok: true, changed: order.some((x, i) => x !== i), days, added, total };
+}
+
+/**
+ * 일자 순서 바꾸기: 날짜·숙소·항공편은 그 자리에 두고 각 날의 장소 묶음을 order대로 옮긴다.
+ * → { undo(trip) } | null   undo는 역순열을 적용한다 (그사이 일수가 바뀌었으면 아무것도 안 함)
+ */
+export function reorderDays(trip, order) {
+  const n = trip.days.length;
+  if (!isPermutation(order, n) || order.every((x, i) => x === i)) return null;
+  const lists = trip.days.map((d) => d.items);
+  trip.days.forEach((d, i) => (d.items = lists[order[i]]));
+  const inverse = [];
+  order.forEach((from, to) => (inverse[from] = to));
+  return {
+    undo(tr) {
+      if (tr.days.length !== n) return false;
+      const now = tr.days.map((d) => d.items);
+      tr.days.forEach((d, i) => (d.items = now[inverse[i]]));
+      return true;
+    },
+  };
+}
+
+/** 순서 배열에서 한 칸 옮기기 (접근성 ↑↓ 버튼) */
+export function moveInOrder(order, index, dir) {
+  const j = index + dir;
+  if (j < 0 || j >= order.length) return order;
+  const next = [...order];
+  [next[index], next[j]] = [next[j], next[index]];
+  return next;
+}
