@@ -849,8 +849,12 @@ export function validateTrip(obj) {
   for (const st of obj.stays ?? []) {
     if (!Number.isInteger(st.startIndex) || !Number.isInteger(st.nights) || st.nights < 1) fail('숙소 기간');
   }
+  // 항공편: 시각 칸은 'YYYY-MM-DDTHH:MM' 글자여야 화면이 깨지지 않는다 (예전 백업에서 빠진 칸만 기본값)
+  const isTime = (v) => typeof v === 'string' && (v === '' || /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?/.test(v));
   for (const fl of obj.flights ?? []) {
-    if (typeof fl?.id !== 'string' || typeof fl.departAt !== 'string') fail('항공편');
+    if (typeof fl?.id !== 'string' || !isTime(fl.departAt) || !fl.departAt) fail('항공편');
+    if (fl.arriveAt != null && !isTime(fl.arriveAt)) fail('항공편');
+    for (const key of ['kind', 'flightNo', 'from', 'to', 'bookingRef', 'memo']) if (fl[key] != null && typeof fl[key] !== 'string') fail('항공편');
   }
   // 예전 버전 백업은 메모·주소 같은 칸이 없을 수 있다: 빈 글자로 채워 화면이 깨지지 않게
   const str = (v) => (typeof v === 'string' ? v : '');
@@ -862,15 +866,20 @@ export function validateTrip(obj) {
     stays: (obj.stays ?? []).map((st) => ({ ...st, address: str(st.address), memo: str(st.memo), url: str(st.url) })),
     flights: (obj.flights ?? []).map((f) => ({ kind: 'out', flightNo: '', from: '', to: '', arriveAt: '', bookingRef: '', memo: '', ...f })),
   };
+  const dropped = { expenses: 0, checks: 0 };
   if (obj.expenses != null) {
     if (!Array.isArray(obj.expenses)) fail('가계부');
     out.expenses = obj.expenses.filter((e) => typeof e?.id === 'string' && Number.isFinite(Number(e.amount)));
+    dropped.expenses = obj.expenses.length - out.expenses.length;
   }
   if (obj.checks != null) {
     if (!Array.isArray(obj.checks)) fail('체크리스트');
     out.checks = obj.checks.filter((c) => typeof c?.id === 'string' && typeof c.text === 'string');
+    dropped.checks = obj.checks.length - out.checks.length;
   }
   if (obj.budget != null && (typeof obj.budget !== 'object' || Array.isArray(obj.budget))) fail('가계부');
+  // 읽지 못해 뺀 기록 수 (저장되는 데이터에는 넣지 않는다). 있으면 덮어쓰기 대신 사본으로만 가져온다.
+  Object.defineProperty(out, 'dropped', { value: dropped, enumerable: false });
   return out;
 }
 

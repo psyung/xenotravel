@@ -409,3 +409,52 @@ test('P4-12: 새 모듈과 추천 데이터는 오프라인(서비스 워커)에
   const sw = read('sw.js');
   for (const f of ['lib/undo.js', 'lib/dayops.js', 'lib/summary.js', 'data/checklist-presets.json']) assert.ok(sw.includes(`'${f}'`), f);
 });
+
+/* ───────── GPT 교차 검수 1차 (2026-11-20) 반영 ───────── */
+
+test('R1-3: 항공편 시각이 글자가 아니면(숫자 등) 백업을 거부한다 — 화면이 .slice()에서 멈추지 않게', () => {
+  const base = { id: 'x', title: 'T', days: [{ id: 'd', date: '2026-01-01', items: [] }] };
+  const fl = (patch) => ({ ...base, flights: [{ id: 'f', departAt: '2026-01-01T09:00', ...patch }] });
+  assert.throws(() => M.validateTrip(fl({ arriveAt: 123 })));
+  assert.throws(() => M.validateTrip(fl({ departAt: 5 })));
+  assert.throws(() => M.validateTrip(fl({ flightNo: 7 })));
+  assert.doesNotThrow(() => M.validateTrip(fl({ arriveAt: '' })));
+  assert.equal(M.validateTrip(fl({})).flights[0].arriveAt, '', '예전 백업에서 빠진 칸만 기본값');
+});
+
+test('R1-4: 읽지 못해 뺀 지출·체크 수를 알려 주고(저장 데이터에는 안 들어감), 덮어쓰기 대신 사본만', () => {
+  const tr = M.validateTrip({
+    id: 'x', title: 'T', days: [{ id: 'd', date: '2026-01-01', items: [] }],
+    expenses: [{ id: 'a', amount: 1 }, { id: 'b', amount: 'abc' }],
+    checks: [{ id: 'c', text: 'ok' }, { id: 'd' }],
+  });
+  assert.deepEqual(tr.dropped, { expenses: 1, checks: 1 });
+  assert.ok(!('dropped' in JSON.parse(JSON.stringify(tr))), '저장할 JSON에는 없다');
+  const app = read('app.js');
+  assert.match(app, /actions: same \|\| dropped \? \[\{ value: 'copy'/);
+});
+
+test('R1-1·7·14·16: 저장 실패 시 성공 알림 금지 · 일반 알림이 실행 취소를 지우지 않음 · 날짜 칩 포커스 · 잘못된 주소', () => {
+  const app = read('app.js');
+  assert.match(app, /const r = switchTrip\(imported, \{ save: true \}\);\n  if \(r\?\.ok\)/, '백업 불러오기는 실제 저장 성공 후에만 알린다');
+  assert.match(app, /const r = switchTrip\(copy, \{ save: true \}\);\n  if \(r\?\.ok\)/, '공유 사본 저장도 마찬가지');
+  assert.match(app, /if \(!action && undoStack\.size\(\)\) \{/, '실행 취소가 남아 있으면 일반 알림에도 버튼을 둔다');
+  assert.ok(app.indexOf('const undoStack = createUndoStack()') < app.indexOf('function toast('), '시작 중 알림도 안전하게 (TDZ 없음)');
+  assert.match(app, /if \(hadFocus\) \$\(`#dayTabs \[data-day="\$\{i\}"\]`\)\?\.focus/);
+  assert.match(app, /id = m\[1\]; \/\/ 잘못된 % 인코딩/);
+});
+
+test('R1-8·12: 검색어가 바뀐 뒤 Enter는 옛 결과를 넣지 않고, 결과는 listbox/option + 추가 버튼', () => {
+  const app = read('app.js');
+  assert.match(app, /const p = ui\.resultsFor === searchEl\.value\.trim\(\) \? ui\.results\[ui\.activeResult\] : null;/);
+  assert.match(app, /role="option" aria-selected=/);
+  assert.match(app, /searchEl\.setAttribute\('aria-activedescendant'/);
+  assert.match(app, /class="r-add" data-add=/);
+});
+
+test('R1-9·13: 고정 안내는 쌓이고(오프라인 → 저장 오류 → 날짜 칩), 경고·완료 글자는 AA 대비', () => {
+  const css = read('styles.css');
+  assert.match(css, /\.daytabs \{ top: calc\(var\(--head\) \+ var\(--offbar, 0px\) \+ var\(--savebar, 0px\)\); \}/);
+  assert.match(css, /\.save-bar \{ top: calc\(var\(--head\) \+ var\(--offbar, 0px\)\); \}/);
+  assert.match(css, /\.time-warn\.flight \.tw-badge[^{]*\{ color: color-mix\(in srgb, var\(--warn\) 50%, var\(--ink\)\); \}/);
+});

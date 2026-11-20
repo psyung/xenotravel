@@ -17,6 +17,7 @@ import { createUndoStack } from './lib/undo.js';
 import * as D from './lib/dayops.js';
 import { summaryModel, drawSummary, summaryFileName } from './lib/summary.js';
 
+const undoStack = createUndoStack(); // 실행 취소 스택 (toast·pushUndo가 쓴다, 시작 중 알림도 안전하게 맨 위에 둔다)
 const COLORS = ['#A3432E', '#9C4A28', '#A03754', '#516B53', '#795169', '#576B65', '#82601F', '#626456'];
 const INBOX_COLOR = '#868e96';
 const TREND_COLOR = '#BF3E26';
@@ -979,6 +980,8 @@ function renderSaveBar() {
         : '저장된 데이터를 읽지 못해 빈 상태로 열었어요. 읽지 못한 원본은 지우지 않고 따로 보관했어요.')
       : '';
   $('#saveBar').hidden = !text;
+  // 머리 바 아래 고정 안내(오프라인 띠 → 저장 오류 띠)를 차례로 쌓는다. 날짜 바로가기는 그 아래에 붙는다 (GPT 검수 #9)
+  document.body.style.setProperty('--savebar', text ? `${$('#saveBar').offsetHeight}px` : '0px');
   $('#saveBarText').textContent = text;
   $('#saveRetry').hidden = !ui.saveError;
   $('#saveBackup').hidden = !ui.saveError || !trip || ui.readonly;
@@ -2479,21 +2482,31 @@ function candidateMeta(p) {
 
 function showResults(places) {
   ui.results = places;
+  ui.resultsFor = searchEl.value.trim(); // 이 결과가 나온 검색어 (바뀌면 Enter가 옛 결과를 넣지 않게)
   ui.activeResult = places.length ? 0 : -1;
   if (!places.length) return showMessage(t('검색 결과가 없어요. 영어나 현지어로도 검색해 보세요.'));
+  resultsEl.setAttribute('role', 'listbox');
+  resultsEl.setAttribute('aria-label', t('검색 결과'));
   resultsEl.innerHTML = places
     .map(
       (p, i) =>
-        `<li data-i="${i}"${i === 0 ? ' class="active"' : ''}><div class="r-main"><div class="r-name">${esc(p.name)}</div><div class="r-addr">${esc(candidateMeta(p))}</div></div>
+        `<li id="result-${i}" role="option" aria-selected="${i === 0}" data-i="${i}"${i === 0 ? ' class="active"' : ''}><div class="r-main"><div class="r-name">${esc(p.name)}</div><div class="r-addr">${esc(candidateMeta(p))}</div></div>
+          <button type="button" class="r-add" data-add="${i}" aria-label="${esc(t('{name} 추가', { name: p.name }))}">${esc(t('추가'))}</button>
           <button type="button" class="r-preview" data-preview="${i}" aria-label="${esc(t('{name} 위치 미리 보기', { name: p.name }))}">${esc(t('위치 보기'))}</button></li>`,
     )
     .join('');
   resultsEl.hidden = false;
+  searchEl.setAttribute('aria-controls', 'results');
+  searchEl.setAttribute('aria-expanded', 'true');
+  searchEl.setAttribute('aria-activedescendant', 'result-0');
 }
 
 function hideResults() {
   resultsEl.hidden = true;
   ui.results = [];
+  ui.resultsFor = null;
+  searchEl.setAttribute('aria-expanded', 'false');
+  searchEl.removeAttribute('aria-activedescendant');
 }
 
 function searchErrorText(err) {
@@ -2565,16 +2578,28 @@ searchEl.addEventListener('keydown', (e) => {
     e.preventDefault();
     const n = ui.results.length;
     ui.activeResult = (ui.activeResult + (e.key === 'ArrowDown' ? 1 : -1) + n) % n;
-    $$('li', resultsEl).forEach((li, i) => li.classList.toggle('active', i === ui.activeResult));
+    $$('li', resultsEl).forEach((li, i) => {
+      li.classList.toggle('active', i === ui.activeResult);
+      li.setAttribute('aria-selected', String(i === ui.activeResult));
+    });
+    searchEl.setAttribute('aria-activedescendant', `result-${ui.activeResult}`); // 스크린리더가 지금 고른 결과를 읽게
+    $(`#result-${ui.activeResult}`)?.scrollIntoView({ block: 'nearest' });
   } else if (e.key === 'Enter') {
     e.preventDefault();
-    const p = ui.results[ui.activeResult];
+    // 결과가 지금 검색어에서 나온 것일 때만 추가 (검색어를 바꾸고 바로 Enter → 새로 검색, GPT 검수 #8)
+    const p = ui.resultsFor === searchEl.value.trim() ? ui.results[ui.activeResult] : null;
     if (p) addPlace(p);
     else runSearch({ explicit: true });
   }
 });
 resultsEl.addEventListener('click', (e) => {
   if (e.target.closest('[data-retry]')) return void runSearch({ explicit: true });
+  const add = e.target.closest('[data-add]');
+  if (add) {
+    const p = ui.results[Number(add.dataset.add)];
+    if (p) addPlace(p);
+    return;
+  }
   const pv = e.target.closest('[data-preview]');
   if (pv) {
     const p = ui.results[Number(pv.dataset.preview)];
@@ -2763,15 +2788,25 @@ $('#importFile').addEventListener('change', async (e) => {
       cancel: null,
     });
   }
+  // 지출·체크 중 읽지 못한 기록이 있으면 미리 알리고, 같은 여행이 있으면 덮어쓰지 않고 사본으로만 가져온다
+  const dropped = (imported.dropped?.expenses ?? 0) + (imported.dropped?.checks ?? 0);
+  if (dropped) {
+    const ok = await ask({
+      title: t('일부 기록을 읽지 못했어요'),
+      body: t('지출 {e}건 · 체크 항목 {c}건이 형식이 맞지 않아 빠져요. 나머지는 그대로 가져와요.', { e: imported.dropped.expenses, c: imported.dropped.checks }),
+      actions: [{ value: 'go', label: t('나머지 가져오기'), primary: true }],
+    });
+    if (!ok) return;
+  }
   const existing = store.trips[imported.id];
   if (existing) {
-    const same = JSON.stringify(existing) === JSON.stringify(imported);
+    const same = !dropped && JSON.stringify(existing) === JSON.stringify(imported);
     const choice = await ask({
       title: t('이미 있는 여행이에요'),
       body: same
         ? t('"{title}"이(가) 이미 같은 내용으로 있어요. 사본을 하나 더 만들까요?', { title: existing.title })
         : t('"{title}"이(가) 이미 있어요. 사본으로 가져오면 지금 여행은 그대로 두고 새 여행을 하나 더 만들어요. 덮어쓰면 지금 여행이 백업 파일 내용으로 바뀌어요.', { title: existing.title }),
-      actions: same ? [{ value: 'copy', label: t('사본으로 가져오기'), primary: true }] : [
+      actions: same || dropped ? [{ value: 'copy', label: t('사본으로 가져오기'), primary: true }] : [
         { value: 'overwrite', label: t('덮어쓰기'), danger: true },
         { value: 'copy', label: t('사본으로 가져오기'), primary: true },
       ],
@@ -2779,8 +2814,8 @@ $('#importFile').addEventListener('change', async (e) => {
     if (!choice) return;
     if (choice === 'copy') imported = { ...imported, id: M.uid(), title: t('{title} (사본)', { title: imported.title }), createdAt: new Date().toISOString() };
   }
-  switchTrip(imported, { save: true });
-  if (store.trips[imported.id]) toast(t('"{title}"을(를) 불러왔어요', { title: imported.title }));
+  const r = switchTrip(imported, { save: true });
+  if (r?.ok) toast(dropped ? t('"{title}"을(를) 불러왔어요 · 읽지 못한 기록 {n}건은 빠졌어요', { title: imported.title, n: dropped }) : t('"{title}"을(를) 불러왔어요', { title: imported.title }), dropped ? 5000 : 2200);
 });
 
 /* ───────── 메인 페이지 · 주소(라우팅) ─────────
@@ -2824,7 +2859,12 @@ function go(page, id = trip?.id ?? store.currentId) {
 function route() {
   if (ui.readonly) return;
   const m = /^#\/trip\/([^/]+)(?:\/(budget|check))?$/.exec(location.hash);
-  const id = m ? decodeURIComponent(m[1]) : null;
+  let id = null;
+  try {
+    id = m ? decodeURIComponent(m[1]) : null;
+  } catch {
+    id = m[1]; // 잘못된 % 인코딩(#/trip/%)도 '찾을 수 없는 여행' 안내로 보낸다 (시작 화면이 멈추지 않게)
+  }
   const found = id && store.trips[id];
   if (!found) {
     if (m) {
@@ -2855,15 +2895,17 @@ function openTrip(tr, { save = false } = {}) {
   ui.focusList = prefs.view === 'list' ? tr.days[ui.day]?.id ?? null : null;
   ui.target = null;
   ui.bf = null;
-  if (save) saveNow();
-  else persistSoon();
-  if (!trip) return;
+  const res = save ? saveNow() : (persistSoon(), null);
+  if (!trip) return res;
   render({ fit: true });
+  return res;
 }
 
+/** 다른 여행으로 바꾸기. save면 저장 결과({ ok, conflicts?, error? })를 돌려준다 — 저장이 실제로 된 뒤에만 성공을 알린다 */
 function switchTrip(tr, { save = false } = {}) {
-  openTrip(tr, { save });
+  const r = openTrip(tr, { save });
   if (trip) go('plan', trip.id);
+  return r;
 }
 
 function deleteTrip(id) {
@@ -3359,6 +3401,15 @@ $$('.mtabs button').forEach((b) => b.addEventListener('click', () => showTab(b.d
 let toastTimer;
 function toast(text, ms = 2200, action = null) {
   if (!text) return;
+  // 실행 취소가 아직 유효하면 일반 알림이 버튼을 지우지 않게 함께 둔다 (5초 안 되돌리기 보장)
+  if (!action && undoStack.size()) {
+    const n = undoStack.size();
+    action = { label: n > 1 ? t('실행 취소 ({n})', { n }) : t('실행 취소'), run: () => {
+      undoStack.undo();
+      if (undoStack.size()) showUndoToast(t('되돌렸어요'));
+    } };
+    ms = Math.max(ms, undoStack.left());
+  }
   const el = $('#toast');
   el.textContent = text;
   el.classList.toggle('has-action', Boolean(action));
@@ -3387,7 +3438,6 @@ function toast(text, ms = 2200, action = null) {
  * 실행 취소 스택 (5초): 연달아 지우거나 옮겨도 앞선 작업의 복구 데이터가 덮어쓰이지 않는다.
  * 토스트에는 가장 최근 작업과 남은 되돌리기 개수를 보여 주고, 누를 때마다 하나씩 거꾸로 되돌린다.
  */
-const undoStack = createUndoStack();
 function pushUndo(text, run) {
   undoStack.push({ text, run, scope: trip?.id });
   showUndoToast();
@@ -3593,7 +3643,11 @@ $('#notice').addEventListener('click', (e) => {
 });
 $('#dayTabs').addEventListener('click', (e) => {
   const b = e.target.closest('[data-day]');
-  if (b) selectDay(Number(b.dataset.day));
+  if (!b) return;
+  const i = Number(b.dataset.day);
+  const hadFocus = document.activeElement === b; // Enter·Space로 누른 경우: 다시 그린 같은 날짜 칩으로 포커스를 돌려준다 (GPT 검수 #14)
+  selectDay(i);
+  if (hadFocus) $(`#dayTabs [data-day="${i}"]`)?.focus({ preventScroll: true });
 });
 // 날짜 칩: ←→ Home End로 이동 (탭 목록 키보드 규칙)
 $('#dayTabs').addEventListener('keydown', (e) => {
@@ -5014,8 +5068,8 @@ $('#sharedSave').addEventListener('click', () => {
   // 받은 일정은 새 id로 사본을 만들어 내 여행에 넣는다 (보낸 사람 일정과 섞이지 않게).
   const copy = { ...trip, title: t('{title} (공유 사본)', { title: trip.title }), id: M.uid(), createdAt: new Date().toISOString() };
   delete copy.sharedAt;
-  switchTrip(copy, { save: true });
-  if (store.trips[copy.id]) toast(t('내 여행으로 저장했어요. 이제 일정을 수정하거나 다시 공유할 수 있어요'), 4000);
+  const r = switchTrip(copy, { save: true });
+  if (r?.ok) toast(t('내 여행으로 저장했어요. 이제 일정을 수정하거나 다시 공유할 수 있어요'), 4000);
 });
 $('#sharedLeave').addEventListener('click', () => {
   leaveShared();

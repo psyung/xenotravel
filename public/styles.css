@@ -1891,3 +1891,17 @@ dialog.preset-dialog { width: min(520px, calc(100vw - 32px)); }
 @media (max-width: 900px) {
   .layout[data-tab="map"] .mapwrap { height: calc(100dvh - var(--head) - var(--pbar) - 12px - var(--offbar, 0px)); }
 }
+
+/* 작은 글자 대비 AA (GPT 검수 #13): 경고·완료 색은 배경은 그대로 두고 글자만 어둡게(다크는 밝게) */
+.time-warn.flight .tw-badge, .checks li.done .price-chip.set, .price-chip.paid { color: color-mix(in srgb, var(--warn) 50%, var(--ink)); }
+.checks li.done .price-chip.set, .price-chip.paid { color: color-mix(in srgb, var(--ok) 50%, var(--ink)); }
+/* 고정 안내 쌓기 (GPT 검수 #9): 오프라인 띠 → 저장 오류 띠 → 날짜 바로가기 순서로, 서로 덮지 않게 */
+.save-bar { top: calc(var(--head) + var(--offbar, 0px)); }
+.daytabs { top: calc(var(--head) + var(--offbar, 0px) + var(--savebar, 0px)); }
+/* 낮은 화면(GPT 검수 #10): 지도 최소 높이보다 실제 남은 높이를 우선 */
+@media (max-width: 900px) {
+  .layout[data-tab="map"] .mapwrap { min-height: min(300px, calc(100dvh - var(--head) - var(--pbar) - 12px - var(--offbar, 0px))); }
+}
+/* 검색 결과마다 이름 있는 추가 버튼 (GPT 검수 #12: 키보드·스크린리더로도 고른 결과를 추가) */
+.r-add { flex: none; border: 0; background: var(--control); color: var(--control-text); border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 700; min-height: 32px; }
+.r-add:focus-visible, .r-preview:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

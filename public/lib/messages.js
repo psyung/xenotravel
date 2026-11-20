@@ -1007,4 +1007,10 @@ export const MESSAGES = {
   "기존 항목의 이름·체크·가격·가계부 연결은 바뀌지 않아요.": ["Existing items keep their names, checks, prices and budget links.", "现有项目的名称、勾选、价格和账本关联不会改变。", "既存項目の名前・チェック・価格・家計簿の連携は変わりません。"],
   "선택한 {n}개 추가": ["Add {n} selected", "添加所选 {n} 项", "選んだ{n}件を追加"],
   "추천 준비물 {n}개를 추가했어요": ["Added {n} suggested item|Added {n} suggested items", "已添加 {n} 项推荐物品", "おすすめの持ち物を{n}件追加しました"],
+  "일부 기록을 읽지 못했어요": ["Some records couldn't be read", "部分记录无法读取", "一部の記録を読み込めませんでした"],
+  "지출 {e}건 · 체크 항목 {c}건이 형식이 맞지 않아 빠져요. 나머지는 그대로 가져와요.": ["{e} expense(s) and {c} checklist item(s) have an invalid format and will be skipped. Everything else will be imported.", "{e} 笔支出和 {c} 个清单项格式不正确，将被跳过。其余内容照常导入。", "支出{e}件・チェック項目{c}件は形式が正しくないため除外します。残りはそのまま読み込みます。"],
+  "나머지 가져오기": ["Import the rest", "导入其余内容", "残りを読み込む"],
+  "\"{title}\"을(를) 불러왔어요 · 읽지 못한 기록 {n}건은 빠졌어요": ["Imported \"{title}\" · {n} unreadable record was skipped|Imported \"{title}\" · {n} unreadable records were skipped", "已导入「{title}」· 跳过了 {n} 条无法读取的记录", "「{title}」を読み込みました · 読めなかった記録{n}件は除外しました"],
+  "검색 결과": ["Search results", "搜索结果", "検索結果"],
+  "{name} 추가": ["Add {name}", "添加{name}", "{name}を追加"],
 };

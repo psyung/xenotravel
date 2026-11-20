@@ -1,0 +1,55 @@
+# 모바일 레퍼런스 조사 · 메인 색상 시안 (2026-11-20)
+
+> 상태: **시안 (선택 대기)**. 실제 브랜드 토큰(`public/styles.css`)과 가드레일 문서(`docs/design_and_brand_principles.md`, `docs/warnings_and_guardrails.md`의 파란색 금지 규칙)는 시안을 고른 뒤 함께 바꾼다.
+
+## 1. 레퍼런스 (모바일 390px 캡처 · 앱스토어 스크린샷)
+
+캡처 원본은 저작권 때문에 저장소에 넣지 않고 로컬(`.overnight/refs/`)에만 둔다.
+
+| 서비스 | 출처 | 메인 강조색 (캔버스 추출) | 모바일 패턴 |
+| --- | --- | --- | --- |
+| TripIt | [웹](https://www.tripit.com/web) · [앱스토어](https://apps.apple.com/us/app/tripit-travel-planner/id311035142) | 블루 `#0868A8` + 오렌지 포인트 | 날짜별 타임라인(시간 · 아이콘 · 카드) |
+| 트리플 → NOL | [웹](https://triple.guide/) · [앱스토어](https://apps.apple.com/kr/app/id1225499481) | 스카이블루 `#3898F8` | 하단 탭바, 일정·지도 통합 |
+| Polarsteps | [웹](https://www.polarsteps.com/) | 블루 `#08A8E8` | 지도 위 경로 + 단계 카드 |
+| Tripomatic | [앱스토어](https://apps.apple.com/kr/app/id519058033) | 스카이블루 `#18A8D8` | 일러스트 지도 + 장소 핀 |
+| 마이리얼트립 | [웹](https://www.myrealtrip.com/) | 네이비 `#183888` + 옐로 `#F8E848` | 큰 배너, 하단 고정 CTA |
+| Wanderlog | [웹](https://wanderlog.com/) · [앱스토어](https://apps.apple.com/us/app/id1476732439) | 코랄 `#F85848` / `#E83858` | **지도 + 하단 시트**, Overview/Itinerary/Explore 탭, + 버튼 |
+| Airbnb | [웹](https://www.airbnb.co.kr/) | 레드코랄 `#E81858` | 흰 바탕, 큰 둥근 카드, 하단 CTA |
+| Visit Japan | [웹](https://www.japan.travel/ko/) | 레드 `#F80808` | — |
+| Stippl | [웹](https://www.stippl.io/) · [앱스토어](https://apps.apple.com/app/id6443617088) | 민트그린 `#18B888` + 딥틸 `#083848` | **지도 + 하단 시트**, 일차 카드 |
+| Google Maps | [앱스토어](https://apps.apple.com/us/app/google-maps/id585027354) | 틸·그린 | **지도 전체 화면 + 끌어올리는 시트**, 떠 있는 검색·버튼 |
+
+(Google Travel·Klook은 자동 접속 차단으로 제외)
+
+**색 집계**: 블루 계열 5곳 · 코랄/레드 3곳 · 틸/민트 2곳 → 레퍼런스에서 가장 많이 쓰는 색은 **블루(하늘·바다)**.
+
+**모바일 공통 패턴 (우리 취지 = 지도와 일정을 한 화면에)**
+1. 지도 전체 화면 + 끌어올리는 하단 시트 (Google Maps · Wanderlog · Stippl) — 지금의 "일정 / 지도" 탭 전환보다 한 화면에 가깝다.
+2. 시트 맨 위 가로 스크롤 일차 칩, 그 아래 시간 축 타임라인 카드.
+3. 떠 있는 둥근 `+` 추가 버튼 (탭바 위), 하단 탭바 4개.
+4. 흰/아주 옅은 바탕 + 강조색 1개 + 일차별 보조색 (지도 경로 색 구분).
+
+## 2. 색상 시안 3안 (실제 앱 화면에 입혀 비교)
+
+`palettes/palette-compare-light.jpg`, `palettes/palette-compare-dark.jpg` — 현재 / A / B / C × (홈 · 일정 위 · 일정 목록 · 지도 탭). 토큰 값은 `palettes/palette-tokens.mjs`.
+
+| 시안 | 근거 | 라이트 강조 / 버튼 | 다크 강조 | 일차 색 (지도 경로) |
+| --- | --- | --- | --- | --- |
+| **A. 오션 블루** | 레퍼런스 최다(5곳) | `#0B84E3` / 버튼 `#0A6FC2`(흰 글자 5.2:1) | `#4AA8F5` | 블루·오렌지·그린·보라·핑크·시안·브라운·슬레이트 |
+| **B. 라군 틸** | 지도 앱(Stippl·Google Maps) | `#0E9F87` / 버튼 딥틸 `#0E2A2F` | `#3CCFAF` | 틸·코랄·블루·앰버·보라·핑크·그린·슬레이트 |
+| **C. 선셋 코랄** | Wanderlog·Airbnb, 지금 색을 선명하게 | `#F2554A` / 버튼 `#D33A30`(4.75:1) | `#FF7468` | 코랄·블루·틸·앰버·보라·핑크·시안·그레이 |
+
+지금 색이 탁해 보이는 주된 이유: 강조색(`#D94E34`)이 갈색기가 돌고, **일차 색 8개가 모두 갈색·올리브 계열**(`#A3432E`, `#9C4A28`, …)이라 지도에서 일차 구분이 안 되며, 흰 글자 버튼 대비가 4.13:1로 AA 미달.
+세 시안 모두 일차 색을 색상환에서 고르게 벌려 지도 경로가 바로 구분되고, 버튼 글자 대비 4.5:1 이상.
+
+## 3. GPT 이미지 시안 (codex image_gen)
+
+`mockups/mockup-ocean.jpg`, `mockups/mockup-lagoon.jpg`, `mockups/mockup-sunset.jpg` — 같은 레이아웃(지도 전체 화면 + 하단 시트 + 일차 칩 + 타임라인 + `+` 버튼 + 탭바)에 각 색을 적용.
+- 비행기·지구본 아이콘 없음, 인라인 `KO EN 中 日` 유지.
+- 선셋 시안의 장소 사진 썸네일은 지금 앱에 없는 기능(장소 사진 API 필요)이다.
+
+## 4. 고른 뒤 적용 범위 (예상)
+
+- `styles.css` `:root` / 다크 토큰, `app.js` `COLORS`(일차 색)·`TREND_COLOR`, 하드코딩 색(홈 히어로·D-day 타일 그라데이션·`새로 오픈` 배지), 파비콘·아이콘 PNG의 목적지 점 색, `summary.js` 테마, `404.html`.
+- 가드레일 문서의 "파란색 금지" 규칙(A 선택 시) 갱신.
+- 레이아웃(지도 + 하단 시트)은 색과 별개 작업 — 모바일 `일정/지도` 탭 구조를 바꾸므로 따로 진행.
