@@ -23,7 +23,11 @@ const ENTITY_LISTS = new Set(['expenses', 'checks', 'stays', 'flights', 'members
 const SPECIAL = new Set(['days', 'inbox', 'startDate', 'endDate', 'updatedAt']);
 
 function conflict(ctx, path, local, remote, base) {
-  const choice = ctx.choices[keyOf(path)];
+  // 고른 값: 'local' | 'remote' 또는 { pick, seen } — seen은 고를 때 보여 준 다른 탭 값.
+  // 그사이 다른 탭이 또 바꿨으면(seen ≠ 지금 값) 보지 못한 값이므로 고른 것을 쓰지 않고 다시 묻는다 (GPT 검수 #5)
+  const raw = ctx.choices[keyOf(path)];
+  const stale = raw && typeof raw === 'object' && 'seen' in raw && !same(raw.seen, remote);
+  const choice = stale ? undefined : typeof raw === 'object' && raw ? raw.pick : raw;
   if (choice === 'remote') return { value: remote, resolved: true };
   if (choice === 'local') return { value: local, resolved: true };
   ctx.conflicts.push({ path, local, remote, base });

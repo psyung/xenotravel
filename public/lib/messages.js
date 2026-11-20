@@ -1013,4 +1013,5 @@ export const MESSAGES = {
   "\"{title}\"을(를) 불러왔어요 · 읽지 못한 기록 {n}건은 빠졌어요": ["Imported \"{title}\" · {n} unreadable record was skipped|Imported \"{title}\" · {n} unreadable records were skipped", "已导入「{title}」· 跳过了 {n} 条无法读取的记录", "「{title}」を読み込みました · 読めなかった記録{n}件は除外しました"],
   "검색 결과": ["Search results", "搜索结果", "検索結果"],
   "{name} 추가": ["Add {name}", "添加{name}", "{name}を追加"],
+  "도착 (현지 시각) {time}": ["Arrival (local time) {time}", "到达（当地时间）{time}", "到着（現地時刻）{time}"],
 };

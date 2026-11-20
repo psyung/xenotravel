@@ -1104,7 +1104,8 @@ async function resolveConflicts(conflicts) {
     cancel: null,
   });
   const choices = {};
-  conflicts.forEach((c, i) => (choices[c.key] = askDialog.querySelector(`input[name="cf${i}"]:checked`)?.value ?? 'local'));
+  // 고를 때 본 다른 탭 값도 함께 넘긴다: 창을 띄운 사이 또 바뀌었으면 그 항목은 다시 묻는다
+  conflicts.forEach((c, i) => (choices[c.key] = { pick: askDialog.querySelector(`input[name="cf${i}"]:checked`)?.value ?? 'local', seen: c.remote }));
   resolving = false;
   const r = saveNow(choices);
   if (r.ok) {

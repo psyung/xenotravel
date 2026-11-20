@@ -175,3 +175,47 @@ test('mergeStore: 다른 탭에서 만든 여행은 더하고, 지운 여행은 
   const r = mergeStore(base, { [t1.id]: t1 }, { [t2.id]: t2 });
   assert.deepEqual(Object.keys(r.trips), [t2.id]);
 });
+
+test('GPT 검수 #2: 두 탭이 같은 저장을 읽고 거의 동시에 쓰면(먼저 쓴 쪽이 덮어써짐) 다음 저장에서 되살린다', () => {
+  const { storage, id, a, b } = twoTabs();
+  // B가 저장소를 읽는 순간과 쓰는 순간 사이에 A가 저장한다 (localStorage에는 잠금이 없다)
+  const stale = storage.getItem(KEY);
+  const get = storage.getItem;
+  let staleOnce = false;
+  storage.getItem = function (k) {
+    if (staleOnce && k === KEY) {
+      staleOnce = false;
+      return stale;
+    }
+    return get.call(this, k);
+  };
+  B.addExpense(a.trip(), { amount: 1200, cat: 'food', day: 0, memo: 'A 점심' });
+  assert.equal(a.db.save(a.store).ok, true);
+  B.addExpense(b.trip(), { amount: 800, cat: 'transport', day: 1, memo: 'B 택시' });
+  staleOnce = true; // B는 A의 저장을 보기 전 값을 읽고
+  assert.equal(b.db.save(b.store).ok, true); // A의 저장을 덮어쓴다
+  const memos = () => JSON.parse(storage.getItem(KEY)).trips[id].expenses.map((e) => e.memo).sort();
+  assert.deepEqual(memos(), ['B 택시'], '이 순간 A의 지출은 저장소에서 사라졌다');
+  // A가 다음에 저장할 때(저장소 변경 이벤트 등) 덮어써진 것을 알아채고 공통 조상 기준으로 다시 합친다
+  assert.equal(a.db.save(a.store).ok, true);
+  assert.deepEqual(memos(), ['A 점심', 'B 택시']);
+  // B도 다음 저장에서 둘 다 갖는다
+  assert.equal(b.db.save(b.store).ok, true);
+  assert.deepEqual(b.trip().expenses.map((e) => e.memo).sort(), ['A 점심', 'B 택시']);
+});
+
+test('GPT 검수 #5: 충돌 창에서 고른 뒤 그사이 다른 탭이 또 바꿨으면 고른 것을 쓰지 않고 다시 묻는다', () => {
+  const base = { t: { id: 't', title: '원래', days: [{ id: 'd', items: [] }] } };
+  const local = { t: { ...base.t, title: '이 탭' } };
+  const remote1 = { t: { ...base.t, title: '다른 탭 1' } };
+  const remote2 = { t: { ...base.t, title: '다른 탭 2' } };
+  const first = mergeStore(base, local, remote1);
+  assert.equal(first.conflicts.length, 1);
+  const c = first.conflicts[0];
+  const pickRemote = { [c.key]: { pick: 'remote', seen: c.remote } };
+  assert.equal(mergeStore(base, local, remote1, pickRemote).trips.t.title, '다른 탭 1', '본 값 그대로면 고른 대로');
+  const again = mergeStore(base, local, remote2, pickRemote);
+  assert.equal(again.conflicts.length, 1, '보지 못한 새 값이면 다시 충돌');
+  assert.equal(again.conflicts[0].remote, '다른 탭 2');
+  assert.equal(mergeStore(base, local, remote2, { [c.key]: 'remote' }).trips.t.title, '다른 탭 2', '예전 형식(글자) 선택도 그대로 된다');
+});

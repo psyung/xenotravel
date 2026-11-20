@@ -458,3 +458,34 @@ test('R1-9·13: 고정 안내는 쌓이고(오프라인 → 저장 오류 → �
   assert.match(css, /\.save-bar \{ top: calc\(var\(--head\) \+ var\(--offbar, 0px\)\); \}/);
   assert.match(css, /\.time-warn\.flight \.tw-badge[^{]*\{ color: color-mix\(in srgb, var\(--warn\) 50%, var\(--ink\)\); \}/);
 });
+
+test('R1-6: 기간을 줄였다 다른 날짜로 늘려도 "일정 외" 지출은 원래 날짜가 돌아올 때만 그날로', () => {
+  const tr = M.createTrip({ title: 'T', startDate: '2026-12-01', endDate: '2026-12-04' });
+  B.ensureBudget(tr).currency = 'KRW';
+  const e = B.addExpense(tr, { amount: 1000, cur: 'KRW', day: 2 }); // 12/03
+  M.setTripDates(tr, '2026-12-01', '2026-12-02');
+  assert.equal(B.expenseDay(tr, e), 'out');
+  M.setTripDates(tr, '2026-12-10', '2026-12-14'); // 3일차가 다시 생기지만 날짜가 다르다
+  assert.equal(B.expenseDay(tr, e), 'out', '엉뚱한 날(12/12)에 붙지 않는다');
+  assert.equal(B.summarize(tr).byDay[2] ?? 0, 0);
+  M.setTripDates(tr, '2026-12-01', '2026-12-05');
+  assert.equal(B.expenseDay(tr, e), 2, '원래 날짜가 돌아오면 그날');
+  assert.equal(e.date, undefined);
+});
+
+test('R1-15: 날짜변경선 항공편(도착 현지 시각이 더 이름)은 .ics 설명에 도착 시각을 남긴다', async () => {
+  const { tripToCalendar } = await import('../public/lib/export.js');
+  I.setLang('ko');
+  const tr = M.createTrip({ title: 'T', startDate: '2026-12-01', endDate: '2026-12-03' });
+  tr.flights = [{ id: 'f', kind: 'out', flightNo: 'KE53', from: 'ICN', to: 'HNL', departAt: '2026-12-01T20:00', arriveAt: '2026-12-01T09:30', bookingRef: '', memo: '' }];
+  const ics = tripToCalendar(tr);
+  assert.doesNotMatch(ics, /DTEND:20261201T093000/);
+  assert.match(ics, /DESCRIPTION:도착 \(현지 시각\) 2026-12-01 09:30/);
+});
+
+test('R1-11: 날짜보다 먼저 고른 항공편 시간은 초안으로 남았다가 날짜를 고를 때 함께 쓴다', () => {
+  const dp = read('lib/datepicker.js');
+  assert.match(dp, /else draftTime = time\.value;/);
+  assert.match(dp, /write\(value, time\.value \|\| draftTime \|\| parts\(\)\.t\)/);
+  assert.match(dp, /if \(now !== lastRaw\) draftTime = '';/, '앱이 값을 새로 넣을 때만 초안을 버린다 (속성 변경은 유지)');
+});

@@ -237,6 +237,11 @@ export function removeExpense(trip, id) {
 export function expenseDay(trip, e) {
   const d = Number(e.day);
   if (!Number.isInteger(d) || d < 0) return -1;
+  // 기간을 줄여 원래 날짜(e.date)를 남긴 지출: 그 날짜가 있는 일차에만 붙고, 없으면 '일정 외' (GPT 검수 #6)
+  if (e.date) {
+    const i = trip.days.findIndex((x) => x.date === e.date);
+    return i >= 0 ? i : 'out';
+  }
   return d < trip.days.length ? d : 'out';
 }
 

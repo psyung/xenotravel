@@ -79,7 +79,9 @@ function flightEvents(trip, stamp) {
     const start = icsDateTime(f.departAt);
     if (!start) return [];
     const end = f.arriveAt && f.arriveAt > f.departAt ? icsDateTime(f.arriveAt) : '';
-    const desc = [f.bookingRef && t('예약번호 {ref}', { ref: f.bookingRef }), f.memo].filter(Boolean).join('\n');
+    // 날짜변경선을 넘어 도착 현지 시각이 출발보다 이르면 DTEND를 쓸 수 없다 → 도착 현지 시각을 설명에 남긴다 (GPT 검수 #15)
+    const arriveNote = f.arriveAt && !end ? t('도착 (현지 시각) {time}', { time: f.arriveAt.replace('T', ' ') }) : '';
+    const desc = [arriveNote, f.bookingRef && t('예약번호 {ref}', { ref: f.bookingRef }), f.memo].filter(Boolean).join('\n');
     return [[
       'BEGIN:VEVENT',
       `UID:${calendarEscape(trip.id)}-flight-${calendarEscape(f.id)}@xenotravel`,

@@ -108,6 +108,15 @@ export function setTripDates(trip, start, end) {
   trip.inbox.push(...leftover);
   trip.startDate = dates[0];
   trip.endDate = dates.at(-1);
+  // '일정 외'로 남겨 둔 지출은 원래 날짜가 다시 여행 기간에 들어올 때만 그날로 돌아간다 (일차 번호로 붙이지 않는다)
+  for (const e of trip.expenses ?? []) {
+    if (!e.date) continue;
+    const i = dates.indexOf(e.date);
+    if (i >= 0) {
+      e.day = i;
+      delete e.date;
+    }
+  }
   return { moved: leftover.length };
 }
 

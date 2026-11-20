@@ -344,19 +344,31 @@ function enhanceDateTime(input) {
     const [d = '', t = ''] = VALUE.get.call(input).split('T');
     return { d, t };
   };
+  // 날짜보다 시간을 먼저 고르면 원래 칸에는 아직 쓸 수 없다 → 초안으로 들고 있다가 날짜를 고를 때 함께 쓴다 (GPT 검수 #11)
+  let draftTime = '';
   const sync = () => {
     const { d, t } = parts();
     paint(btn, d, input.disabled, true);
-    if (document.activeElement !== time) time.value = t.slice(0, 5);
+    if (d) draftTime = '';
+    if (document.activeElement !== time) time.value = d ? t.slice(0, 5) : draftTime;
     time.disabled = input.disabled;
   };
   const write = (d, t) => {
     VALUE.set.call(input, d ? `${d}T${t || '09:00'}` : '');
+    lastRaw = VALUE.get.call(input);
     sync();
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
   };
-  watch(input, sync);
+  // 앱이 값을 새로 넣으면(다른 항공편 열기·폼 비우기) 초안은 버린다 — 이전 항공편 시간이 남지 않게.
+  // disabled·min 같은 속성만 바뀐 경우(같은 콜백이 불린다)는 값이 그대로라 초안을 지킨다.
+  let lastRaw = VALUE.get.call(input);
+  watch(input, () => {
+    const now = VALUE.get.call(input);
+    if (now !== lastRaw) draftTime = '';
+    lastRaw = now;
+    sync();
+  });
   const repaint = () => {
     time.setAttribute('aria-label', t('시간'));
     sync();
@@ -367,6 +379,7 @@ function enhanceDateTime(input) {
   time.addEventListener('change', () => {
     const { d } = parts();
     if (d) write(d, time.value);
+    else draftTime = time.value;
   });
   btn.addEventListener('click', () => {
     // 도착 칸은 출발 날짜 근처 달을 먼저 보여준다
@@ -377,7 +390,7 @@ function enhanceDateTime(input) {
       title: t(input.closest('label')?.firstChild?.textContent.trim() || '날짜'),
       value: parts().d,
       near,
-      onApply: ({ value }) => write(value, time.value || parts().t),
+      onApply: ({ value }) => write(value, time.value || draftTime || parts().t),
     });
   });
 }
