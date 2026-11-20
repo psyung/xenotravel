@@ -2025,7 +2025,8 @@ function openItem(id, { scroll = false } = {}) {
 /* ───────── 펼친 장소 카드: 바깥을 탭하면 접기 ─────────
  * 지도·팝업·대화상자·날짜 선택 창은 제외하고, 8px 넘게 움직인 터치(스크롤)는 탭으로 보지 않는다.
  */
-const OUTSIDE_SAFE = '#map, .mapwrap, .leaflet-container, .leaflet-popup, dialog, .dp-pop, .menu, .tripsw, .toast, #toast, .ctx';
+// 보관함과 select는 제외: 카드를 접으며 일정을 다시 그리면 열리던 "보낼 날" 드롭다운이 새 요소로 바뀌어 닫힌다
+const OUTSIDE_SAFE = '#map, .mapwrap, .leaflet-container, .leaflet-popup, dialog, .dp-pop, .menu, .tripsw, .toast, #toast, .ctx, .inbox-dock, select, option';
 let cardTap = null;
 document.addEventListener('pointerdown', (e) => {
   cardTap = (ui.openItem || ui.openStay) && e.isPrimary ? { x: e.clientX, y: e.clientY, target: e.target, scrollY } : null;

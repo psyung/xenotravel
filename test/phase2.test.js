@@ -126,3 +126,19 @@ test('가계부: 통화별 합계는 기록한 통화 그대로 더한다', () =
   assert.deepEqual(B.currencyTotals(trip), { local: 1500, krw: 20000, localCount: 2, krwCount: 1 });
   assert.equal(B.summarize(trip).spent, 1500 * 9 + 20000);
 });
+
+test('보관함 "보낼 날" select: 포커스해도 보관함이 숨지 않고, 바깥 탭 닫기가 보관함을 다시 그리지 않는다', async () => {
+  const { readFileSync } = await import('node:fs');
+  const css = readFileSync(new URL('../public/styles.css', import.meta.url), 'utf8');
+  const hide = [...css.matchAll(/body:has\(([^{]*?)\)\s*\.inbox-dock/g)].map((m) => m[1]);
+  assert.ok(hide.length, '입력 중 보관함 숨김 규칙이 있다');
+  for (const sel of hide) {
+    assert.doesNotMatch(sel, /\bselect\b/, 'select 포커스로 보관함을 숨기지 않는다');
+    assert.match(sel, /:not\(\.inbox-dock \*\)/, '보관함 안의 칸은 제외한다');
+  }
+  const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  const safe = /const OUTSIDE_SAFE = '([^']*)'/.exec(app)[1];
+  assert.match(safe, /\.inbox-dock/);
+  assert.match(safe, /\bselect\b/);
+  assert.match(app, /handle: '\.drag'/, '드래그는 ⋮⋮ 손잡이에서만 시작한다');
+});

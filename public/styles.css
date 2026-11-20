@@ -1030,9 +1030,11 @@ body[data-has-trip="no"] .trip-only { display: none !important; }
   .share-buttons .btn { height: 44px; }
 }
 @media (max-width: 900px) {
-  /* 입력하는 동안(키보드가 올라온 동안)은 아래 고정 영역을 치워서 입력칸이 가려지지 않게 */
-  body:has(.page :is(input, textarea, select):focus) .inbox-dock,
-  body:has(.page :is(input, textarea, select):focus) .pagebar { display: none; }
+  /* 입력하는 동안(키보드가 올라온 동안)은 아래 고정 영역을 치워서 입력칸이 가려지지 않게.
+     select·체크박스는 키보드를 띄우지 않으므로 제외한다 — 특히 보관함 안의 "보낼 날" select에 포커스가 가는 순간
+     보관함이 사라지면 드롭다운이 열리자마자 닫힌다. 보관함 안의 칸도 제외. */
+  body:has(.page :is(input:not([type="checkbox"], [type="radio"], [type="range"]), textarea):focus:not(.inbox-dock *)) .inbox-dock,
+  body:has(.page :is(input:not([type="checkbox"], [type="radio"], [type="range"]), textarea):focus:not(.inbox-dock *)) .pagebar { display: none; }
   .inbox-dock { padding: 6px 10px 8px; }
   .dock-head { min-height: 26px; }
   .dock-card { padding: 6px 8px; gap: 4px; }
