@@ -980,8 +980,7 @@ function renderSaveBar() {
         : '저장된 데이터를 읽지 못해 빈 상태로 열었어요. 읽지 못한 원본은 지우지 않고 따로 보관했어요.')
       : '';
   $('#saveBar').hidden = !text;
-  // 머리 바 아래 고정 안내(오프라인 띠 → 저장 오류 띠)를 차례로 쌓는다. 날짜 바로가기는 그 아래에 붙는다 (GPT 검수 #9)
-  document.body.style.setProperty('--savebar', text ? `${$('#saveBar').offsetHeight}px` : '0px');
+  // 고정 안내 높이(--savebar)는 아래 ResizeObserver가 다 그려진 뒤 실제 높이로 맞춘다 (GPT 2차 #14)
   $('#saveBarText').textContent = text;
   $('#saveRetry').hidden = !ui.saveError;
   $('#saveBackup').hidden = !ui.saveError || !trip || ui.readonly;
@@ -2469,6 +2468,8 @@ const resultsEl = $('#results');
 
 function showMessage(text, { retry = false } = {}) {
   ui.results = [];
+  ui.resultsFor = null;
+  $('#resultsStatus').textContent = '';
   resultsEl.innerHTML = `<li class="msg" role="status">${esc(text)}${retry ? ` <button type="button" class="linkbtn" data-retry>${esc(t('다시 시도'))}</button>` : ''}</li>`;
   resultsEl.hidden = false;
 }
@@ -2481,17 +2482,21 @@ function candidateMeta(p) {
   return parts.join(' · ');
 }
 
-function showResults(places) {
+/**
+ * 검색 결과. forQuery = 이 결과를 요청한 검색어 (늦게 온 옛 응답이 지금 검색어의 결과로 취급되지 않게, GPT 2차 #11).
+ * 결과마다 '추가'·'위치 보기' 버튼이 따로 있는 일반 목록이다 (listbox 안에 버튼을 넣지 않는다, GPT 2차 #18).
+ * 방향키로 고른 결과는 화면에서 강조하고 스크린리더에는 상태 문구로 알린다.
+ */
+function showResults(places, forQuery = searchEl.value.trim()) {
   ui.results = places;
-  ui.resultsFor = searchEl.value.trim(); // 이 결과가 나온 검색어 (바뀌면 Enter가 옛 결과를 넣지 않게)
+  ui.resultsFor = forQuery;
   ui.activeResult = places.length ? 0 : -1;
   if (!places.length) return showMessage(t('검색 결과가 없어요. 영어나 현지어로도 검색해 보세요.'));
-  resultsEl.setAttribute('role', 'listbox');
   resultsEl.setAttribute('aria-label', t('검색 결과'));
   resultsEl.innerHTML = places
     .map(
       (p, i) =>
-        `<li id="result-${i}" role="option" aria-selected="${i === 0}" data-i="${i}"${i === 0 ? ' class="active"' : ''}><div class="r-main"><div class="r-name">${esc(p.name)}</div><div class="r-addr">${esc(candidateMeta(p))}</div></div>
+        `<li id="result-${i}" data-i="${i}"${i === 0 ? ' class="active" aria-current="true"' : ''}><div class="r-main"><div class="r-name">${esc(p.name)}</div><div class="r-addr">${esc(candidateMeta(p))}</div></div>
           <button type="button" class="r-add" data-add="${i}" aria-label="${esc(t('{name} 추가', { name: p.name }))}">${esc(t('추가'))}</button>
           <button type="button" class="r-preview" data-preview="${i}" aria-label="${esc(t('{name} 위치 미리 보기', { name: p.name }))}">${esc(t('위치 보기'))}</button></li>`,
     )
@@ -2499,7 +2504,12 @@ function showResults(places) {
   resultsEl.hidden = false;
   searchEl.setAttribute('aria-controls', 'results');
   searchEl.setAttribute('aria-expanded', 'true');
-  searchEl.setAttribute('aria-activedescendant', 'result-0');
+  announceResult();
+}
+/** 방향키로 고른 결과를 스크린리더에 알린다 (Enter로 추가) */
+function announceResult() {
+  const p = ui.results[ui.activeResult];
+  $('#resultsStatus').textContent = p ? t('{n}개 중 {i}번째: {name} · Enter로 추가', { n: ui.results.length, i: ui.activeResult + 1, name: p.name }) : '';
 }
 
 function hideResults() {
@@ -2507,7 +2517,7 @@ function hideResults() {
   ui.results = [];
   ui.resultsFor = null;
   searchEl.setAttribute('aria-expanded', 'false');
-  searchEl.removeAttribute('aria-activedescendant');
+  $('#resultsStatus').textContent = '';
 }
 
 function searchErrorText(err) {
@@ -2541,10 +2551,10 @@ async function runSearch({ explicit = false } = {}) {
       let place = { name: parsed.name ?? '', address: '', lat: parsed.lat, lng: parsed.lng };
       // 주소를 찾는 동안 추가해도 '위치 확인 중…'이 이름으로 남지 않게: 찾으면 나중에 채운다
       const lookup = reversePlace(parsed.lat, parsed.lng, ctrl.signal).catch(() => null);
-      showResults([{ ...place, name: place.name || t('위치 확인 중…'), lookup, unnamed: !place.name }]);
+      showResults([{ ...place, name: place.name || t('위치 확인 중…'), lookup, unnamed: !place.name }], q);
       const r = await lookup;
       place = { ...place, name: place.name || r?.name || t('링크로 추가한 장소'), address: r?.address ?? '', region: r?.region ?? '' };
-      if (!ctrl.signal.aborted) showResults([place]);
+      if (!ctrl.signal.aborted) showResults([place], q);
       return;
     }
     if (!navigator.onLine) return showMessage(searchErrorText({ kind: 'offline' }), { retry: true });
@@ -2559,16 +2569,17 @@ async function runSearch({ explicit = false } = {}) {
       if (!places.length) {
         return showMessage(t('한국어 이름으로는 못 찾았어요. 영어·현지어로 검색하거나(예: Kuromon Market), 구글맵 링크를 붙여넣어 주세요.'));
       }
-      return showResults(places);
+      return showResults(places, q);
     }
     showMessage(t('검색 중…'));
     const places = await searchPlaces(query, near, ctrl.signal);
-    if (!ctrl.signal.aborted) showResults(places);
+    if (!ctrl.signal.aborted) showResults(places, q);
   } catch (err) {
     if (err.name !== 'AbortError') showMessage(searchErrorText(err), { retry: true });
   }
 }
 
+searchEl.addEventListener('input', () => (ui.resultsFor = null)); // 입력이 바뀌는 순간 보이는 결과는 옛 검색어의 것 (Enter·클릭이 넣지 않게)
 searchEl.addEventListener('input', debounce(() => runSearch(), 350));
 searchEl.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
@@ -2581,9 +2592,10 @@ searchEl.addEventListener('keydown', (e) => {
     ui.activeResult = (ui.activeResult + (e.key === 'ArrowDown' ? 1 : -1) + n) % n;
     $$('li', resultsEl).forEach((li, i) => {
       li.classList.toggle('active', i === ui.activeResult);
-      li.setAttribute('aria-selected', String(i === ui.activeResult));
+      if (i === ui.activeResult) li.setAttribute('aria-current', 'true');
+      else li.removeAttribute('aria-current');
     });
-    searchEl.setAttribute('aria-activedescendant', `result-${ui.activeResult}`); // 스크린리더가 지금 고른 결과를 읽게
+    announceResult(); // 스크린리더가 지금 고른 결과를 읽게
     $(`#result-${ui.activeResult}`)?.scrollIntoView({ block: 'nearest' });
   } else if (e.key === 'Enter') {
     e.preventDefault();
@@ -2597,6 +2609,7 @@ resultsEl.addEventListener('click', (e) => {
   if (e.target.closest('[data-retry]')) return void runSearch({ explicit: true });
   const add = e.target.closest('[data-add]');
   if (add) {
+    if (ui.resultsFor !== searchEl.value.trim()) return void runSearch({ explicit: true }); // 옛 검색어 결과는 넣지 않고 다시 찾는다
     const p = ui.results[Number(add.dataset.add)];
     if (p) addPlace(p);
     return;
@@ -4094,6 +4107,7 @@ function currencyTotalsHtml(b, s) {
   const parts = [
     c.localCount ? `${B.moneyCode(c.local, b.currency)} <small>(${esc(t('{n}건', { n: c.localCount }))})</small>` : '',
     c.krwCount ? `${B.won(c.krw)} <small>(${esc(t('{n}건', { n: c.krwCount }))})</small>` : '',
+    ...Object.entries(c.other).map(([code, o]) => `${B.moneyCode(o.amount, code)} <small>(${esc(t('{n}건', { n: o.count }))})</small>`),
   ].filter(Boolean);
   return `<p class="cur-totals"><span>${esc(t('통화별 합계'))}</span> ${parts.join(' <i aria-hidden="true">+</i> ')} <span class="eq">= ${esc(t('{code} 환산', { code: shownBase(b) }))} <b>${bu(B.spentUnits(trip))}</b>${s.pending.count ? ` <span class="pend">${esc(t('환율 미정 {n}건 제외', { n: s.pending.count }))}</span>` : ''}</span></p>`;
 }
@@ -4170,14 +4184,16 @@ function addMemberFromInput() {
 /** 저장한 지출 고치기 (행 안에서) */
 function expenseEditHtml(e) {
   const b = trip.budget;
-  const local = b.currency !== 'KRW';
+  // 이 기록을 적은 통화로 보여 준다 (현지 통화를 나중에 바꿨어도 그때 통화 그대로, GPT 2차 #6)
+  const recCode = e.cur !== 'KRW' ? e.ccy ?? b.currency : b.currency;
+  const local = recCode !== 'KRW';
   const dk = B.expenseDay(trip, e);
   const days = [-1, ...trip.days.map((_, i) => i)];
   const opt = (v, label, sel) => `<option value="${v}"${sel ? ' selected' : ''}>${esc(label)}</option>`;
   return `<li class="rec-edit"><form class="exp-form" data-exp="${e.id}" aria-label="${esc(t('지출 수정'))}">
       <div class="exp-row">
         <label class="exp-amt"><span>${esc(t('금액'))}</span><input name="amount" data-draft="exp-amount-${e.id}" inputmode="decimal" value="${e.amount}" autocomplete="off"></label>
-        ${local ? `<label><span>${esc(t('통화'))}</span><select name="cur">${opt('local', `${B.CURRENCIES[b.currency].symbol.trim()} ${b.currency}`, e.cur !== 'KRW')}${opt('KRW', '₩ KRW', e.cur === 'KRW')}</select></label>` : ''}
+        ${local ? `<label><span>${esc(t('통화'))}</span><select name="cur">${opt('local', `${B.CURRENCIES[recCode].symbol.trim()} ${recCode}`, e.cur !== 'KRW')}${opt('KRW', '₩ KRW', e.cur === 'KRW')}</select></label>` : ''}
       </div>
       <label><span>${esc(t('메모'))}</span><input name="memo" data-draft="exp-memo-${e.id}" value="${esc(e.memo)}" maxlength="80"></label>
       <div class="exp-row">
@@ -4231,6 +4247,7 @@ async function fetchRate({ quiet = false } = {}) {
       const bp = data?.rates?.[base];
       if (bp > 0) {
         b.baseKrwPerUnit = 1 / bp;
+        b.baseRateCode = base; // 요청할 때의 기준 통화 (그사이 기준 통화를 바꿨으면 krwPerBase가 쓰지 않는다)
         b.baseRateAt = new Date().toISOString();
       } else if (b.currency === 'KRW') throw new Error('no rate');
     }
@@ -5152,7 +5169,7 @@ function openPlaceOps(itemId, mode = 'move') {
   const from = trip.days.findIndex((d) => d.id === found.listId);
   // 기본 대상: 이동이면 다음 날(없으면 전날), 복제면 같은 날 다음 날
   const to = from < 0 ? 0 : from + 1 < trip.days.length ? from + 1 : Math.max(0, from - 1);
-  ui.ops = { kind: 'place', itemId, mode, to };
+  ui.ops = { kind: 'place', itemId, mode, to, sig: daySig() };
   renderDayOps();
   showDialog(dayOpsDialog);
   $('#dayOpsBody input[name="opsDay"]:checked')?.focus();
@@ -5160,7 +5177,7 @@ function openPlaceOps(itemId, mode = 'move') {
 
 function openDayOrder() {
   if (ui.readonly || trip.days.length < 2) return;
-  ui.ops = { kind: 'order', order: trip.days.map((_, i) => i) };
+  ui.ops = { kind: 'order', order: trip.days.map((_, i) => i), sig: daySig() };
   renderDayOps();
   showDialog(dayOpsDialog);
   $('#dayOpsBody .do-move')?.focus();
@@ -5284,9 +5301,20 @@ function renderDayOps({ focus } = {}) {
   if (focus) $(focus, dayOpsDialog)?.focus();
 }
 
+/** 대화상자를 연 뒤 일정(날짜·장소 배치)이 바뀌었는지 보는 표식 — 다른 탭 저장 등 */
+const daySig = () => JSON.stringify(trip.days.map((d) => [d.id, d.date, d.items.map((x) => [x.id, x.time])]));
 function applyDayOps() {
   const op = ui.ops;
   if (!op || ui.readonly) return;
+  // 미리보기를 본 뒤 일정이 바뀌었으면 그대로 적용하지 않고 새 미리보기를 보여 준다 (GPT 2차 #8)
+  if (op.sig !== daySig()) {
+    op.sig = daySig();
+    if (op.kind === 'order' && !D.isPermutation(op.order, trip.days.length)) op.order = trip.days.map((_, i) => i);
+    if (op.kind === 'place' && !trip.days[op.to]) op.to = 0;
+    renderDayOps({ focus: '[data-ops="apply"]' });
+    toast(t('그사이 일정이 바뀌어 미리보기를 새로 고쳤어요. 확인하고 다시 눌러 주세요'), 4000);
+    return;
+  }
   const tripId = trip.id;
   if (op.kind === 'place') {
     const found = M.findItem(trip, op.itemId);
@@ -5423,7 +5451,10 @@ presetDialog.addEventListener('change', (e) => {
     st.off.clear();
     renderPresets({ focus: `[name="pType"][value="${CSS.escape(st.type)}"]` });
   } else if (e.target.name === 'pDays') {
-    st.days = Number(e.target.value);
+    // 고른 구간에 이 여행 일수가 들면 실제 일수로 (6일 여행이 4~7일을 다시 골라도 6일 기준, GPT 2차 #16)
+    const d = Object.values(presetData.durations).find((x) => x.min === Number(e.target.value));
+    const n = Math.max(1, trip.days.length);
+    st.days = d && n >= d.min && n <= d.max ? n : Number(e.target.value);
     st.off.clear();
     renderPresets({ focus: `[name="pDays"][value="${st.days}"]` });
   } else if (e.target.name === 'pItem') {
@@ -5680,12 +5711,27 @@ enhanceDates(document); // 처음부터 있는 날짜 칸 (여행 날짜, 숙소
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
   navigator.serviceWorker.register(new URL('sw.js', document.baseURI), { scope: './' }).catch(() => {});
 }
+/**
+ * 머리 바 아래 고정 안내(오프라인 띠 → 저장 오류 띠)의 실제 높이를 CSS 변수로 둔다. 날짜 칩·일차 스크롤 위치가 이 높이만큼 내려간다.
+ * 문구가 줄바꿈되거나 버튼이 나타나 높이가 바뀌어도 ResizeObserver가 다시 잰다 (GPT 1차 #9, 2차 #14).
+ */
+function syncBarHeights() {
+  const h = (el) => (el.hidden ? 0 : el.offsetHeight);
+  document.body.style.setProperty('--offbar', `${h($('#offlineBar'))}px`);
+  document.body.style.setProperty('--savebar', `${h($('#saveBar'))}px`);
+}
+if ('ResizeObserver' in window) {
+  const ro = new ResizeObserver(syncBarHeights);
+  ro.observe($('#offlineBar'));
+  ro.observe($('#saveBar'));
+}
+new MutationObserver(syncBarHeights).observe($('#saveBar'), { attributes: true, attributeFilter: ['hidden'] });
 function syncOnline() {
   const off = !navigator.onLine;
   document.body.classList.toggle('offline', off);
   $('#offlineBar').hidden = !off;
   // 모바일 '지도' 탭은 화면 높이에 맞춰 그리므로 안내 띠 높이만큼 줄인다 (띠가 지도 조작부를 가리지 않게)
-  document.body.style.setProperty('--offbar', off ? `${$('#offlineBar').offsetHeight}px` : '0px');
+  syncBarHeights();
   if (pickViewport.matches && $('.layout')?.dataset.tab === 'map' && prefs.page === 'plan') {
     requestAnimationFrame(() => {
       map.invalidateSize({ pan: false });

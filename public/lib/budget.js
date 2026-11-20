@@ -171,11 +171,12 @@ export function expenseProblem({ amount }) {
 
 export function addExpense(trip, { amount, cur = 'local', cat = 'etc', pay = 'card', day = -1, memo = '' }) {
   const budget = ensureBudget(trip);
+  const a = parseAmount(amount) ?? 0; // "1,200"도 한 번만 읽어 저장·환산에 같은 숫자를 쓴다 (GPT 2차 #5)
   const e = {
     id: uid(),
-    amount: parseAmount(amount) ?? 0,
+    amount: a,
     cur: cur === 'KRW' ? 'KRW' : 'local',
-    krw: toKrw(amount, cur, budget), // 환율을 모르면 null (나중에 채움)
+    krw: toKrw(a, cur, budget), // 환율을 모르면 null (나중에 채움)
     cat: EXPENSE_CATS[cat] ? cat : 'etc',
     pay: PAYMENTS[pay] ? pay : 'card',
     day: Number.isInteger(day) ? day : -1,
@@ -208,6 +209,8 @@ export function fillPendingKrw(trip) {
   let n = 0;
   for (const e of trip.expenses) {
     if (e.krw != null) continue;
+    // 적은 통화(ccy)가 지금 현지 통화와 다르면 지금 환율로 채우지 않는다 — 1,000엔을 달러 환율로 바꾸지 않게 (GPT 2차 #2)
+    if (e.cur !== 'KRW' && e.ccy && e.ccy !== 'KRW' && e.ccy !== budget.currency) continue;
     const krw = toKrw(e.amount, e.cur, budget);
     if (krw != null) {
       e.krw = krw;
@@ -281,14 +284,21 @@ export function summarize(trip) {
  * → { local: 현지 통화 합계, krw: 원화로 적은 합계, localCount, krwCount }
  */
 export function currencyTotals(trip) {
-  const out = { local: 0, krw: 0, localCount: 0, krwCount: 0 };
+  const cur = ensureBudget(trip).currency;
+  const out = { local: 0, krw: 0, localCount: 0, krwCount: 0, other: {} };
   for (const e of trip.expenses ?? []) {
-    if (e.cur === 'KRW') {
+    const ccy = e.cur === 'KRW' ? 'KRW' : e.ccy ?? cur;
+    if (ccy === 'KRW') {
       out.krw += Number(e.amount) || 0;
       out.krwCount++;
-    } else {
+    } else if (ccy === cur) {
       out.local += Number(e.amount) || 0;
       out.localCount++;
+    } else {
+      // 현지 통화를 바꾸기 전에 적은 다른 통화 (예: 엔으로 적고 달러로 바꿈) — 섞어 더하지 않는다 (GPT 2차 #6)
+      out.other[ccy] ??= { amount: 0, count: 0 };
+      out.other[ccy].amount += Number(e.amount) || 0;
+      out.other[ccy].count++;
     }
   }
   return out;
@@ -326,7 +336,8 @@ export const fromUnits = (units, code) => units / 10 ** fractionDigits(code);
 export function krwPerBase(budget) {
   const code = baseCode(budget);
   if (code === 'KRW') return 1;
-  const r = code === budget?.currency ? budget.krwPerUnit : budget?.baseKrwPerUnit;
+  // baseKrwPerUnit은 baseRateCode 통화의 환율이다. 기준 통화를 바꾸면 예전 통화 환율을 쓰지 않는다 (GPT 2차 #3)
+  const r = code === budget?.currency ? budget.krwPerUnit : !budget?.baseRateCode || budget.baseRateCode === code ? budget?.baseKrwPerUnit : null;
   return r > 0 ? r : null;
 }
 /** 원화 금액 → 기준 통화 숫자 (환율을 모르면 null) */
@@ -404,6 +415,12 @@ export function setBase(trip, code) {
   if (baseCode(b) === next) return false;
   if (next === 'KRW') delete b.base;
   else b.base = next;
+  // 다른 통화의 기준 환율은 버린다 (새 통화 환율을 받을 때까지 원화로 보여 준다)
+  if (b.baseKrwPerUnit && (b.baseRateCode ?? null) !== next) {
+    delete b.baseKrwPerUnit;
+    delete b.baseRateAt;
+    delete b.baseRateCode;
+  }
   return true;
 }
 
@@ -497,6 +514,7 @@ export function payPlace(trip, itemId, { amount, cur, today = '' } = {}) {
     old.amount = price;
     old.cur = c;
     old.krw = toKrw(price, c, budget);
+    snapshotRate(old, budget); // 새로 기록한 결제이므로 통화·환율도 지금 값으로 (GPT 2차 #7)
     return { expense: old, created: false };
   }
   const i = indexOfDate(trip, today);
@@ -558,10 +576,11 @@ export function expenseKrwPreview(trip, e, { amount, cur }) {
   const a = parseAmount(amount);
   if (!(a > 0)) return null;
   if (cur === 'KRW' || b.currency === 'KRW') return { krw: Math.round(a), rate: null, source: 'krw' };
-  if (e.cur !== 'KRW' && e.krw != null && e.amount > 0) {
-    const rate = e.krw / e.amount;
+  if (e.cur !== 'KRW' && (e.rate > 0 || (e.krw != null && e.amount > 0))) {
+    const rate = e.rate > 0 ? e.rate : e.krw / e.amount; // 기록할 때 남긴 환율 (반올림 전 값)
     return { krw: Math.round(a * rate), rate, source: 'recorded' };
   }
+  if (e.cur !== 'KRW' && e.ccy && e.ccy !== b.currency) return { krw: null, rate: null, source: 'none' }; // 다른 통화 기록에 지금 환율을 쓰지 않는다
   if (b.krwPerUnit > 0) return { krw: Math.round(a * b.krwPerUnit), rate: b.krwPerUnit, source: 'current' };
   return { krw: null, rate: null, source: 'none' };
 }

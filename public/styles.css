@@ -1905,3 +1905,12 @@ dialog.preset-dialog { width: min(520px, calc(100vw - 32px)); }
 /* 검색 결과마다 이름 있는 추가 버튼 (GPT 검수 #12: 키보드·스크린리더로도 고른 결과를 추가) */
 .r-add { flex: none; border: 0; background: var(--control); color: var(--control-text); border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 700; min-height: 32px; }
 .r-add:focus-visible, .r-preview:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* GPT 2차 #13: 모바일 시트 폭 — 새 대화상자(일차 이동·일자 순서·스마트 추천)도 화면 폭 전체, 긴 버튼(일본어 등)은 두 줄로 */
+@media (max-width: 900px) {
+  dialog.dayops-dialog, dialog.preset-dialog { width: 100%; max-width: 100%; }
+  .dialog-actions { flex-wrap: wrap; }
+  .dialog-actions .btn { flex: 1 1 auto; min-width: 0; height: auto; min-height: 44px; padding-block: 8px; white-space: normal; line-height: 1.25; text-align: center; }
+}
+/* 일차로 스크롤할 때 고정 안내 높이만큼 더 내려 둔다 (GPT 2차 #14) */
+.day { scroll-margin-top: calc(var(--head) + 56px + var(--offbar, 0px) + var(--savebar, 0px)); }

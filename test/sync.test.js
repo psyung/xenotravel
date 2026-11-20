@@ -219,3 +219,57 @@ test('GPT 검수 #5: 충돌 창에서 고른 뒤 그사이 다른 탭이 또 바
   assert.equal(again.conflicts[0].remote, '다른 탭 2');
   assert.equal(mergeStore(base, local, remote2, { [c.key]: 'remote' }).trips.t.title, '다른 탭 2', '예전 형식(글자) 선택도 그대로 된다');
 });
+
+test('GPT 2차 #1·#4: 덮어쓴 탭이 한 번 더 저장한 뒤에도 사라진 변경을 되살리고, 실제 공통 조상 기준으로 합친다', () => {
+  const { storage, id, a, b } = twoTabs();
+  const stale = () => storage.getItem(KEY);
+  const get = storage.getItem;
+  let staleValue = null;
+  storage.getItem = function (k) {
+    if (staleValue != null && k === KEY) {
+      const v = staleValue;
+      staleValue = null;
+      return v;
+    }
+    return get.call(this, k);
+  };
+  // 공통 버전: 제목을 Y로 (A가 저장, B도 받아 둠)
+  a.trip().title = 'Y';
+  assert.equal(a.db.save(a.store).ok, true);
+  assert.equal(b.db.save(b.store).ok, true);
+  assert.equal(b.trip().title, 'Y');
+  // A: 지출 추가 저장. B는 그 직전 값을 읽고 제목을 Z로 바꿔 덮어쓴다
+  const before = stale();
+  B.addExpense(a.trip(), { amount: 1200, cat: 'food', day: 0, memo: 'A 점심' });
+  assert.equal(a.db.save(a.store).ok, true);
+  b.trip().title = 'Z';
+  staleValue = before;
+  assert.equal(b.db.save(b.store).ok, true);
+  // B가 한 번 더 저장한다 (A가 아직 알아채기 전)
+  B.addExpense(b.trip(), { amount: 800, cat: 'transport', day: 1, memo: 'B 택시' });
+  assert.equal(b.db.save(b.store).ok, true);
+  // A가 저장하면: 사라진 'A 점심'을 되살리고, 제목은 충돌 없이 Z (공통 조상은 X가 아니라 Y)
+  const r = a.db.save(a.store);
+  assert.equal(r.ok, true, JSON.stringify(r.conflicts ?? r.error));
+  const saved = JSON.parse(storage.getItem(KEY)).trips[id];
+  assert.deepEqual(saved.expenses.map((e) => e.memo).sort(), ['A 점심', 'B 택시']);
+  assert.equal(saved.title, 'Z');
+});
+
+test('GPT 2차 #15: 두 탭이 같은 스마트 추천을 동시에 넣어도 저장소에는 하나만 남는다', () => {
+  const { storage, id, a, b } = twoTabs();
+  C.ensureChecks(a.trip());
+  C.ensureChecks(b.trip());
+  a.db.save(a.store);
+  b.db.save(b.store);
+  const add = (tab) => tab.trip().checks.push({ id: M.uid(), group: 'pack', text: '접이식 우산', done: false, preset: 'umbrella', textI18n: { ko: '접이식 우산', en: 'Compact umbrella', zh: '折叠伞', ja: '折りたたみ傘' } });
+  add(a);
+  add(b);
+  assert.equal(a.db.save(a.store).ok, true);
+  assert.equal(b.db.save(b.store).ok, true);
+  assert.equal(a.db.save(a.store).ok, true);
+  const n = (checks) => checks.filter((c) => c.preset === 'umbrella').length;
+  assert.equal(n(JSON.parse(storage.getItem(KEY)).trips[id].checks), 1);
+  assert.equal(n(a.trip().checks), 1);
+  assert.equal(n(b.trip().checks), 1);
+});

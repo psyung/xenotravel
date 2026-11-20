@@ -77,7 +77,7 @@ export function placementPreview(trip, itemId, toDay, mode = 'move') {
     })),
     stays: dayStays(trip, toDay),
     conflicts,
-    added: [...after.keys()].filter((id) => !before.has(id)).length,
+    added: [...after].filter(([id, kind]) => before.get(id) !== kind).length, // 새 충돌 + 종류가 바뀐 충돌(순서 → 항공편) (GPT 2차 #10)
     targetConflict: after.get(item.id) ?? '',
   };
 }
@@ -139,14 +139,14 @@ export const isPermutation = (order, n) => Array.isArray(order) && order.length 
 export function dayOrderPreview(trip, order) {
   const n = trip.days.length;
   if (!isPermutation(order, n)) return { ok: false };
-  const nowKeys = new Set(trip.days.flatMap((_, i) => [...dayConflicts(trip, i).keys()].map((id) => `${i}:${id}`)));
+  const nowKeys = new Set(trip.days.flatMap((_, i) => [...dayConflicts(trip, i)].map(([id, kind]) => `${i}:${id}:${kind}`)));
   let added = 0;
   let total = 0;
   const days = order.map((from, to) => {
     const items = trip.days[from].items;
     const c = dayConflicts(trip, to, items);
     total += c.size;
-    for (const id of c.keys()) if (!nowKeys.has(`${to}:${id}`)) added++;
+    for (const [id, kind] of c) if (!nowKeys.has(`${to}:${id}:${kind}`)) added++;
     const names = new Map(items.map((x) => [x.id, x.name]));
     return {
       to,
@@ -169,14 +169,19 @@ export function reorderDays(trip, order) {
   const n = trip.days.length;
   if (!isPermutation(order, n) || order.every((x, i) => x === i)) return null;
   const lists = trip.days.map((d) => d.items);
+  const original = lists.map((items) => items.map((x) => x.id)); // 바꾸기 전 날마다의 장소 id
   trip.days.forEach((d, i) => (d.items = lists[order[i]]));
-  const inverse = [];
-  order.forEach((from, to) => (inverse[from] = to));
   return {
+    /**
+     * 이 작업이 옮긴 장소만 원래 날·순서로 되돌린다. 그 뒤에 새로 넣은 장소는 지금 날에 그대로 두고,
+     * 보관함으로 뺀 장소는 다시 끌어오지 않는다 (GPT 2차 #9).
+     */
     undo(tr) {
       if (tr.days.length !== n) return false;
-      const now = tr.days.map((d) => d.items);
-      tr.days.forEach((d, i) => (d.items = now[inverse[i]]));
+      const byId = new Map(tr.days.flatMap((d) => d.items.map((x) => [x.id, x])));
+      const mine = new Set(original.flat());
+      const extra = tr.days.map((d) => d.items.filter((x) => !mine.has(x.id)));
+      tr.days.forEach((d, i) => (d.items = [...original[i].map((id) => byId.get(id)).filter(Boolean), ...extra[i]]));
       return true;
     },
   };

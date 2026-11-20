@@ -1014,4 +1014,6 @@ export const MESSAGES = {
   "검색 결과": ["Search results", "搜索结果", "検索結果"],
   "{name} 추가": ["Add {name}", "添加{name}", "{name}を追加"],
   "도착 (현지 시각) {time}": ["Arrival (local time) {time}", "到达（当地时间）{time}", "到着（現地時刻）{time}"],
+  "그사이 일정이 바뀌어 미리보기를 새로 고쳤어요. 확인하고 다시 눌러 주세요": ["The plan changed in the meantime, so the preview was refreshed. Check it and press again", "期间行程有变化，已刷新预览。请确认后再点一次", "その間に予定が変わったのでプレビューを更新しました。確認してもう一度押してください"],
+  "{n}개 중 {i}번째: {name} · Enter로 추가": ["{i} of {n}: {name} · press Enter to add", "第 {i} 个，共 {n} 个：{name} · 按 Enter 添加", "{n}件中{i}件目：{name} · Enterで追加"],
 };

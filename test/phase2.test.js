@@ -123,7 +123,7 @@ test('가계부: 통화별 합계는 기록한 통화 그대로 더한다', () =
   B.addExpense(trip, { amount: 1000, cur: 'local' });
   B.addExpense(trip, { amount: 500, cur: 'local' });
   B.addExpense(trip, { amount: 20000, cur: 'KRW' });
-  assert.deepEqual(B.currencyTotals(trip), { local: 1500, krw: 20000, localCount: 2, krwCount: 1 });
+  assert.deepEqual(B.currencyTotals(trip), { local: 1500, krw: 20000, localCount: 2, krwCount: 1, other: {} }); // other: 현지 통화를 바꾸기 전 다른 통화로 적은 기록 (Phase 4)
   assert.equal(B.summarize(trip).spent, 1500 * 9 + 20000);
 });
 

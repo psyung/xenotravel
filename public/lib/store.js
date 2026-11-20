@@ -9,8 +9,9 @@
 //
 // 저장 문자열에는 rev(이번 저장 id)와 prev(어느 저장을 보고 썼는지)를 함께 쓴다.
 // 두 탭이 같은 저장을 읽고 거의 동시에 쓰면 먼저 쓴 쪽이 덮어써진다(localStorage에는 잠금이 없다).
-// 다음 저장 때 상대 저장의 prev가 내 마지막 저장의 prev와 같으면(내 저장을 못 보고 썼다) 내 저장이 사라진 것이므로,
-// 그 공통 조상을 기준으로 다시 합쳐 내 변경을 되살린다 (GPT 검수 #2).
+// chain에는 최근 저장 rev 20개(자기 자신부터 조상 순)를 남긴다. 다음 저장 때 상대 저장의 chain에 내 마지막 rev가 없고
+// 내 저장의 조상(prev)은 있으면, 상대가 내 저장을 못 보고 썼다(사라졌다) — 그 뒤에 상대가 몇 번 더 저장했어도 알아챈다.
+// 그때는 내 저장의 바로 앞 버전(공통 조상)을 기준으로 다시 합쳐 내 변경을 되살린다 (GPT 검수 1차 #2, 2차 #1·#4).
 import { mergeStore, stable } from './sync.js';
 
 export const KEY = 'xenotravel:v1';
@@ -36,12 +37,13 @@ function parse(raw) {
     if (!s || typeof s.trips !== 'object' || !s.trips || Array.isArray(s.trips)) return null;
     // 하나가 망가져도 나머지 여행은 연다
     const trips = Object.fromEntries(Object.entries(s.trips).filter(([, t]) => validTrip(t)));
-    return { trips, currentId: s.currentId ?? null, dropped: Object.keys(s.trips).length - Object.keys(trips).length, rev: typeof s.rev === 'string' ? s.rev : null, prev: typeof s.prev === 'string' ? s.prev : null };
+    return { trips, currentId: s.currentId ?? null, dropped: Object.keys(s.trips).length - Object.keys(trips).length, rev: typeof s.rev === 'string' ? s.rev : null, prev: typeof s.prev === 'string' ? s.prev : null, chain: Array.isArray(s.chain) ? s.chain.filter((x) => typeof x === 'string').slice(0, CHAIN) : typeof s.rev === 'string' ? [s.rev] : [] };
   } catch {
     return null;
   }
 }
 
+const CHAIN = 20;
 const newRev = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 const errorKind = (err) => (err?.name === 'QuotaExceededError' || err?.code === 22 || /quota/i.test(String(err?.message)) ? 'quota' : 'denied');
@@ -50,6 +52,7 @@ export function openStore(storage = globalThis.localStorage) {
   let base = {}; // 이 탭이 마지막으로 읽거나 쓴 여행들 (깊은 복사)
   let baseRaw = null; // 그때의 저장 문자열
   let baseRev = null; // 그 저장의 rev
+  let baseChain = []; // 그 저장의 chain (최근 rev들)
   let lastWrite = null; // 내 마지막 저장 { rev, prev, ancestor: 그때 기준으로 삼은 여행들 } — 덮어써졌는지 알아보는 데 쓴다
   let corruptRaw = null; // 읽지 못한 원본 (백업 파일로 내려받을 수 있게)
 
@@ -88,6 +91,7 @@ export function openStore(storage = globalThis.localStorage) {
           baseRaw = raw;
           base = parse(raw).trips;
           baseRev = s.rev;
+          baseChain = s.chain;
         }
         return { trips: s.trips, currentId: s.currentId, problem };
       }
@@ -113,6 +117,7 @@ export function openStore(storage = globalThis.localStorage) {
       return { ok: false, error: 'unavailable' };
     }
     let trips = store.trips;
+    let prevTrips = base; // 이번 저장이 기준으로 삼는 버전의 여행들 (= prev가 가리키는 내용)
     const changed = [];
     if (raw !== baseRaw) {
       // 다른 탭이 저장했다
@@ -122,7 +127,8 @@ export function openStore(storage = globalThis.localStorage) {
         remote = { trips: {}, currentId: null };
       }
       // 상대가 내 마지막 저장을 못 보고 같은 조상에서 썼다 → 내 저장이 덮어써졌다. 공통 조상 기준으로 다시 합친다
-      const lost = lastWrite && remote.rev != null && remote.rev !== lastWrite.rev && remote.prev === lastWrite.prev && baseRev === lastWrite.rev;
+      const chain = remote.chain ?? [];
+      const lost = lastWrite && remote.rev != null && baseRev === lastWrite.rev && !chain.includes(lastWrite.rev) && (lastWrite.prev == null || chain.includes(lastWrite.prev));
       const merged = mergeStore(lost ? lastWrite.ancestor : base, store.trips, remote.trips, choices);
       if (merged.conflicts.length) return { ok: false, conflicts: merged.conflicts };
       trips = merged.trips;
@@ -135,9 +141,12 @@ export function openStore(storage = globalThis.localStorage) {
         baseRaw = raw;
         base = parse(raw).trips;
         baseRev = remote.rev;
+        baseChain = remote.chain ?? [];
         return { ok: true, changed };
       }
       baseRev = remote.rev; // 이번 저장은 상대 저장을 보고 쓴다
+      baseChain = remote.chain ?? [];
+      prevTrips = remote.trips;
     }
     // 내용(여행·현재 여행)이 저장소와 같으면 쓰지 않는다 — rev만 바뀐 저장으로 다른 탭을 깨우지 않게
     const content = JSON.stringify({ trips, currentId: store.currentId });
@@ -151,17 +160,19 @@ export function openStore(storage = globalThis.localStorage) {
       } catch {}
     }
     const rev = newRev();
-    const out = JSON.stringify({ trips, currentId: store.currentId, rev, prev: baseRev });
+    const chainOut = [rev, ...baseChain.filter((x) => x !== rev)].slice(0, CHAIN);
+    const out = JSON.stringify({ trips, currentId: store.currentId, rev, prev: baseRev, chain: chainOut });
     try {
       storage.setItem(KEY, out);
     } catch (err) {
       return { ok: false, error: errorKind(err) };
     }
     apply(store, trips, changed);
-    lastWrite = { rev, prev: baseRev, ancestor: base };
+    lastWrite = { rev, prev: baseRev, ancestor: JSON.parse(JSON.stringify(prevTrips)) }; // 조상 = prev 버전 그대로 (2차 #4)
     baseRaw = out;
     base = JSON.parse(out).trips;
     baseRev = rev;
+    baseChain = chainOut;
     return { ok: true, changed };
   }
 

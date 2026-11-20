@@ -80,6 +80,8 @@ export function mergeEntities(base = [], local = [], remote = [], path, ctx) {
       const c = conflict(ctx, [...path, `#${r.id}`], null, r, B.get(r.id));
       if (!c.value) return;
     }
+    // 두 탭이 같은 스마트 추천(preset)을 동시에 넣었으면 이 탭 것 하나만 둔다 (id는 탭마다 달라도 같은 항목, GPT 2차 #15)
+    if (path.at(-1) === 'checks' && !B.has(r.id) && r.preset && out.some((o) => o.preset === r.preset && !B.has(o.id))) return;
     // 다른 탭이 새로 만든 항목: remote에서 바로 앞에 있던 항목 뒤에
     const prev = remote.slice(0, i).reverse().find((x) => out.some((o) => o.id === x.id));
     const at = prev ? out.findIndex((o) => o.id === prev.id) + 1 : out.length;

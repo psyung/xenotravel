@@ -45,7 +45,11 @@ export function projectRoutes(routes, { x = 0, y = 0, w, h, pad = 40 }) {
   if (!all.length) return [];
   const lat0 = all.reduce((s, p) => s + p.lat, 0) / all.length;
   const kx = Math.cos((lat0 * Math.PI) / 180);
-  const xs = all.map((p) => p.lng * kx);
+  // 날짜변경선 양옆(179.9°E · 179.9°W)은 0.2° 차이로 이어서 그린다: 경도 폭이 180°를 넘으면 서경에 360°를 더한다 (GPT 2차 #17)
+  const raw = all.map((p) => p.lng);
+  const wrap = Math.max(...raw) - Math.min(...raw) > 180;
+  const lngOf = (p) => (wrap && p.lng < 0 ? p.lng + 360 : p.lng);
+  const xs = all.map((p) => lngOf(p) * kx);
   const ys = all.map((p) => p.lat);
   const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
   const spanX = Math.max(maxX - minX, 1e-6);
@@ -53,7 +57,7 @@ export function projectRoutes(routes, { x = 0, y = 0, w, h, pad = 40 }) {
   const scale = Math.min((w - pad * 2) / spanX, (h - pad * 2) / spanY);
   const ox = x + (w - spanX * scale) / 2;
   const oy = y + (h - spanY * scale) / 2;
-  return routes.map((r) => ({ ...r, pts: r.pts.map((p) => ({ ...p, x: ox + (p.lng * kx - minX) * scale, y: oy + (maxY - p.lat) * scale })) }));
+  return routes.map((r) => ({ ...r, pts: r.pts.map((p) => ({ ...p, x: ox + (lngOf(p) * kx - minX) * scale, y: oy + (maxY - p.lat) * scale })) }));
 }
 
 /** 폭에 맞게 자르기 (넘치면 …). measure(text) → px. 띄어쓰기 없는 중국어·일본어도 글자 단위로 자른다. */

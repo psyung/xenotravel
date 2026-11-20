@@ -444,12 +444,15 @@ test('R1-1·7·14·16: 저장 실패 시 성공 알림 금지 · 일반 알림�
   assert.match(app, /id = m\[1\]; \/\/ 잘못된 % 인코딩/);
 });
 
-test('R1-8·12: 검색어가 바뀐 뒤 Enter는 옛 결과를 넣지 않고, 결과는 listbox/option + 추가 버튼', () => {
+test('R1-8·12 / R2-11·18: 옛 검색 결과는 Enter·추가 버튼으로 넣지 않고, 결과는 버튼이 있는 일반 목록 + 상태 안내', () => {
   const app = read('app.js');
   assert.match(app, /const p = ui\.resultsFor === searchEl\.value\.trim\(\) \? ui\.results\[ui\.activeResult\] : null;/);
-  assert.match(app, /role="option" aria-selected=/);
-  assert.match(app, /searchEl\.setAttribute\('aria-activedescendant'/);
+  assert.match(app, /searchEl\.addEventListener\('input', \(\) => \(ui\.resultsFor = null\)\);/, '입력이 바뀌는 순간 무효');
+  assert.match(app, /if \(ui\.resultsFor !== searchEl\.value\.trim\(\)\) return void runSearch/, '추가 버튼도 같은 검사');
+  assert.equal((app.match(/showResults\([^;]*, q\)/g) ?? []).length, 4, '응답은 요청한 검색어에 묶는다');
+  assert.doesNotMatch(app, /role="option"/, 'listbox 안에 버튼을 넣지 않는다');
   assert.match(app, /class="r-add" data-add=/);
+  assert.match(read('index.html'), /id="resultsStatus" class="sr-only" role="status"/);
 });
 
 test('R1-9·13: 고정 안내는 쌓이고(오프라인 → 저장 오류 → 날짜 칩), 경고·완료 글자는 AA 대비', () => {
@@ -488,4 +491,79 @@ test('R1-11: 날짜보다 먼저 고른 항공편 시간은 초안으로 남았�
   assert.match(dp, /else draftTime = time\.value;/);
   assert.match(dp, /write\(value, time\.value \|\| draftTime \|\| parts\(\)\.t\)/);
   assert.match(dp, /if \(now !== lastRaw\) draftTime = '';/, '앱이 값을 새로 넣을 때만 초안을 버린다 (속성 변경은 유지)');
+});
+
+/* ───────── GPT 교차 검수 2차 반영 ───────── */
+
+test('R2-2·3·5: 쉼표 금액도 환산, 다른 통화로 적은 미정 지출에 지금 환율을 쓰지 않음, 기준 환율은 통화 코드와 함께', () => {
+  const tr = M.createTrip({ title: 'T', destination: '도쿄', startDate: '2026-12-01', endDate: '2026-12-02' });
+  const b = B.ensureBudget(tr);
+  b.krwPerUnit = 9.1;
+  const comma = B.addExpense(tr, { amount: '1,200', cur: 'local' });
+  assert.deepEqual([comma.amount, comma.krw], [1200, 10920]);
+  b.krwPerUnit = 0;
+  const pend = B.addExpense(tr, { amount: 1000, cur: 'local' }); // 환율 없이 엔으로
+  b.currency = 'USD';
+  b.krwPerUnit = 1400;
+  assert.equal(B.fillPendingKrw(tr), 0);
+  assert.equal(pend.krw, null, '1,000엔을 달러 환율로 바꾸지 않는다');
+  assert.equal(pend.ccy, 'JPY');
+  assert.deepEqual(B.currencyTotals(tr).other.JPY, { amount: 2200, count: 2 }, '엔으로 적은 두 건(1,200 + 1,000)은 달러 합계에 섞지 않는다');
+  assert.equal(B.currencyTotals(tr).localCount, 0);
+  b.currency = 'JPY';
+  b.base = 'USD';
+  b.baseKrwPerUnit = 1300;
+  b.baseRateCode = 'USD';
+  assert.equal(B.krwPerBase(b), 1300);
+  B.setBase(tr, 'EUR');
+  assert.equal(B.krwPerBase(b), null, 'EUR로 바꾸면 USD 환율을 쓰지 않는다');
+  assert.equal(b.baseKrwPerUnit, undefined);
+});
+
+test('R2-6·7: 고칠 때는 기록한 환율(반올림 전)을, 장소 결제를 다시 기록하면 환율 스냅샷도 새로', () => {
+  const tr = M.createTrip({ title: 'T', destination: '도쿄', startDate: '2026-12-01', endDate: '2026-12-02' });
+  const b = B.ensureBudget(tr);
+  b.krwPerUnit = 9.137;
+  const e = B.addExpense(tr, { amount: 3, cur: 'local' }); // krw 27 (반올림) — rate는 9.137
+  b.krwPerUnit = 10;
+  assert.equal(B.expenseKrwPreview(tr, e, { amount: 1000, cur: 'local' }).krw, 9137, '반올림된 krw/amount(9)가 아니라 남긴 환율');
+  const it = M.addItem(tr, tr.days[0].id, { name: '박물관', lat: 35, lng: 139 });
+  b.base = 'JPY';
+  b.krwPerUnit = 9;
+  B.payPlace(tr, it.id, { amount: 1000, cur: 'local' });
+  const paid = B.placeExpense(tr, it.id);
+  assert.equal(paid.ccy, 'JPY');
+  B.payPlace(tr, it.id, { amount: 10000, cur: 'KRW' });
+  assert.equal(paid.ccy, 'KRW', '원화로 다시 기록하면 통화도 원화');
+  assert.equal(paid.rate, 1);
+  assert.equal(B.expenseBaseUnits(paid, b), Math.round(10000 / 9), '원화 10,000을 엔 10,000으로 보지 않는다');
+});
+
+test('R2-9·10: 일자 순서 되돌리기는 옮긴 장소만, 충돌 종류가 바뀌어도 새 충돌로 센다', () => {
+  const tr = tripWith();
+  const r = D.reorderDays(tr, [1, 0, 2, 3]);
+  assert.deepEqual(names(tr), ['CD', 'AB', 'E', 'FG']);
+  M.addItem(tr, tr.days[0].id, { name: 'N', lat: 34.6, lng: 135.5 }); // 바꾼 뒤 1일차에 새로 넣음
+  r.undo(tr);
+  assert.deepEqual(names(tr), ['ABN', 'CD', 'E', 'FG'], '옮긴 장소만 원래 날로, 새 장소 N은 넣은 날(1일차)에 그대로');
+  // 순서 겹침이 있던 묶음을 항공편 제약이 있는 날로 옮기면 종류가 바뀐 충돌(order → flight)도 새 충돌
+  const t2 = tripWith();
+  t2.days[1].items[1].time = '09:00'; // Day 2: C 10:00, D 09:00 → D는 순서 겹침(order)
+  const before = D.dayConflicts(t2, 1);
+  assert.equal(before.get(t2.days[1].items[1].id), 'order');
+  const p = D.dayOrderPreview(t2, [1, 0, 2, 3]); // 그 묶음이 Day 1(도착 11:00)로 → C·D 모두 flight
+  assert.ok(p.added >= 2, `added=${p.added}`);
+});
+
+test('R2-12·13·14·16·17: 폼 비우기 시 시간 초안 삭제 · 모바일 시트 폭/버튼 줄바꿈 · 안내 높이 재측정 · 기간 칩 · 날짜변경선 투영', () => {
+  assert.match(read('lib/datepicker.js'), /input\.form\?\.addEventListener\('reset', \(\) => \{\n    draftTime = '';/);
+  const css = read('styles.css');
+  assert.match(css, /dialog\.dayops-dialog, dialog\.preset-dialog \{ width: 100%; max-width: 100%; \}/);
+  assert.match(css, /\.dialog-actions \.btn \{ flex: 1 1 auto; min-width: 0;[^}]*white-space: normal;/);
+  const app = read('app.js');
+  assert.match(app, /new ResizeObserver\(syncBarHeights\)/);
+  assert.match(app, /st\.days = d && n >= d\.min && n <= d\.max \? n : Number\(e\.target\.value\);/);
+  const pts = projectRoutes([{ color: '#000', pts: [{ lat: 0, lng: 179.9 }, { lat: 0.1, lng: -179.9 }] }], { x: 0, y: 0, w: 400, h: 300, pad: 20 })[0].pts;
+  assert.ok(pts.every((p) => p.x >= 19 && p.x <= 381), '양 끝으로 갈라지지 않고 칸 안에');
+  assert.ok(Math.abs(pts[0].x - pts[1].x) < 400, '0.2° 거리로 이어서');
 });

@@ -363,6 +363,11 @@ function enhanceDateTime(input) {
   // 앱이 값을 새로 넣으면(다른 항공편 열기·폼 비우기) 초안은 버린다 — 이전 항공편 시간이 남지 않게.
   // disabled·min 같은 속성만 바뀐 경우(같은 콜백이 불린다)는 값이 그대로라 초안을 지킨다.
   let lastRaw = VALUE.get.call(input);
+  // 폼을 비우면(새 항공편·다른 항공편 열기) 값이 원래 빈 칸이어도 시간 초안을 버린다 (GPT 2차 #12)
+  input.form?.addEventListener('reset', () => {
+    draftTime = '';
+    time.value = '';
+  });
   watch(input, () => {
     const now = VALUE.get.call(input);
     if (now !== lastRaw) draftTime = '';
