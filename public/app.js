@@ -677,8 +677,8 @@ function addTrend(id, listId, index) {
   const found = findTrend(id);
   if (!found) return;
   const local = { ...found.place, ...tp(found.place) };
-  if (listId == null) return addPlace(T.trendToPlace(local, t(found.city.name)));
-  const item = M.addItem(trip, listId, T.trendToPlace(local, t(found.city.name)));
+  if (listId == null) return addPlace(T.trendToPlace(local, t(found.city.name), found.place.category));
+  const item = M.addItem(trip, listId, T.trendToPlace(local, t(found.city.name), found.place.category));
   M.moveItem(trip, item.id, listId, index);
   if (commit().ok) toast(t('"{name}"을(를) 담았어요', { name: item.name }));
 }
@@ -2626,7 +2626,9 @@ resultsEl.addEventListener('click', (e) => {
     return;
   }
   const li = e.target.closest('li[data-i]');
-  if (li) addPlace(ui.results[+li.dataset.i]);
+  if (!li) return;
+  if (ui.resultsFor !== searchEl.value.trim()) return void runSearch({ explicit: true }); // 결과 본문을 눌러도 옛 검색어 결과는 넣지 않는다 (GPT 3차 #9)
+  addPlace(ui.results[+li.dataset.i]);
 });
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.search') && !e.target.closest('#mapPlace')) hideResults();
@@ -3335,6 +3337,12 @@ function openPrint() {
 
   const loads = $$('.print-map', el).map((div) => {
     const l = lists.find((x) => x.id === div.dataset.list);
+    // 장소·숙소 좌표가 없는 날(항공편만 있는 날)은 지도 칸을 치운다 — 빈 좌표로 fitBounds를 부르면 미리보기 전체가 멈춘다 (GPT 3차 #4)
+    const route = l.isDay ? M.dayRoute(trip, Number(div.dataset.day)) : l.items;
+    if (!route.length) {
+      div.remove();
+      return Promise.resolve();
+    }
     const m = L.map(div, { zoomControl: false, attributionControl: true, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, touchZoom: false, keyboard: false });
     printMaps.push(m);
     const tiles = L.tileLayer(TILES.light[0], TILE_OPTS);
@@ -4245,7 +4253,8 @@ async function fetchRate({ quiet = false } = {}) {
     if (trip !== forTrip) return;
     if (needBase) {
       const bp = data?.rates?.[base];
-      if (bp > 0) {
+      if (bp > 0 && B.baseCode(b) === base) {
+        // 응답이 오는 사이 기준 통화를 또 바꿨으면(USD → EUR) 늦게 온 USD 환율로 EUR 환율을 덮지 않는다 (GPT 3차 #10)
         b.baseKrwPerUnit = 1 / bp;
         b.baseRateCode = base; // 요청할 때의 기준 통화 (그사이 기준 통화를 바꿨으면 krwPerBase가 쓰지 않는다)
         b.baseRateAt = new Date().toISOString();
@@ -4894,7 +4903,8 @@ async function updateShare() {
     const code = await encodeShare(source, { includePrivate });
     const url = await createShareUrl(code);
     if (request !== shareRequest || !shareDialog.open) return;
-    ui.share = { url, title, line, code, includePrivate, message: shareMessage({ ...source, title }, url) };
+    // 링크와 파일이 같은 내용이 되게, 링크를 만든 순간의 사본을 같이 둔다 (GPT 3차 #11)
+    ui.share = { url, title, line, code, includePrivate, message: shareMessage({ ...source, title }, url), copy: sharedCopy(source, { includePrivate }) };
     $('#shareLink').textContent = url;
     $('#shareLong').hidden = !url.includes('#s=');
     const tooLong = url.length > SHARE_LIMIT;
@@ -4917,7 +4927,7 @@ async function updateShare() {
 function saveShareFile() {
   const current = ui.share;
   if (!current || !trip) return;
-  downloadJson(sharedCopy(trip, { includePrivate: current.includePrivate }), { kind: 'share' });
+  downloadJson(current.copy ?? sharedCopy(trip, { includePrivate: current.includePrivate }), { kind: 'share' });
 }
 
 /** 복사. 클립보드가 막혀 있으면 직접 복사 창을 연다 (공유면 일정 파일로도 보낼 수 있게). */
@@ -5302,7 +5312,11 @@ function renderDayOps({ focus } = {}) {
 }
 
 /** 대화상자를 연 뒤 일정(날짜·장소 배치)이 바뀌었는지 보는 표식 — 다른 탭 저장 등 */
-const daySig = () => JSON.stringify(trip.days.map((d) => [d.id, d.date, d.items.map((x) => [x.id, x.time])]));
+const daySig = () => JSON.stringify([
+  trip.days.map((d) => [d.id, d.date, d.items.map((x) => [x.id, x.time])]),
+  (trip.flights ?? []).map((f) => [f.id, f.kind, f.departAt, f.arriveAt]), // 항공편·숙소도 미리보기 계산에 쓴다 (GPT 3차 #7)
+  (trip.stays ?? []).map((s) => [s.id, s.startIndex, s.nights]),
+]);
 function applyDayOps() {
   const op = ui.ops;
   if (!op || ui.readonly) return;

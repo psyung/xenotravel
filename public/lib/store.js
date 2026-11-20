@@ -118,6 +118,8 @@ export function openStore(storage = globalThis.localStorage) {
     }
     let trips = store.trips;
     let prevTrips = base; // 이번 저장이 기준으로 삼는 버전의 여행들 (= prev가 가리키는 내용)
+    let nextRev = baseRev; // 이번 저장의 prev (상대 저장을 합쳤으면 그 rev)
+    let nextChain = baseChain;
     const changed = [];
     if (raw !== baseRaw) {
       // 다른 탭이 저장했다
@@ -144,8 +146,9 @@ export function openStore(storage = globalThis.localStorage) {
         baseChain = remote.chain ?? [];
         return { ok: true, changed };
       }
-      baseRev = remote.rev; // 이번 저장은 상대 저장을 보고 쓴다
-      baseChain = remote.chain ?? [];
+      // 상대 저장의 버전 정보는 실제로 쓴 뒤에만 이 탭의 기준으로 삼는다 — 쓰기에 실패하면 다음 시도가 덮어쓰기를 다시 알아챈다 (GPT 3차 #1)
+      nextRev = remote.rev;
+      nextChain = remote.chain ?? [];
       prevTrips = remote.trips;
     }
     // 내용(여행·현재 여행)이 저장소와 같으면 쓰지 않는다 — rev만 바뀐 저장으로 다른 탭을 깨우지 않게
@@ -160,15 +163,15 @@ export function openStore(storage = globalThis.localStorage) {
       } catch {}
     }
     const rev = newRev();
-    const chainOut = [rev, ...baseChain.filter((x) => x !== rev)].slice(0, CHAIN);
-    const out = JSON.stringify({ trips, currentId: store.currentId, rev, prev: baseRev, chain: chainOut });
+    const chainOut = [rev, ...nextChain.filter((x) => x !== rev)].slice(0, CHAIN);
+    const out = JSON.stringify({ trips, currentId: store.currentId, rev, prev: nextRev, chain: chainOut });
     try {
       storage.setItem(KEY, out);
     } catch (err) {
       return { ok: false, error: errorKind(err) };
     }
     apply(store, trips, changed);
-    lastWrite = { rev, prev: baseRev, ancestor: JSON.parse(JSON.stringify(prevTrips)) }; // 조상 = prev 버전 그대로 (2차 #4)
+    lastWrite = { rev, prev: nextRev, ancestor: JSON.parse(JSON.stringify(prevTrips)) }; // 조상 = prev 버전 그대로 (2차 #4)
     baseRaw = out;
     base = JSON.parse(out).trips;
     baseRev = rev;

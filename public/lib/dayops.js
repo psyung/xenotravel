@@ -171,6 +171,7 @@ export function reorderDays(trip, order) {
   const lists = trip.days.map((d) => d.items);
   const original = lists.map((items) => items.map((x) => x.id)); // 바꾸기 전 날마다의 장소 id
   trip.days.forEach((d, i) => (d.items = lists[order[i]]));
+  const placed = new Map(trip.days.flatMap((d, i) => d.items.map((x) => [x.id, i]))); // 이 작업이 둔 날
   return {
     /**
      * 이 작업이 옮긴 장소만 원래 날·순서로 되돌린다. 그 뒤에 새로 넣은 장소는 지금 날에 그대로 두고,
@@ -179,9 +180,11 @@ export function reorderDays(trip, order) {
     undo(tr) {
       if (tr.days.length !== n) return false;
       const byId = new Map(tr.days.flatMap((d) => d.items.map((x) => [x.id, x])));
-      const mine = new Set(original.flat());
-      const extra = tr.days.map((d) => d.items.filter((x) => !mine.has(x.id)));
-      tr.days.forEach((d, i) => (d.items = [...original[i].map((id) => byId.get(id)).filter(Boolean), ...extra[i]]));
+      const dayOf = new Map(tr.days.flatMap((d, i) => d.items.map((x) => [x.id, i])));
+      // 이 작업이 둔 자리(placed)에 아직 있는 장소만 되돌린다. 그 뒤 다른 날로 옮긴 장소는 그 이동을 지킨다 (GPT 3차 #8)
+      const back = new Set(original.flat().filter((id) => dayOf.get(id) === placed.get(id)));
+      const stay = tr.days.map((d) => d.items.filter((x) => !back.has(x.id)));
+      tr.days.forEach((d, i) => (d.items = [...original[i].filter((id) => back.has(id)).map((id) => byId.get(id)), ...stay[i]]));
       return true;
     },
   };

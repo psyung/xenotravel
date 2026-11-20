@@ -1914,3 +1914,6 @@ dialog.preset-dialog { width: min(520px, calc(100vw - 32px)); }
 }
 /* 일차로 스크롤할 때 고정 안내 높이만큼 더 내려 둔다 (GPT 2차 #14) */
 .day { scroll-margin-top: calc(var(--head) + 56px + var(--offbar, 0px) + var(--savebar, 0px)); }
+/* PDF 일정표: 긴 링크·메모가 A4 표 폭을 밀어내지 않게 (GPT 3차 #14) */
+.print-day table { table-layout: fixed; }
+.print-day td { overflow-wrap: anywhere; word-break: break-word; }

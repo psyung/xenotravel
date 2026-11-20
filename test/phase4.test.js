@@ -567,3 +567,34 @@ test('R2-12·13·14·16·17: 폼 비우기 시 시간 초안 삭제 · 모바일
   assert.ok(pts.every((p) => p.x >= 19 && p.x <= 381), '양 끝으로 갈라지지 않고 칸 안에');
   assert.ok(Math.abs(pts[0].x - pts[1].x) < 400, '0.2° 거리로 이어서');
 });
+
+/* ───────── GPT 교차 검수 3차 반영 ───────── */
+
+test('R3-2: 현지 통화를 원화로 바꾼 뒤 예전 엔 지출을 고쳐도 엔 그대로, 기록 환율로', () => {
+  const tr = M.createTrip({ title: 'T', destination: '도쿄', startDate: '2026-12-01', endDate: '2026-12-02' });
+  const b = B.ensureBudget(tr);
+  b.krwPerUnit = 9;
+  const e = B.addExpense(tr, { amount: 1000, cur: 'local' });
+  b.currency = 'KRW';
+  b.krwPerUnit = 0;
+  B.updateExpense(tr, e.id, { amount: '1,200', cur: 'local' });
+  assert.deepEqual([e.amount, e.cur, e.ccy, e.krw, e.rate], [1200, 'local', 'JPY', 10800, 9]);
+  B.updateExpense(tr, e.id, { amount: 5000, cur: 'KRW' });
+  assert.deepEqual([e.cur, e.ccy, e.krw, e.rate], ['KRW', 'KRW', 5000, 1], '원화로 바꾸면 원화');
+});
+
+test('R3-8: 일자 순서 되돌리기는 그 뒤 다른 날로 옮긴 장소의 이동을 지킨다', () => {
+  const tr = tripWith();
+  const r = D.reorderDays(tr, [1, 0, 2, 3]); // Day1 = CD, Day2 = AB
+  M.moveItem(tr, idOf(tr, 'C'), tr.days[2].id, 0); // 그 뒤 C를 Day3으로
+  r.undo(tr);
+  assert.deepEqual(names(tr).map((x) => [...x].sort().join('')), ['AB', 'D', 'CE', 'FG'], 'C는 옮긴 Day 3에 그대로, 나머지만 원래 날로');
+});
+
+test('R3-4·7·9·10: 항공편만 있는 날 PDF · 미리보기 표식에 항공편·숙소 · 결과 본문 클릭 · 늦은 환율 응답', () => {
+  const app = read('app.js');
+  assert.match(app, /if \(!route\.length\) \{\n      div\.remove\(\);/);
+  assert.match(app, /\(trip\.flights \?\? \[\]\)\.map\(\(f\) => \[f\.id, f\.kind, f\.departAt, f\.arriveAt\]\)/);
+  assert.match(app, /if \(!li\) return;\n  if \(ui\.resultsFor !== searchEl\.value\.trim\(\)\) return void runSearch/);
+  assert.match(app, /if \(bp > 0 && B\.baseCode\(b\) === base\) \{/);
+});

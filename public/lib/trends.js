@@ -55,8 +55,11 @@ export function statusLabel(p, today) {
   return t('꾸준한 인기');
 }
 
-/** 트렌드 장소를 일정 항목용 장소로 바꾼다. */
-export function trendToPlace(p, cityName) {
+/**
+ * 트렌드 장소를 일정 항목용 장소로 바꾼다.
+ * rawCategory: 번역 전 원문 분류(한국어). 화면 언어와 상관없이 같은 장소는 같은 종류로 저장된다 (GPT 3차 #13).
+ */
+export function trendToPlace(p, cityName, rawCategory = p.category) {
   return {
     name: p.name,
     address: [p.area, cityName].filter(Boolean).join(', '),
@@ -64,7 +67,7 @@ export function trendToPlace(p, cityName) {
     lng: p.lng,
     url: p.sources?.[0]?.url ?? '',
     memo: p.summary ?? '',
-    category: categoryFromText(p.category),
+    category: categoryFromText(rawCategory),
   };
 }
 

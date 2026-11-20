@@ -47,12 +47,33 @@ function newId() {
   return Array.from({ length: 8 }, () => ABC[randomInt(ABC.length)]).join('');
 }
 
+/**
+ * IP당 시간당 공유 링크 생성 수 제한 (GPT 3차 #12).
+ * 막힌 요청은 기록에 더하지 않고, 한 시간 지난 주소는 지워 메모리가 늘지 않게 한다.
+ */
 function limited(ip) {
   const now = Date.now();
   const hits = (rate.get(ip) ?? []).filter((t) => now - t < 3600_000);
+  if (hits.length >= RATE_MAX) {
+    rate.set(ip, hits);
+    return true;
+  }
   hits.push(now);
   rate.set(ip, hits);
-  return hits.length > RATE_MAX;
+  return false;
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, hits] of rate) if (!hits.some((t) => now - t < 3600_000)) rate.delete(ip);
+}, 10 * 60_000).unref();
+
+/** 요청 주소. 역방향 프록시 뒤에서는 TRUST_PROXY=1일 때만 X-Forwarded-For 첫 주소를 믿는다 (아니면 누구나 위조 가능) */
+function clientIp(req) {
+  if (process.env.TRUST_PROXY === '1') {
+    const xff = String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim();
+    if (xff) return xff;
+  }
+  return req.socket.remoteAddress;
 }
 
 async function readBody(req) {
@@ -67,7 +88,7 @@ async function readBody(req) {
 }
 
 async function createShare(req, res) {
-  if (limited(req.socket.remoteAddress)) return json(res, 429, { error: '잠시 후 다시 시도해 주세요' });
+  if (limited(clientIp(req))) return json(res, 429, { error: '잠시 후 다시 시도해 주세요' });
   let code;
   try {
     code = JSON.parse(await readBody(req)).code;

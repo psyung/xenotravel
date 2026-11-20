@@ -571,11 +571,14 @@ export function combinePlans(...plans) {
  * 메모·분류·날짜·결제수단만 바꾸면 원화 환산액(기록 당시 환율)은 그대로 둔다.
  * 금액·통화를 바꾸면: 원화 → 그 금액, 현지 돈 → 이 기록에 적용했던 환율(있으면), 없으면 지금 환율, 그것도 없으면 '환율 미정'.
  */
+/** 고치는 지출이 적힌 실제 통화: 원화로 바꾸면 KRW, 현지 돈 그대로면 그 기록의 통화(ccy) — 지금 현지 통화가 아니라 (GPT 3차 #2) */
+export const editCurrency = (trip, e, cur) => (cur === 'KRW' ? 'KRW' : e.cur !== 'KRW' && e.ccy ? e.ccy : ensureBudget(trip).currency);
+
 export function expenseKrwPreview(trip, e, { amount, cur }) {
   const b = ensureBudget(trip);
   const a = parseAmount(amount);
   if (!(a > 0)) return null;
-  if (cur === 'KRW' || b.currency === 'KRW') return { krw: Math.round(a), rate: null, source: 'krw' };
+  if (editCurrency(trip, e, cur) === 'KRW') return { krw: Math.round(a), rate: null, source: 'krw' };
   if (e.cur !== 'KRW' && (e.rate > 0 || (e.krw != null && e.amount > 0))) {
     const rate = e.rate > 0 ? e.rate : e.krw / e.amount; // 기록할 때 남긴 환율 (반올림 전 값)
     return { krw: Math.round(a * rate), rate, source: 'recorded' };
@@ -594,18 +597,13 @@ export function updateExpense(trip, id, patch) {
   const cur = patch.cur === 'KRW' ? 'KRW' : patch.cur === 'local' ? 'local' : e.cur;
   if (amount !== e.amount || cur !== e.cur) {
     const p = expenseKrwPreview(trip, e, { amount, cur });
-    const b = ensureBudget(trip);
+    const code = editCurrency(trip, e, cur);
     e.amount = amount;
-    e.cur = cur;
+    e.cur = code === 'KRW' ? 'KRW' : 'local';
     e.krw = p.krw;
     // 적용 환율은 이 기록에 남긴 값 그대로 (통화를 바꿨을 때만 새로)
-    if (cur === 'KRW' || b.currency === 'KRW') {
-      e.ccy = 'KRW';
-      e.rate = 1;
-    } else {
-      if (!e.ccy || e.ccy === 'KRW') e.ccy = b.currency;
-      e.rate = p.rate ?? e.rate ?? null;
-    }
+    e.ccy = code;
+    e.rate = code === 'KRW' ? 1 : p.rate ?? e.rate ?? null;
   }
   if (patch.memo != null) e.memo = String(patch.memo).trim();
   if (EXPENSE_CATS[patch.cat]) e.cat = patch.cat;

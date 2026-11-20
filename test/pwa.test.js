@@ -24,9 +24,20 @@ test('sw.js: 오프라인에 필요한 앱 파일이 빠짐없이 들어 있다'
 test('sw.js: index.html이 불러오는 CDN 파일을 모두 저장한다', () => {
   const html = readFileSync(new URL('index.html', pub), 'utf8');
   const cdn = [...html.matchAll(/(?:src|href)="(https:\/\/(?:cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net)[^"]+)"/g)].map((m) => m[1]);
-  assert.ok(cdn.length >= 5);
+  assert.ok(cdn.length >= 3);
   const libs = list('LIB_URLS');
   for (const u of cdn) assert.ok(libs.includes(u), `${u}이(가) LIB_URLS에 없어요`);
+});
+
+test('GPT 3차 #5: 앱 시작에 필수인 지도·끌기 라이브러리는 앱과 함께 배포하고 필수 캐시(APP_FILES)에 넣는다', () => {
+  const html = readFileSync(new URL('index.html', pub), 'utf8');
+  assert.doesNotMatch(html, /cdnjs\.cloudflare\.com\/ajax\/libs\/(leaflet|Sortable)/, 'CDN에서 받지 않는다');
+  assert.match(html, /<script src="vendor\/leaflet\/leaflet\.min\.js"><\/script>/);
+  assert.match(html, /<script src="vendor\/sortable\/Sortable\.min\.js"><\/script>/);
+  const files = list('APP_FILES');
+  for (const f of ['vendor/leaflet/leaflet.min.css', 'vendor/leaflet/leaflet.min.js', 'vendor/sortable/Sortable.min.js']) assert.ok(files.includes(f), f);
+  const css = readFileSync(new URL('vendor/leaflet/leaflet.min.css', pub), 'utf8');
+  for (const m of css.matchAll(/url\((images\/[^)]+)\)/g)) assert.ok(files.includes(`vendor/leaflet/${m[1]}`), m[1]);
 });
 
 test('manifest: 설치에 필요한 값', () => {

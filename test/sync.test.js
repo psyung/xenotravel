@@ -273,3 +273,28 @@ test('GPT 2차 #15: 두 탭이 같은 스마트 추천을 동시에 넣어도 �
   assert.equal(n(a.trip().checks), 1);
   assert.equal(n(b.trip().checks), 1);
 });
+
+test('GPT 3차 #1: 덮어쓰기를 되살리는 저장이 한 번 실패해도, 다시 저장할 때 또 알아채고 되살린다', () => {
+  const { storage, id, a, b } = twoTabs();
+  const get = storage.getItem;
+  let staleValue = null;
+  storage.getItem = function (k) {
+    if (staleValue != null && k === KEY) {
+      const v = staleValue;
+      staleValue = null;
+      return v;
+    }
+    return get.call(this, k);
+  };
+  const before = storage.getItem(KEY);
+  B.addExpense(a.trip(), { amount: 1200, cat: 'food', day: 0, memo: 'A 점심' });
+  assert.equal(a.db.save(a.store).ok, true);
+  B.addExpense(b.trip(), { amount: 800, cat: 'transport', day: 1, memo: 'B 택시' });
+  staleValue = before;
+  assert.equal(b.db.save(b.store).ok, true); // A 저장을 덮어씀
+  storage.failWith = Object.assign(new Error('full'), { name: 'QuotaExceededError' });
+  assert.equal(a.db.save(a.store).ok, false); // 되살리는 저장이 실패
+  storage.failWith = null;
+  assert.equal(a.db.save(a.store).ok, true); // 다시 시도
+  assert.deepEqual(JSON.parse(storage.getItem(KEY)).trips[id].expenses.map((e) => e.memo).sort(), ['A 점심', 'B 택시']);
+});

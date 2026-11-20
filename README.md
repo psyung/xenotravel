@@ -125,7 +125,7 @@ public/data/trends-i18n.json 트렌드 문구(지역·분류·설명) 영·중·
 test/                node:test 단위 테스트
 ```
 
-외부 라이브러리는 CDN(cdnjs)에서 고정 버전으로 불러온다: Leaflet 1.9.4, SortableJS 1.15.2, SheetJS 0.18.5, Cally 0.9.2(jsDelivr).
+앱 시작에 꼭 필요한 Leaflet 1.9.4·SortableJS 1.15.2는 `public/vendor/`에 넣어 앱 파일과 함께 배포하고 오프라인 필수 캐시에 넣는다(cdnjs SRI와 같은 파일). 없어도 앱이 열리는 SheetJS 0.18.5(엑셀)·Cally 0.9.2(달력, jsDelivr)·Pretendard(글꼴)는 CDN에서 고정 버전으로 불러온다.
 
 ## 트렌드 데이터 (`public/data/trends.json`)
 

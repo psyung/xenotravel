@@ -41,7 +41,8 @@
       };
       var l = null;
       try { l = localStorage.getItem('xenotravel:lang'); } catch (e) {}
-      if (!l) { var n = (navigator.language || '').toLowerCase(); l = n.indexOf('zh') === 0 ? 'zh' : n.indexOf('ja') === 0 ? 'ja' : n.indexOf('ko') === 0 ? 'ko' : 'en'; }
+      // 앱과 같은 규칙: 저장된 언어가 없으면 한국어 (홈으로 갔을 때 언어가 바뀌지 않게, GPT 3차 #15)
+      if (!l) l = 'ko';
       var s = T[l];
       if (s) {
         document.documentElement.lang = s[3];

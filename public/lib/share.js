@@ -73,6 +73,32 @@ async function pipe(bytes, stream) {
   return new Uint8Array(await out.arrayBuffer());
 }
 
+/** 공유 코드를 풀었을 때 허용하는 최대 크기 (장소 수천 곳도 1MB 안팎) — 작은 코드가 거대하게 풀리는 압축 폭탄 방지 (GPT 3차 #3) */
+export const MAX_INFLATED = 5 * 1024 * 1024;
+/** 압축 풀기: 나오는 대로 세다가 상한을 넘으면 바로 멈춘다 (전부 메모리에 모으기 전에) */
+async function inflateLimited(bytes, max = MAX_INFLATED) {
+  const reader = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader();
+  const chunks = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > max) {
+      await reader.cancel().catch(() => {});
+      throw new Error('too large');
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const c of chunks) {
+    out.set(c, at);
+    at += c.length;
+  }
+  return out;
+}
+
 function toBase64Url(bytes) {
   let bin = '';
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
@@ -121,7 +147,7 @@ export async function decodeShare(code) {
   if (format !== FORMAT || !data) fail();
   let raw;
   try {
-    const bytes = await pipe(fromBase64Url(decodeURIComponent(data)), new DecompressionStream('deflate-raw'));
+    const bytes = await inflateLimited(fromBase64Url(decodeURIComponent(data)));
     raw = JSON.parse(new TextDecoder().decode(bytes));
   } catch {
     fail();

@@ -1,15 +1,16 @@
 // 오프라인용 서비스 워커. 해외에서 데이터가 안 터져도 앱을 새로 열 수 있게 한다.
 // 여행 데이터 자체는 localStorage에 있으므로 여기서는 "앱 파일"만 챙긴다.
 //  - 우리 파일: 인터넷이 되면 항상 새로 받고(개발 중 수정이 바로 보이게), 안 되면 저장해 둔 것
-//  - CDN 라이브러리: 버전이 고정이라 저장해 둔 것을 먼저 쓴다
+//  - CDN 라이브러리(글꼴·엑셀·달력 — 없어도 앱은 열린다): 버전이 고정이라 저장해 둔 것을 먼저 쓴다
 //  - 지도 타일(Esri): 이용 약관상 오프라인 장기 저장을 하지 않는다. 브라우저 기본 HTTP 캐시만 쓰고,
 //    오프라인이면 앱이 일정 좌표로 그린 SVG 동선 미니맵을 보여 준다. (예전 버전이 저장한 타일 캐시는 activate에서 지운다)
 //  - 검색·날씨·환율 API: 저장하지 않는다 (날씨는 앱이 따로 저장)
-const VERSION = 'v10';
+const VERSION = 'v11';
 const APP = `xenotravel-app-${VERSION}`;
 const LIBS = `xenotravel-libs-${VERSION}`;
 
 // test/pwa.test.js가 public/의 앱 파일이 빠짐없이 들어 있는지 검사한다 (일반 스크립트라 export 없음).
+// vendor/: 지도(Leaflet)·끌기(Sortable) 라이브러리 — 앱 시작에 필수라 CDN이 아니라 앱 파일과 함께 한 번에 설치한다 (GPT 3차 #5)
 const APP_FILES = [
   './',
   'index.html',
@@ -20,6 +21,14 @@ const APP_FILES = [
   'icons/icon-192.png',
   'icons/icon-512.png',
   'icons/icon-180.png',
+  'vendor/leaflet/leaflet.min.css',
+  'vendor/leaflet/leaflet.min.js',
+  'vendor/leaflet/images/layers.png',
+  'vendor/leaflet/images/layers-2x.png',
+  'vendor/leaflet/images/marker-icon.png',
+  'vendor/leaflet/images/marker-icon-2x.png',
+  'vendor/leaflet/images/marker-shadow.png',
+  'vendor/sortable/Sortable.min.js',
   'data/trends.json',
   'data/trends-i18n.json',
   'data/checklist-presets.json',
@@ -46,9 +55,6 @@ const APP_FILES = [
 ];
 
 const LIB_URLS = [
-  'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css',
-  'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
   'https://cdn.jsdelivr.net/npm/cally@0.9.2/dist/cally.js',
   'https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css',
