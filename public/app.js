@@ -564,6 +564,12 @@ $('#mapPlace').addEventListener('click', (e) => {
   }
   if (e.target.closest('[data-cand-add]') && ui.candidate) {
     const p = ui.candidate;
+    // 검색 결과의 '위치 보기'로 연 후보인데 그사이 검색어가 바뀌었으면 넣지 않고 다시 찾는다 (GPT 4차 #6)
+    if (p.fromSearch != null && p.fromSearch !== searchEl.value.trim()) {
+      clearCandidate();
+      $('#mapPlace').hidden = true;
+      return void runSearch({ explicit: true });
+    }
     clearCandidate();
     $('#mapPlace').hidden = true;
     addPlace(p);
@@ -2616,8 +2622,10 @@ resultsEl.addEventListener('click', (e) => {
   }
   const pv = e.target.closest('[data-preview]');
   if (pv) {
-    const p = ui.results[Number(pv.dataset.preview)];
-    if (!p) return;
+    if (ui.resultsFor !== searchEl.value.trim()) return void runSearch({ explicit: true });
+    const found = ui.results[Number(pv.dataset.preview)];
+    if (!found) return;
+    const p = { ...found, fromSearch: ui.resultsFor }; // 지도 카드에서 추가할 때 다시 확인한다
     if (pickViewport.matches) {
       resultsEl.hidden = true;
       showTab('map');
@@ -4224,8 +4232,9 @@ function expensePreviewText(e, amount, cur) {
   if (!p) return '';
   if (p.source === 'krw') return t('원화 {krw}', { krw: B.won(p.krw) });
   if (p.source === 'none') return t('원화: 환율 미정 (환율을 정하면 채워져요)');
-  const unit = B.CURRENCIES[trip.budget.currency].unit;
-  const rate = `${unit} ${t(B.CURRENCIES[trip.budget.currency].name)} = ${num(p.rate * unit, { maximumFractionDigits: 2 })} KRW`;
+  const code = B.editCurrency(trip, e, cur); // 이 기록의 통화 (현지 통화를 나중에 바꿨어도, GPT 4차 #2)
+  const unit = B.CURRENCIES[code].unit;
+  const rate = `${unit} ${t(B.CURRENCIES[code].name)} = ${num(p.rate * unit, { maximumFractionDigits: 2 })} KRW`;
   return t(p.source === 'recorded' ? k('원화 {krw} · 기록 당시 환율 {rate}') : k('원화 {krw} · 지금 환율 {rate}'), { krw: B.won(p.krw), rate });
 }
 
@@ -4251,9 +4260,10 @@ async function fetchRate({ quiet = false } = {}) {
     const r = await fetch(RATE_API, { signal: AbortSignal.timeout(8000) });
     const data = await r.json();
     if (trip !== forTrip) return;
+    if (needBase && B.baseCode(b) !== base) return; // 그사이 기준 통화를 바꿨다: 이 응답은 버리고 알리지도 않는다 (GPT 4차 #7)
     if (needBase) {
       const bp = data?.rates?.[base];
-      if (bp > 0 && B.baseCode(b) === base) {
+      if (bp > 0) {
         // 응답이 오는 사이 기준 통화를 또 바꿨으면(USD → EUR) 늦게 온 USD 환율로 EUR 환율을 덮지 않는다 (GPT 3차 #10)
         b.baseKrwPerUnit = 1 / bp;
         b.baseRateCode = base; // 요청할 때의 기준 통화 (그사이 기준 통화를 바꿨으면 krwPerBase가 쓰지 않는다)
@@ -4900,7 +4910,7 @@ async function updateShare() {
   renderShareGauge(null);
   ui.share = null;
   try {
-    const code = await encodeShare(source, { includePrivate });
+    const code = await encodeShare(source, { includePrivate }); // 받는 쪽이 못 여는 크기면 encodeShare가 오류 → 아래에서 파일로 안내 (GPT 4차 #3)
     const url = await createShareUrl(code);
     if (request !== shareRequest || !shareDialog.open) return;
     // 링크와 파일이 같은 내용이 되게, 링크를 만든 순간의 사본을 같이 둔다 (GPT 3차 #11)
@@ -4912,12 +4922,14 @@ async function updateShare() {
     $('#shareFile').hidden = false; // 길이와 상관없이 파일로도 보낼 수 있게
     renderShareGauge(url.length);
     for (const id of ['shareCopy', 'shareCopyLink', 'shareNative']) $(`#${id}`).disabled = false;
-  } catch {
+  } catch (err) {
     if (request !== shareRequest || !shareDialog.open) return;
-    // 압축을 못 하는 브라우저: 링크 대신 같은 내용의 일정 파일로 보낸다
-    ui.share = { url: '', title, line, code: null, includePrivate, message: '' };
+    // 압축을 못 하는 브라우저 또는 링크로 담기엔 너무 큰 일정: 링크 대신 같은 내용의 일정 파일로 보낸다
+    ui.share = { url: '', title, line, code: null, includePrivate, message: '', copy: sharedCopy(source, { includePrivate }) };
     $('#shareLink').textContent = '';
-    $('#shareError').textContent = t('이 브라우저에서는 공유 링크를 만들 수 없어요. 일정 파일(JSON)을 보내고, 받는 사람에게 ‘백업 파일 불러오기’를 안내하세요.');
+    $('#shareError').textContent = err?.code === 'too-large'
+      ? t('일정이 너무 커서 링크로 보낼 수 없어요. 일정 파일(JSON)을 보내고, 받는 사람에게 ‘백업 파일 불러오기’를 안내하세요.')
+      : t('이 브라우저에서는 공유 링크를 만들 수 없어요. 일정 파일(JSON)을 보내고, 받는 사람에게 ‘백업 파일 불러오기’를 안내하세요.');
     $('#shareError').hidden = false;
     $('#shareFile').hidden = false;
   }
@@ -5314,8 +5326,9 @@ function renderDayOps({ focus } = {}) {
 /** 대화상자를 연 뒤 일정(날짜·장소 배치)이 바뀌었는지 보는 표식 — 다른 탭 저장 등 */
 const daySig = () => JSON.stringify([
   trip.days.map((d) => [d.id, d.date, d.items.map((x) => [x.id, x.time])]),
-  (trip.flights ?? []).map((f) => [f.id, f.kind, f.departAt, f.arriveAt]), // 항공편·숙소도 미리보기 계산에 쓴다 (GPT 3차 #7)
-  (trip.stays ?? []).map((s) => [s.id, s.startIndex, s.nights]),
+  // 항공편·숙소도 미리보기 계산과 화면(편명·공항·숙소 이름)에 쓴다 (GPT 3차 #7, 4차 #4)
+  (trip.flights ?? []).map((f) => [f.id, f.kind, f.departAt, f.arriveAt, f.flightNo, f.from, f.to]),
+  (trip.stays ?? []).map((s) => [s.id, s.startIndex, s.nights, s.name]),
 ]);
 function applyDayOps() {
   const op = ui.ops;

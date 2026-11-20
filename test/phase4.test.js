@@ -594,7 +594,36 @@ test('R3-8: 일자 순서 되돌리기는 그 뒤 다른 날로 옮긴 장소의
 test('R3-4·7·9·10: 항공편만 있는 날 PDF · 미리보기 표식에 항공편·숙소 · 결과 본문 클릭 · 늦은 환율 응답', () => {
   const app = read('app.js');
   assert.match(app, /if \(!route\.length\) \{\n      div\.remove\(\);/);
-  assert.match(app, /\(trip\.flights \?\? \[\]\)\.map\(\(f\) => \[f\.id, f\.kind, f\.departAt, f\.arriveAt\]\)/);
+  assert.match(app, /\(trip\.flights \?\? \[\]\)\.map\(\(f\) => \[f\.id, f\.kind, f\.departAt, f\.arriveAt, f\.flightNo, f\.from, f\.to\]\)/, '편명·공항도 (4차 #4)');
+  assert.match(app, /\(trip\.stays \?\? \[\]\)\.map\(\(s\) => \[s\.id, s\.startIndex, s\.nights, s\.name\]\)/);
   assert.match(app, /if \(!li\) return;\n  if \(ui\.resultsFor !== searchEl\.value\.trim\(\)\) return void runSearch/);
-  assert.match(app, /if \(bp > 0 && B\.baseCode\(b\) === base\) \{/);
+  assert.match(app, /if \(needBase && B\.baseCode\(b\) !== base\) return; \/\/ 그사이 기준 통화를 바꿨다/, '버린 응답은 오류도 알리지 않는다 (4차 #7)');
+});
+
+/* ───────── GPT 교차 검수 4차 반영 ───────── */
+
+test('R4-5: 일자 순서 되돌리기는 작업이 건드리지 않은 날, 같은 날 안에서 바꾼 순서를 지킨다', () => {
+  const tr = tripWith();
+  const r = D.reorderDays(tr, [1, 0, 2, 3]); // Day1 = CD, Day2 = AB (Day3·4는 그대로)
+  const d4 = tr.days[3].items;
+  d4.reverse(); // 그 뒤 Day4 안에서 순서를 바꿈 (GF)
+  const d2 = tr.days[1].items;
+  d2.reverse(); // 옮겨 간 묶음 안에서도 순서를 바꿈 (BA)
+  r.undo(tr);
+  assert.deepEqual(names(tr), ['BA', 'CD', 'E', 'GF'], '건드리지 않은 Day4와 바꾼 순서를 지키고 날만 되돌린다');
+  const t2 = tripWith();
+  const r2 = D.reorderDays(t2, [3, 1, 0, 2]);
+  r2.undo(t2);
+  assert.deepEqual(names(t2), ['AB', 'CD', 'E', 'FG']);
+});
+
+test('R4-1·3·8: 버전 이력 200개 · 보낼 때도 같은 크기 상한 · 프록시 주소는 마지막 값', async () => {
+  assert.match(readFileSync(new URL('../public/lib/store.js', import.meta.url), 'utf8'), /const CHAIN = 200;/);
+  const { encodeShare, MAX_INFLATED } = await import('../public/lib/share.js');
+  const tr = M.createTrip({ title: 'T', startDate: '2026-12-20', endDate: '2026-12-20' });
+  M.addItem(tr, tr.days[0].id, { name: 'A', lat: 1, lng: 1, memo: '가'.repeat(Math.ceil(MAX_INFLATED / 3) + 10) });
+  await assert.rejects(encodeShare(tr, { includePrivate: true }), (e) => e.code === 'too-large');
+  const server = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  assert.match(server, /if \(hops\.length\) return hops\.at\(-1\);/);
+  assert.match(server, /if \(rate\.size > RATE_KEYS\) rate\.delete/);
 });

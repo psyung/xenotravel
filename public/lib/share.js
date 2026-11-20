@@ -121,6 +121,8 @@ export function sharedCopy(trip, options) {
 /** 여행 → 링크용 문자열 ('1.' + base64url(deflate(JSON))) */
 export async function encodeShare(trip, options) {
   const json = new TextEncoder().encode(JSON.stringify(shareSnapshot(trip, options)));
+  // 받는 쪽 상한(MAX_INFLATED)을 넘는 일정은 링크로 만들지 않는다 — 열리지 않는 링크를 보내지 않게 (GPT 4차 #3)
+  if (json.length > MAX_INFLATED) throw Object.assign(new Error('too large'), { code: 'too-large' });
   return `${FORMAT}.${toBase64Url(await pipe(json, new CompressionStream('deflate-raw')))}`;
 }
 

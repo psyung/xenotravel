@@ -60,6 +60,7 @@ function limited(ip) {
   }
   hits.push(now);
   rate.set(ip, hits);
+  if (rate.size > RATE_KEYS) rate.delete(rate.keys().next().value);
   return false;
 }
 setInterval(() => {
@@ -67,14 +68,18 @@ setInterval(() => {
   for (const [ip, hits] of rate) if (!hits.some((t) => now - t < 3600_000)) rate.delete(ip);
 }, 10 * 60_000).unref();
 
-/** 요청 주소. 역방향 프록시 뒤에서는 TRUST_PROXY=1일 때만 X-Forwarded-For 첫 주소를 믿는다 (아니면 누구나 위조 가능) */
+/**
+ * 요청 주소. 역방향 프록시 뒤에서는 TRUST_PROXY=1일 때만 X-Forwarded-For를 쓰되,
+ * 클라이언트가 써 넣을 수 있는 앞쪽 값이 아니라 믿는 프록시가 마지막에 붙인 값을 쓴다 (GPT 4차 #8)
+ */
 function clientIp(req) {
   if (process.env.TRUST_PROXY === '1') {
-    const xff = String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim();
-    if (xff) return xff;
+    const hops = String(req.headers['x-forwarded-for'] ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+    if (hops.length) return hops.at(-1);
   }
   return req.socket.remoteAddress;
 }
+const RATE_KEYS = 10_000; // 기록할 주소 수 상한 (넘으면 가장 오래된 주소부터 버린다)
 
 async function readBody(req) {
   let size = 0;

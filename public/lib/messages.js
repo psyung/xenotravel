@@ -1016,4 +1016,5 @@ export const MESSAGES = {
   "도착 (현지 시각) {time}": ["Arrival (local time) {time}", "到达（当地时间）{time}", "到着（現地時刻）{time}"],
   "그사이 일정이 바뀌어 미리보기를 새로 고쳤어요. 확인하고 다시 눌러 주세요": ["The plan changed in the meantime, so the preview was refreshed. Check it and press again", "期间行程有变化，已刷新预览。请确认后再点一次", "その間に予定が変わったのでプレビューを更新しました。確認してもう一度押してください"],
   "{n}개 중 {i}번째: {name} · Enter로 추가": ["{i} of {n}: {name} · press Enter to add", "第 {i} 个，共 {n} 个：{name} · 按 Enter 添加", "{n}件中{i}件目：{name} · Enterで追加"],
+  "일정이 너무 커서 링크로 보낼 수 없어요. 일정 파일(JSON)을 보내고, 받는 사람에게 ‘백업 파일 불러오기’를 안내하세요.": ["This trip is too large to send as a link. Send the trip file (JSON) and ask the recipient to use ‘Import backup file’.", "行程太大，无法以链接发送。请发送行程文件（JSON），并告诉对方使用“导入备份文件”。", "旅程が大きすぎてリンクでは送れません。旅程ファイル（JSON）を送り、受け取る人に「バックアップファイルを読み込む」を案内してください。"],
 };

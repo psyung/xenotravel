@@ -9,7 +9,7 @@
 //
 // 저장 문자열에는 rev(이번 저장 id)와 prev(어느 저장을 보고 썼는지)를 함께 쓴다.
 // 두 탭이 같은 저장을 읽고 거의 동시에 쓰면 먼저 쓴 쪽이 덮어써진다(localStorage에는 잠금이 없다).
-// chain에는 최근 저장 rev 20개(자기 자신부터 조상 순)를 남긴다. 다음 저장 때 상대 저장의 chain에 내 마지막 rev가 없고
+// chain에는 최근 저장 rev 200개(자기 자신부터 조상 순)를 남긴다. 다음 저장 때 상대 저장의 chain에 내 마지막 rev가 없고
 // 내 저장의 조상(prev)은 있으면, 상대가 내 저장을 못 보고 썼다(사라졌다) — 그 뒤에 상대가 몇 번 더 저장했어도 알아챈다.
 // 그때는 내 저장의 바로 앞 버전(공통 조상)을 기준으로 다시 합쳐 내 변경을 되살린다 (GPT 검수 1차 #2, 2차 #1·#4).
 import { mergeStore, stable } from './sync.js';
@@ -43,7 +43,7 @@ function parse(raw) {
   }
 }
 
-const CHAIN = 20;
+const CHAIN = 200; // 다른 탭이 이만큼 연달아 저장해도 덮어쓰기를 알아챈다 (GPT 4차 #1, 약 4KB)
 const newRev = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 const errorKind = (err) => (err?.name === 'QuotaExceededError' || err?.code === 22 || /quota/i.test(String(err?.message)) ? 'quota' : 'denied');
