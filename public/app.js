@@ -10,7 +10,7 @@ import { encodeShare, decodeShare, shareUrl, shareCodeFromHash, shareSummary, sh
 import { enhanceDates, refreshDates } from './lib/datepicker.js';
 import { enhanceSuggestions } from './lib/suggestions.js';
 import { loadWeather, weatherSignature } from './lib/weather.js';
-import { t, k, missing as i18nMissing, LANGS, LANG_KEY, getLang, setLang, loadLang, saveLang, locale, num, dayName, shortDate, dateTime, normalizeLang, tripLength } from './lib/i18n.js';
+import { t, k, missing as i18nMissing, LANGS, LANG_KEY, getLang, setLang, loadLang, saveLang, locale, num, dayName, shortDate, dateTime, normalizeLang, tripLength, allVersions } from './lib/i18n.js';
 import { privacySections } from './lib/privacy.js';
 
 const COLORS = ['#A3432E', '#9C4A28', '#A03754', '#516B53', '#795169', '#576B65', '#82601F', '#626456'];
@@ -18,6 +18,11 @@ const INBOX_COLOR = '#868e96';
 const TREND_COLOR = '#BF3E26';
 const dayColor = (i) => COLORS[i % COLORS.length];
 const TODAY = new Date().toISOString().slice(0, 10);
+/** 내장 프리셋 문구의 4개 국어 맵 { ko, en, zh, ja } (번역 사전에서 만든다) */
+const presetMap = (key) => {
+  const [ko, en = ko, zh = ko, ja = ko] = allVersions(key);
+  return { ko, en, zh, ja };
+};
 
 // 언어: 저장값이 없거나 이상하면 한국어. 저장소를 못 써도 이번 화면에서는 바꾼 언어로 동작한다.
 loadLang();
@@ -32,6 +37,9 @@ const prefs = (() => {
     return { ...PREF_DEFAULTS };
   }
 })();
+// 밝기는 'light' | 'dark' 두 상태만 쓴다. 저장값이 없으면(또는 예전 'system') 지금 기기 설정으로 확정해
+// 첫 클릭부터 바로 반대로 바뀌게 한다.
+if (prefs.theme !== 'light' && prefs.theme !== 'dark') prefs.theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 const savePrefs = () => {
   try {
     localStorage.setItem(PREF_KEY, JSON.stringify(prefs));
@@ -63,8 +71,7 @@ const TILE_OPTS = {
 };
 /** 바탕 + 글자 타일 묶음 */
 const tileGroup = (kind) => L.layerGroup([L.tileLayer(TILES[kind][0], TILE_OPTS), L.tileLayer(TILES[kind][1], { ...TILE_OPTS, attribution: '' })]);
-const isDark = () =>
-  prefs.theme === 'dark' || (prefs.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+const isDark = () => prefs.theme === 'dark';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -99,6 +106,7 @@ const db = openStore();
 const store = db.load();
 let trip = store.trips[store.currentId] ?? null;
 const ui = {
+  catFilter: null, // 지도 종류별 보기에서 강조할 종류 (sight|food|cafe|shop|etc|stay)
   openItem: null,
   focusList: null, // 지도에서 강조할 일차 id (null이면 전체)
   target: null, // 장소를 추가할 목록 id
@@ -189,10 +197,10 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => with
 const layer = L.layerGroup().addTo(map);
 const markers = new Map();
 
-function pinIcon(label, color, dim) {
+function pinIcon(label, color, dim, filter = '') {
   return L.divIcon({
     className: '',
-    html: `<div class="pin${dim ? ' dim' : ''}${color === 'var(--accent)' ? ' brand-pin' : ''}" style="--c:${color}"><span aria-hidden="true">${esc(label)}</span></div>`,
+    html: `<div class="pin${dim ? ' dim' : ''}${filter ? ` ${filter}` : ''}${color === 'var(--accent)' ? ' brand-pin' : ''}" style="--c:${color}"><span aria-hidden="true">${esc(label)}</span></div>`,
     iconSize: [28, 28],
     iconAnchor: [14, 14],
     popupAnchor: [0, -28],
@@ -213,7 +221,9 @@ const UNSET_COLOR = '#94a3b8'; // 종류 보기에서 종류를 안 정한 장�
 const byCategory = () => prefs.pinColor === 'category';
 /** 핀 색: 일차별(동선 선과 같은 색) 또는 종류별(관광·맛집·카페·쇼핑) */
 const pinColorOf = (it, listColor) => (byCategory() ? M.CATEGORIES[it.category]?.color ?? UNSET_COLOR : listColor);
-const stayPinHtml = () => `<div class="stay-pin"${byCategory() ? ` style="background:${M.STAY_COLOR};border-color:${M.STAY_COLOR};color:#fff"` : ''}><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg></div>`;
+const stayPinHtml = () => `<div class="stay-pin${catFilterClass('stay')}"${byCategory() ? ` style="background:${M.STAY_COLOR};border-color:${M.STAY_COLOR};color:#fff"` : ''}><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg></div>`;
+/** 종류별 필터: 고른 종류 핀만 또렷하게, 나머지는 흐리게 */
+const catFilterClass = (cat) => (byCategory() && ui.catFilter ? (ui.catFilter === cat ? ' cat-on' : ' cat-off') : '');
 const catLabel = (k) => (M.CATEGORIES[k] ? t(M.CATEGORIES[k].label) : '');
 const catIcon = (it) => {
   const c = M.CATEGORIES[it.category];
@@ -227,9 +237,9 @@ function renderPinLegend() {
       <button type="button" data-pin="category" aria-pressed="${byCategory()}" class="${byCategory() ? 'active' : ''}">${esc(t('종류별'))}</button>
     </div>${
       byCategory()
-        ? `<div class="legend">${Object.values(M.CATEGORIES)
-            .map((c) => `<span><i style="--c:${c.color}"></i>${esc(t(c.label))}</span>`)
-            .join('')}<span><i style="--c:${M.STAY_COLOR}"></i>${esc(t('숙소'))}</span></div>`
+        ? `<div class="legend" role="group" aria-label="${esc(t('종류별'))}">${[...Object.entries(M.CATEGORIES), ['stay', { label: '숙소', color: M.STAY_COLOR }]]
+            .map(([k, c]) => `<button type="button" class="cat-chip${ui.catFilter === k ? ' on' : ''}" data-cat-filter="${k}" aria-pressed="${ui.catFilter === k}" style="--c:${c.color}"><i></i>${esc(t(c.label))}</button>`)
+            .join('')}</div>`
         : ''
     }`;
 }
@@ -267,7 +277,7 @@ function renderMap({ fit = false } = {}) {
     l.items.forEach((it, i) => {
       const n = preview ? preview.indexOf(it) + 1 : i + 1;
       const m = L.marker([it.lat, it.lng], {
-        icon: pinIcon(l.isDay ? n : '•', pinColorOf(it, color), dim),
+        icon: pinIcon(l.isDay ? n : '•', pinColorOf(it, color), dim, catFilterClass(M.CATEGORIES[it.category] ? it.category : 'etc').trim()),
         zIndexOffset: dim ? 0 : 1000,
       }).addTo(layer);
       const detail = [l.label, l.isDay ? t('{n}번째', { n }) : '', it.time].filter(Boolean).join(' · ');
@@ -1206,6 +1216,7 @@ function itemHtml(it, i, isDay, leg = null, listItems = null) {
       </button>
       <button class="icon" data-action="duplicate" title="${esc(t('복제'))}" aria-label="${esc(t('{name} 복제', { name: it.name }))}">⧉</button>
       <button class="icon" data-action="locate" title="${esc(t('지도에서 보기'))}" aria-label="${esc(t('{name} 지도에서 보기', { name: it.name }))}">◎</button>
+      ${open ? `<button class="icon collapse" data-action="toggle" title="${esc(t('접기'))}" aria-label="${esc(t('접기'))}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button>` : ''}
     </div>
     ${
       open && ui.readonly
@@ -1256,7 +1267,7 @@ function flightRowsHtml(dayIndex, where) {
       const tm = (role === 'arrive' ? f.arriveAt : f.departAt).slice(11, 16);
       return `<div class="tl-row flight"><div class="tl-time">${esc(tm)}</div><div class="tl-box">
         <button class="flight-main" data-action="flight-edit" data-flight="${f.id}" title="${esc(t('항공편 수정'))}">
-          <span class="fl-ic" aria-hidden="true"><svg class="ic"><use href="#i-plane"/></svg></span>
+          <span class="fl-ic" aria-hidden="true"><svg class="ic"><use href="#i-ticket"/></svg></span>
           <span class="fl-kind">${esc(M.flightKind(f.kind))}${note ? ` · ${esc(note)}` : ''}</span>
           <span class="fl-text">${esc(M.flightSummary(f))}</span>
           ${f.bookingRef ? `<span class="fl-ref">${esc(f.bookingRef)}</span>` : ''}
@@ -1817,6 +1828,43 @@ function openItem(id, { scroll = false } = {}) {
   }
 }
 
+/* ───────── 펼친 장소 카드: 바깥을 탭하면 접기 ─────────
+ * 지도·팝업·대화상자·날짜 선택 창은 제외하고, 8px 넘게 움직인 터치(스크롤)는 탭으로 보지 않는다.
+ */
+const OUTSIDE_SAFE = '#map, .mapwrap, .leaflet-container, .leaflet-popup, dialog, .dp-pop, .menu, .tripsw, .toast, .ctx';
+let cardTap = null;
+document.addEventListener('pointerdown', (e) => {
+  cardTap = ui.openItem || ui.openStay ? { x: e.clientX, y: e.clientY, target: e.target } : null;
+}, true);
+document.addEventListener('pointermove', (e) => {
+  if (cardTap && Math.hypot(e.clientX - cardTap.x, e.clientY - cardTap.y) >= 8) cardTap = null;
+}, true);
+document.addEventListener('pointercancel', () => (cardTap = null), true);
+document.addEventListener('pointerup', (e) => {
+  const tap = cardTap;
+  cardTap = null;
+  if (!tap || Math.hypot(e.clientX - tap.x, e.clientY - tap.y) >= 8) return;
+  const target = tap.target;
+  if (!(target instanceof Element) || !document.contains(target)) return;
+  if (target.closest(OUTSIDE_SAFE)) return;
+  const card = ui.openItem
+    ? $(`.item[data-id="${CSS.escape(ui.openItem)}"]`)
+    : $(`.stay-row[data-key="${CSS.escape(ui.openStay)}"]`)?.closest('.tl-row');
+  if (!card || card.contains(target)) return;
+  // 입력 중인 칸이 카드 안에 있으면 (키보드가 떠 있는 상태 등) 닫지 않는다
+  const active = document.activeElement;
+  if (active && card.contains(active) && active.matches('select, input[type="time"], input[type="date"]') && target === document.documentElement) return;
+  const item = ui.openItem;
+  const stay = ui.openStay;
+  // 다른 카드 열기 등 클릭 처리가 먼저 끝나게 한 박자 늦게 접는다
+  setTimeout(() => {
+    if (ui.openItem !== item || ui.openStay !== stay) return;
+    ui.openItem = null;
+    ui.openStay = null;
+    renderDays();
+  });
+}, true);
+
 /* ───────── 일정 목록 이벤트 ───────── */
 $('#days').addEventListener('click', (e) => {
   const btn = e.target.closest('[data-action]');
@@ -2052,8 +2100,16 @@ $('#days').addEventListener('change', (e) => {
 });
 
 $('#pinLegend').addEventListener('click', (e) => {
+  const cat = e.target.closest('[data-cat-filter]')?.dataset.catFilter;
+  if (cat) {
+    ui.catFilter = ui.catFilter === cat ? null : cat; // 같은 칩을 다시 누르면 해제
+    renderMap();
+    $(`#pinLegend [data-cat-filter="${cat}"]`)?.focus();
+    return;
+  }
   const mode = e.target.closest('[data-pin]')?.dataset.pin;
   if (!mode || mode === prefs.pinColor) return;
+  ui.catFilter = null;
   prefs.pinColor = mode;
   savePrefs();
   renderMap();
@@ -2753,6 +2809,7 @@ $('#page-home').addEventListener('click', (e) => {
       endDate: end.toISOString().slice(0, 10), center: { lat: 35.6812, lng: 139.7671 },
     });
     sample.country = 'jp';
+    sample.presetI18n = { title: presetMap('도쿄 3박 4일 샘플'), destination: presetMap('도쿄') };
     const days = [
       [[k('센소지'), 35.7148, 139.7967], [k('도쿄 스카이트리'), 35.7101, 139.8107]],
       [[k('메이지 신궁'), 35.6764, 139.6993], [k('시부야 스크램블 교차로'), 35.6595, 139.7005]],
@@ -2760,7 +2817,7 @@ $('#page-home').addEventListener('click', (e) => {
       [[k('도쿄역'), 35.6812, 139.7671]],
     ];
     days.forEach((places, i) => {
-      places.forEach(([name, lat, lng]) => M.addItem(sample, sample.days[i].id, { name: t(name), lat, lng }));
+      places.forEach(([name, lat, lng]) => M.addItem(sample, sample.days[i].id, { name: t(name), nameI18n: presetMap(name), lat, lng }));
     });
     B.ensureBudget(sample);
     switchTrip(sample, { save: true });
@@ -2976,7 +3033,7 @@ function selectDay(i, { scroll = true } = {}) {
   if (scroll && prefs.view === 'list' && $('.layout').dataset.tab !== 'map') $(`#day-${ui.day}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-/** 항공편 한 줄: 항공권 앱처럼 "ICN 08:40 ──✈── KIX 10:30" */
+/** 항공편 한 줄: 항공권 앱처럼 "ICN 08:40 ─── KIX 10:30" */
 function flightRoute(f) {
   const tm = (v) => (v ? v.slice(11, 16) : '');
   const md = shortDate(f.departAt.slice(0, 10));
@@ -2984,7 +3041,7 @@ function flightRoute(f) {
       <span class="rt-kind">${esc(M.flightKind(f.kind))}${f.flightNo ? ` · ${esc(f.flightNo)}` : ''}${md ? ` · ${md}` : ''}</span>
       <span class="rt-line">
         <span class="rt-ap"><b>${esc(f.from || t('출발'))}</b><small>${esc(tm(f.departAt))}</small></span>
-        <span class="rt-path" aria-hidden="true"><svg class="ic"><use href="#i-plane"/></svg></span>
+        <span class="rt-path" aria-hidden="true"><svg class="ic"><use href="#i-ticket"/></svg></span>
         <span class="rt-ap"><b>${esc(f.to || t('도착'))}</b><small>${esc(tm(f.arriveAt))}</small></span>
       </span>
     </button>`;
@@ -3231,19 +3288,19 @@ function syncBrowserTheme() {
   $('meta[name="theme-color"]').content = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
 }
 function applyTheme() {
-  const th = prefs.theme;
-  if (th === 'light' || th === 'dark') document.documentElement.dataset.theme = th;
-  else delete document.documentElement.dataset.theme;
+  const th = isDark() ? 'dark' : 'light';
+  document.documentElement.dataset.theme = th;
+  document.documentElement.classList.toggle('dark', th === 'dark');
   syncBrowserTheme();
   const btn = $('#themeBtn');
-  btn.classList.toggle('active', th === 'light' || th === 'dark');
-  const label = th === 'dark' ? t('어둡게 (누르면 시스템 따라가기)') : th === 'light' ? t('밝게 (누르면 어둡게)') : t('시스템 따라가기 (누르면 밝게)');
+  btn.setAttribute('aria-pressed', String(th === 'dark'));
+  const label = th === 'dark' ? t('어둡게 (누르면 밝게)') : t('밝게 (누르면 어둡게)');
   btn.title = label;
   btn.setAttribute('aria-label', `${t('화면 밝기')}: ${label}`);
   $('#themeMenu').textContent = `${t('화면 밝기')}: ${label}`;
 }
 $('#themeBtn').addEventListener('click', () => {
-  prefs.theme = prefs.theme === 'light' ? 'dark' : prefs.theme === 'dark' ? 'system' : 'light';
+  prefs.theme = isDark() ? 'light' : 'dark';
   savePrefs();
   withoutTransitions(() => {
     applyTheme();
@@ -3255,6 +3312,8 @@ $('#themeBtn').addEventListener('click', () => {
 function applyLanguage() {
   const lang = getLang();
   document.documentElement.lang = LANGS[lang].html;
+  // 샘플 일정 같은 내장 프리셋 이름도 이 언어로 (사용자가 고친 이름은 그대로)
+  if (!ui.readonly && Object.values(store.trips).map((tr) => M.localizePresets(tr, lang)).some(Boolean)) saveNow();
   syncLanguageSwitch();
   applyStaticI18n();
   refreshDates();

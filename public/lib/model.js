@@ -183,7 +183,38 @@ export function createItem(place) {
     memo: place.memo ?? '',
     url: place.url ?? '',
     category: itemCategory(place),
+    // 내장 프리셋(샘플 일정 등)만 4개 국어 이름을 함께 가진다. 사용자가 고친 이름은 덮어쓰지 않는다.
+    ...(isI18nMap(place.nameI18n) ? { nameI18n: { ...place.nameI18n } } : {}),
   };
+}
+
+const PRESET_LANGS = ['ko', 'en', 'zh', 'ja'];
+const isI18nMap = (m) => Boolean(m) && typeof m === 'object' && PRESET_LANGS.every((l) => typeof m[l] === 'string' && m[l]);
+/** 프리셋 문구가 아직 원문(어느 언어든 프리셋 값 그대로)이면 지금 언어로 바꾼다. 사용자가 고친 값이면 그대로 둔다. */
+const localizeField = (value, map, lang) => (isI18nMap(map) && Object.values(map).includes(value) ? map[lang] : value);
+
+/**
+ * 내장 프리셋 데이터(샘플 여행 제목·도시, 장소 이름)를 지금 언어로 맞춘다. 바뀐 것이 있으면 true.
+ * 프리셋은 { ko, en, zh, ja } 맵으로 저장하고, 사용자가 직접 고친 문자열은 원문 그대로 둔다.
+ */
+export function localizePresets(trip, lang) {
+  if (!trip || !PRESET_LANGS.includes(lang)) return false;
+  let changed = false;
+  const set = (obj, key, map) => {
+    const next = localizeField(obj[key], map, lang);
+    if (next !== obj[key]) {
+      obj[key] = next;
+      changed = true;
+    }
+  };
+  if (trip.presetI18n) {
+    set(trip, 'title', trip.presetI18n.title);
+    set(trip, 'destination', trip.presetI18n.destination);
+  }
+  for (const list of [...(trip.days ?? []).map((d) => d.items), trip.inbox ?? []]) {
+    for (const it of list) if (it.nameI18n) set(it, 'name', it.nameI18n);
+  }
+  return changed;
 }
 
 export function addItem(trip, listId, place) {

@@ -9,6 +9,7 @@
   <meta property="og:title" content="XenoTravel">
   <meta property="og:description" content="지도와 일정, 가계부, 체크리스트를 한곳에서.">
   <meta property="og:image" content="https://xenotravel.vercel.app/og.png">
+  <link rel="icon" type="image/svg+xml" href="icons/logo-xeno-route.svg">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
@@ -26,6 +27,13 @@
       if (l === 'en' || l === 'ja') document.documentElement.lang = l;
       else if (l === 'zh') document.documentElement.lang = 'zh-Hans';
     } catch {}
+    // 밝기도 첫 화면부터 확정 (light | dark 두 상태, 저장값이 없으면 기기 설정)
+    try {
+      let th = JSON.parse(localStorage.getItem('xenotravel:prefs') || '{}').theme;
+      if (th !== 'light' && th !== 'dark') th = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.dataset.theme = th;
+      document.documentElement.classList.toggle('dark', th === 'dark');
+    } catch {}
   </script>
 </head>
 <body data-page="plan">
@@ -35,16 +43,15 @@
     <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h12v4 M3 7v10a2 2 0 0 0 2 2h14V9H5a2 2 0 0 1-2-2Z M16 14h.01"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="M4 5h16v14H4z M8 12l2.5 2.5L16 9"/></symbol>
     <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 3v12 M7 8l5-5 5 5 M5 14v5h14v-5"/></symbol>
-    <symbol id="i-plane" viewBox="0 0 24 24"><path d="M3 12.5 21 5l-4 15-5-5.5-4 3v-4.5Z M12 14.5 17 9"/></symbol>
+    <symbol id="i-ticket" viewBox="0 0 24 24"><path d="M4 7h16v3a2 2 0 0 0 0 4v3H4v-3a2 2 0 0 0 0-4Z M14 7v2 M14 11v2 M14 15v2"/></symbol>
     <symbol id="i-more" viewBox="0 0 24 24"><path d="M5 12h.01 M12 12h.01 M19 12h.01"/></symbol>
     <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></symbol>
     <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21Z M12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/></symbol>
-    <symbol id="i-globe" viewBox="0 0 24 24"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z M3.5 9h17 M3.5 15h17 M12 3c2.5 2.6 3.6 5.7 3.6 9s-1.1 6.4-3.6 9c-2.5-2.6-3.6-5.7-3.6-9S9.5 5.6 12 3Z"/></symbol>
   </svg>
   <div id="app">
     <header class="topbar">
       <button id="tripsBtn" class="brand" data-i18n-attr="title=메인으로;aria-label=XenoTravel 메인으로">
-        <span class="logo" aria-hidden="true"><svg><use href="#i-plane"/></svg></span>
+        <span class="logo"><svg class="logo-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M9.5 10.5C14.5 10.5 17.5 23.5 23 23.5" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/><path d="M11.3 21.7L19.6 13.4" stroke="currentColor" stroke-width="3.2" stroke-linecap="butt"/><circle cx="9.5" cy="23.5" r="2.6" stroke="currentColor" stroke-width="2.4"/><circle cx="23.3" cy="9.7" r="3.4" fill="var(--accent-primary, #D94E34)"/></svg></span>
         <span class="brand-text"><b>XenoTravel</b></span>
       </button>
       <details id="tripSw" class="tripsw page-trip">
@@ -58,7 +65,7 @@
       </nav>
       <div class="actions">
         <button id="shareBtn" class="pill page-trip" data-i18n-attr="title=앱 설치 없이 볼 수 있는 링크 만들기;aria-label=공유"><svg class="ic" aria-hidden="true"><use href="#i-share"/></svg><span class="hide-sm" data-i18n="공유">공유</span></button>
-        <button id="flightsBtn" class="pill page-trip" data-i18n-attr="aria-label=항공편"><svg class="ic" aria-hidden="true"><use href="#i-plane"/></svg><span class="hide-sm" data-i18n="항공편">항공편</span></button>
+        <button id="flightsBtn" class="pill page-trip" data-i18n-attr="aria-label=항공편"><svg class="ic" aria-hidden="true"><use href="#i-ticket"/></svg><span class="hide-sm" data-i18n="항공편">항공편</span></button>
         <details class="menu">
           <summary class="pill round" data-i18n-attr="aria-label=더보기"><svg class="ic" aria-hidden="true"><use href="#i-more"/></svg><span id="backupDot" aria-hidden="true" hidden></span></summary>
           <div class="menu-pop">
@@ -307,7 +314,7 @@
       <p class="fine" data-i18n="받는 사람은 앱 설치나 가입 없이 링크만 누르면 바로 봐요.">받는 사람은 앱 설치나 가입 없이 링크만 누르면 바로 봐요.</p>
       <label><input id="shareExcludePrivate" type="checkbox" checked> <span data-i18n="메모·항공편 예약번호 제외하고 공유하기">메모·항공편 예약번호 제외하고 공유하기</span></label>
       <div class="share-card" data-i18n-attr="aria-label=공유 메시지 요약">
-        <div class="share-card-top"><svg class="ic" aria-hidden="true"><use href="#i-plane"/></svg></div>
+        <div class="share-card-top"><svg class="logo-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M9.5 10.5C14.5 10.5 17.5 23.5 23 23.5" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/><path d="M11.3 21.7L19.6 13.4" stroke="currentColor" stroke-width="3.2" stroke-linecap="butt"/><circle cx="9.5" cy="23.5" r="2.6" stroke="currentColor" stroke-width="2.4"/><circle cx="23.3" cy="9.7" r="3.4" fill="var(--accent-primary, #D94E34)"/></svg></div>
         <div class="share-card-body">
           <strong id="shareTitle"></strong>
           <span id="shareLine"></span>

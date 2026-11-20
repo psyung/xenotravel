@@ -3,10 +3,13 @@
  * 밝기: 시스템을 따르고, 상단 버튼으로 밝게/어둡게 고정 (html[data-theme]).
  */
 :root {
+  --bg-app: #FAF9F6; --bg-surface: #FFFFFF; --border-subtle: #E7E5E4; --text-primary: #18181B; --text-secondary: #52525B;
+  --btn-primary-bg: #18181B; --btn-primary-text: #FFFFFF; --accent-primary: #D94E34; --accent-hover: #BF3E26; --accent-soft-bg: #FFF4F1; --accent-soft-border: #FAD4CB;
+  --lang-off: #71717A;
   --bg: #FAF9F6; --paper: #FFFFFF; --ink: #18181B; --sub: #52525B; --mute: #71717A;
   --line: #E7E5E4; --soft: #F5F4F2; --hover: #F5F4F2;
   --accent: #D94E34; --accent-ink: #BF3E26; --accent-soft: #FFF4F1;
-  --brand-text: #BF3E26; --cta: #BF3E26; --cta-text: #FFFFFF;
+  --brand-text: #BF3E26; --cta: var(--btn-primary-bg); --cta-text: var(--btn-primary-text); --cta-hover: #3F3F46;
   --control: #18181B; --control-text: #FFFFFF; --pin-text: #101010;
   --hot: #F04452; --hot-soft: #FFEEEE;
   --ok: #03B26C; --ok-soft: #E5F8EE;
@@ -23,10 +26,13 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    --bg-app: #121214; --bg-surface: #1C1C1F; --border-subtle: #2E2E32; --text-primary: #F4F4F5; --text-secondary: #A1A1AA;
+    --btn-primary-bg: #F4F4F5; --btn-primary-text: #18181B; --accent-primary: #F2745B; --accent-hover: #FF8A73; --accent-soft-bg: #2C1D1A; --accent-soft-border: #4A2E28;
+    --lang-off: #A1A1AA;
     --bg: #121214; --paper: #1C1C1F; --ink: #F4F4F5; --sub: #B4B4BD; --mute: #A1A1AA;
     --line: #2E2E32; --soft: #24252A; --hover: #222327;
     --accent: #F2745B; --accent-ink: #FF8A73; --accent-soft: #2C1D1A;
-    --brand-text: #F2745B; --cta: #F2745B; --cta-text: #18181B;
+    --brand-text: #F2745B; --cta: var(--btn-primary-bg); --cta-text: var(--btn-primary-text); --cta-hover: #D4D4D8;
     --control: #F4F4F5; --control-text: #18181B; --pin-text: #18181B;
     --hot: #FF6B75; --hot-soft: #3A1F23; --ok: #2FD08A; --ok-soft: #15301F;
     --warn: #FFAA3B; --warn-soft: #36291A; --stay: #33C7C7; --stay-soft: #152E2E;
@@ -38,10 +44,13 @@
   }
 }
 :root[data-theme="dark"] {
+  --bg-app: #121214; --bg-surface: #1C1C1F; --border-subtle: #2E2E32; --text-primary: #F4F4F5; --text-secondary: #A1A1AA;
+  --btn-primary-bg: #F4F4F5; --btn-primary-text: #18181B; --accent-primary: #F2745B; --accent-hover: #FF8A73; --accent-soft-bg: #2C1D1A; --accent-soft-border: #4A2E28;
+  --lang-off: #A1A1AA;
   --bg: #121214; --paper: #1C1C1F; --ink: #F4F4F5; --sub: #B4B4BD; --mute: #A1A1AA;
   --line: #2E2E32; --soft: #24252A; --hover: #222327;
   --accent: #F2745B; --accent-ink: #FF8A73; --accent-soft: #2C1D1A;
-  --brand-text: #F2745B; --cta: #F2745B; --cta-text: #18181B;
+  --brand-text: #F2745B; --cta: var(--btn-primary-bg); --cta-text: var(--btn-primary-text); --cta-hover: #D4D4D8;
   --control: #F4F4F5; --control-text: #18181B; --pin-text: #18181B;
   --hot: #FF6B75; --hot-soft: #3A1F23; --ok: #2FD08A; --ok-soft: #15301F;
   --warn: #FFAA3B; --warn-soft: #36291A; --stay: #33C7C7; --stay-soft: #152E2E;
@@ -83,7 +92,7 @@ a { color: var(--brand-text); text-decoration: none; }
 }
 .btn:hover { background: var(--hover); }
 .btn.primary { background: var(--cta); border-color: var(--cta); color: var(--cta-text); }
-.btn.primary:hover { background: var(--accent-ink); border-color: var(--accent-ink); }
+.btn.primary:hover { background: var(--cta-hover); border-color: var(--cta-hover); }
 .btn.ghost { border-color: transparent; background: none; color: var(--sub); }
 .btn:disabled { opacity: .5; cursor: default; }
 .pill {
@@ -104,8 +113,9 @@ a { color: var(--brand-text); text-decoration: none; }
 }
 .brand { display: flex; align-items: center; gap: 8px; border: 0; background: none; padding: 4px 6px 4px 2px; border-radius: 10px; text-align: left; }
 .brand:hover { background: var(--soft); }
-.logo { flex: none; width: 28px; height: 28px; border-radius: 8px; background: var(--cta); color: var(--cta-text); display: grid; place-items: center; }
-.logo svg { width: 16px; height: 16px; fill: #fff; stroke: none; }
+.logo { flex: none; width: 28px; height: 28px; display: grid; place-items: center; color: var(--ink); }
+.logo .logo-mark { width: 26px; height: 26px; }
+.share-card-top .logo-mark { width: 30px; height: 30px; }
 .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
 .brand-text b { font-size: 15px; font-weight: 800; letter-spacing: -0.02em; }
 .brand-text small { font-size: 11px; color: var(--mute); font-weight: 500; }
@@ -294,7 +304,7 @@ body[data-view="board"] .board-only { display: inline-flex; }
 .pin-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 9px; background: var(--paper); border: 1px solid var(--line); box-shadow: var(--shadow); }
 .pin-seg button { border: 0; background: none; border-radius: 7px; padding: 4px 9px; font-size: 12px; font-weight: 600; color: var(--sub); }
 .pin-seg button.active { background: var(--ink); color: var(--paper); }
-.legend { display: flex; flex-wrap: wrap; gap: 4px 10px; max-width: 220px; padding: 7px 10px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; font-size: 12px; color: var(--sub); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 4px; max-width: 220px; padding: 7px 10px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; font-size: 12px; color: var(--sub); }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
 .legend i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
 
@@ -356,17 +366,18 @@ body[data-view="board"] .board-only { display: inline-flex; }
 .day { scroll-margin-top: calc(var(--head) + 56px); }
 .daycard { padding: 14px 14px 10px; }
 .daycard.is-focus { border-color: color-mix(in srgb, var(--c) 55%, var(--line)); }
-.dc-head { display: flex; align-items: flex-start; gap: 8px; }
-.dc-title-btn { flex: 1; min-width: 0; border: 0; background: none; padding: 0; text-align: left; }
-.dc-meta { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--c); }
+.dc-head { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 4px 8px; }
+/* 일차·날짜는 어떤 언어에서도 세로로 찢어지지 않고, 도구 버튼은 폭이 모자라면 다음 줄로 */
+.dc-title-btn { flex: 1 1 200px; min-width: min(200px, 100%); border: 0; background: none; padding: 0; text-align: left; }
+.dc-meta { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--c); white-space: nowrap; flex-shrink: 0; font-variant-numeric: tabular-nums; }
 .dc-meta .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
-.dc-meta small { color: var(--mute); font-weight: 500; font-size: 12px; }
+.dc-meta small { color: var(--mute); font-weight: 500; font-size: 12px; white-space: nowrap; flex-shrink: 0; }
 .dc-title { display: block; margin: 2px 0 0; font-size: 16px; font-weight: 700; letter-spacing: -0.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dc-title.empty { color: var(--mute); font-weight: 600; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0 4px; }
 .chip { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 6px; background: var(--soft); color: var(--sub); font-size: 12px; font-weight: 500; }
 .chip.stay { background: var(--stay-soft); color: var(--stay); }
-.day-tools { display: flex; gap: 2px; flex-wrap: wrap; justify-content: flex-end; }
+.day-tools { display: flex; gap: 2px; flex-wrap: wrap; justify-content: flex-end; flex: 0 1 auto; margin-left: auto; }
 .day-tools button, .route-link {
   height: 26px; padding: 0 8px; border: 0; background: none; color: var(--sub); border-radius: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center;
 }
@@ -696,14 +707,14 @@ dialog#flightDialog { width: min(520px, calc(100vw - 32px)); }
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-/* 언어 선택: 보이는 건 "KO", 실제로 누르는 건 투명한 select (키보드·화면 읽기는 select 그대로) */
+/* 언어 선택: KO EN 中 日 인라인 텍스트 버튼 (활성 = 코랄 800, 비활성 = 보조색 500) */
 .lang-switch { display: flex; flex: none; align-items: center; gap: 6px; white-space: nowrap; }
 .lang-switch button {
   min-width: 26px; min-height: 40px; padding: 0 2px; border: 0; border-radius: 6px; background: transparent;
-  color: var(--mute); font-size: 12px; transition: color .15s, background .15s;
+  color: var(--lang-off); font-size: 12px; font-weight: 500; user-select: none; -webkit-user-select: none; transition: color .15s;
 }
-.lang-switch button:hover { background: var(--soft); }
-.lang-switch button[aria-pressed="true"] { color: var(--brand-text); font-weight: 700; }
+.lang-switch button:hover { color: var(--ink); }
+.lang-switch button[aria-pressed="true"] { color: var(--accent-primary); font-weight: 800; }
 
 /* 일정이 비었을 때 */
 .plan-empty { padding: 16px; border-style: dashed; border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); background: var(--accent-soft); }
@@ -1490,8 +1501,8 @@ body.picking .leaflet-bottom.leaflet-right { opacity: .4; pointer-events: none; 
   .tripsw summary { max-width: none; }
   .topbar { gap: 4px; padding-inline: 8px; }
   .actions { gap: 4px; }
-  .lang-switch { gap: 2px; }
-  .lang-switch button { min-width: 26px; min-height: 44px; }
+  .lang-switch { gap: 6px; }
+  .lang-switch button { min-width: 20px; min-height: 44px; padding: 0 1px; }
   .tripsw summary { padding: 0 6px 0 10px; }
 }
 .tripsw-pop .sw-main b { white-space: normal; overflow-wrap: anywhere; }
@@ -1545,3 +1556,19 @@ body.picking .leaflet-bottom.leaflet-right { opacity: .4; pointer-events: none; 
   .checks li.editing .price-form { grid-column: 1 / -1; }
   .checks li.editing .price-form input { flex: 1; }
 }
+.item-row .collapse { color: var(--ink); }
+.item-row .collapse .ic { width: 18px; height: 18px; }
+/* 지도 종류별 필터 칩: 누르면 해당 종류 색으로 켜지고, 그 종류 핀만 또렷해진다 */
+.legend .cat-chip {
+  display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 8px; border: 1px solid transparent; border-radius: 999px;
+  background: none; color: var(--sub); font-size: 12px; font-weight: 500; user-select: none; -webkit-user-select: none;
+  transition: background .15s, border-color .15s, color .15s, box-shadow .15s;
+}
+.legend .cat-chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.legend .cat-chip:hover { color: var(--ink); background: var(--soft); }
+.legend .cat-chip.on {
+  background: color-mix(in srgb, var(--c) 16%, var(--paper)); border-color: var(--c); color: var(--ink); font-weight: 700;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 22%, transparent), 0 0 10px color-mix(in srgb, var(--c) 35%, transparent);
+}
+.pin.cat-off, .stay-pin.cat-off { opacity: .25; }
+.pin.cat-on, .stay-pin.cat-on { opacity: 1; transform: scale(1.15); }

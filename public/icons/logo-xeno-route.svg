@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <style>
+    .route, .origin { stroke: #18181B; }
+    .beacon { fill: #D94E34; }
+    @media (prefers-color-scheme: dark) {
+      .route, .origin { stroke: #F4F4F5; }
+      .beacon { fill: #F2745B; }
+    }
+  </style>
+  <path class="route" d="M9.5 10.5C14.5 10.5 17.5 23.5 23 23.5" stroke-width="3.2" stroke-linecap="round"/>
+  <path class="route" d="M11.3 21.7L19.6 13.4" stroke-width="3.2" stroke-linecap="butt"/>
+  <circle class="origin" cx="9.5" cy="23.5" r="2.6" stroke-width="2.4"/>
+  <circle class="beacon" cx="23.3" cy="9.7" r="3.4"/>
+</svg>
