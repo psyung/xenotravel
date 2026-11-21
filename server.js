@@ -5,12 +5,12 @@
 //   /s/<id> 페이지에는 여행 제목·요약을 미리보기 태그(og:*)로 넣어 카톡·메신저에 카드로 보이게 한다.
 //   공유 데이터는 SHARE_DIR(기본 data/shares)에 파일 하나씩 저장한다.
 import http from 'node:http';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir, stat } from 'node:fs/promises';
 import { randomInt } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodeShare, shareSummary, SHORT_ID, CODE_RE } from './public/lib/share.js';
-import { buildCommit, withBuildMeta } from './scripts/build-version.mjs';
+import { buildCommit, withBuildMeta, withSwBuild } from './scripts/build-version.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, 'public');
@@ -158,6 +158,16 @@ async function sharePage(req, res, id) {
   res.end(html);
 }
 
+/** 폴더 안 파일의 가장 최근 수정 시각 (ms) */
+async function newestMtime(dir) {
+  let max = 0;
+  for (const e of await readdir(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    max = Math.max(max, e.isDirectory() ? await newestMtime(p) : Math.trunc((await stat(p)).mtimeMs));
+  }
+  return max;
+}
+
 async function notFound(res) {
   // 없는 주소(잘못된 공유 링크 포함): 네 언어 안내가 든 404 페이지 (Vercel도 같은 public/404.html을 쓴다)
   try {
@@ -185,6 +195,8 @@ async function staticFile(res, pathname) {
   try {
     let body = await readFile(file);
     if (pathname === '/index.html') body = withBuildMeta(body.toString('utf8'), COMMIT);
+    // 로컬: 공개 파일이 바뀔 때마다 서비스 워커 빌드 값도 바뀌게 (커밋 + 가장 최근 수정 시각) → 오프라인 저장본을 새로 받는다
+    if (pathname === '/sw.js') body = withSwBuild(body.toString('utf8'), `${COMMIT}-${(await newestMtime(root)).toString(36)}`);
     res.writeHead(200, {
       'content-type': TYPES[path.extname(file)] ?? 'application/octet-stream',
       'cache-control': 'no-cache',

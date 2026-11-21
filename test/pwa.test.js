@@ -69,3 +69,15 @@ test('sw.js의 앱 파일은 모두 git에 들어간다 (.gitignore에 걸려 �
   }
   assert.equal(ignored.trim(), '', `배포에서 빠지는 파일: ${ignored}`);
 });
+
+test('sw.js: 오프라인 저장본은 빌드마다 따로 설치 때 한 번에 받고, 실행 중에는 덧쓰지 않는다 (GPT 3차 #6)', async () => {
+  assert.match(sw, /^const BUILD = 'dev';/m, '배포·서버가 바꿔 넣을 자리');
+  assert.match(sw, /const VERSION = `v\d+-\$\{BUILD\}`;/);
+  assert.match(sw, /app\.addAll\(APP_FILES\.map\(\(u\) => new Request\(u, \{ cache: 'reload' \}\)\)\)/);
+  assert.doesNotMatch(sw, /cache\.put\(req, res\.clone\(\)\)/, '앱 파일 저장본에 실행 중 덧쓰기 없음');
+  const { withSwBuild } = await import('../scripts/build-version.mjs');
+  const out = withSwBuild(sw, 'abc1234-x');
+  assert.match(out, /^const BUILD = 'abc1234-x';/m);
+  assert.equal(out.replace("'abc1234-x'", "'dev'"), sw, '다른 곳은 그대로');
+  assert.match(readFileSync(new URL('../vercel.json', pub), 'utf8'), /"source": "\/sw\.js", "headers": \[\{ "key": "cache-control", "value": "no-cache" \}\]/);
+});

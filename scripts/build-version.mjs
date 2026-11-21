@@ -15,6 +15,9 @@ export function buildCommit(env = process.env) {
   return 'dev';
 }
 
+/** sw.js의 BUILD 값을 바꾼다 — 배포마다 서비스 워커가 바뀌어 오프라인 저장본을 그 빌드로 새로 받는다 */
+export const withSwBuild = (js, build) => js.replace(/^const BUILD = '[^']*';/m, `const BUILD = '${build}';`);
+
 /** index.html의 build-commit 메타 값을 바꾼다 */
 export const withBuildMeta = (html, commit) => html.replace(/<meta name="build-commit" content="[^"]*">/, `<meta name="build-commit" content="${commit}">`);
 
@@ -24,5 +27,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   writeFileSync(new URL('version.json', pub), `${JSON.stringify({ commit, builtAt: new Date().toISOString() })}\n`);
   const index = new URL('index.html', pub);
   writeFileSync(index, withBuildMeta(readFileSync(index, 'utf8'), commit));
+  const sw = new URL('sw.js', pub);
+  writeFileSync(sw, withSwBuild(readFileSync(sw, 'utf8'), `${commit}-${Date.now().toString(36)}`));
   console.log(`build-commit: ${commit}`);
 }

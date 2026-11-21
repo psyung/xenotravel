@@ -5,6 +5,7 @@
   "outputDirectory": "public",
   "headers": [
     { "source": "/version.json", "headers": [{ "key": "cache-control", "value": "no-cache" }] },
+    { "source": "/sw.js", "headers": [{ "key": "cache-control", "value": "no-cache" }] },
     { "source": "/404.html", "headers": [{ "key": "cache-control", "value": "no-cache" }] }
   ]
 }
