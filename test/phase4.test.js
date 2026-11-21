@@ -668,3 +668,18 @@ test('팔레트 A: 옛 테라코타 값이 남지 않고, 강조색·일차 색�
   assert.equal(new Set(colors).size, 8);
   for (const c of colors) assert.ok(ratio(c, '#FFFFFF') >= 4.5, `일차 색 ${c} 위 흰 번호`);
 });
+
+test('모바일 지도 하단 시트: 지도 탭에서만, 장소 카드·지도에서 찍기 중엔 숨김, 지도 맞춤은 시트 높이를 비운다', () => {
+  const html = read('index.html');
+  assert.match(html, /<section id="mapSheet" class="map-sheet" data-state="peek"/);
+  assert.match(html, /id="msHandle"[^>]*aria-expanded="false" aria-controls="msList"/);
+  const css = read('styles.css');
+  assert.match(css, /\.map-sheet \{ display: none; \}/, '넓은 화면·일정 탭에서는 없음');
+  assert.match(css, /\.layout\[data-tab="map"\] \.map-sheet \{/);
+  assert.match(css, /body\.picking \.map-sheet, \.mapwrap:has\(#mapPlace:not\(\[hidden\]\)\) \.map-sheet \{ display: none !important; \}/);
+  assert.match(css, /\.leaflet-bottom \{ bottom: var\(--sheet-h, 112px\); \}/, '지도 출처 표기는 시트 위로');
+  const app = read('app.js');
+  assert.match(app, /paddingBottomRight: \[48, 48 \+ pad\]/);
+  assert.match(app, /\$\('#msList'\)\.inert = sheetState === 'peek'/, '살짝 상태에선 가려진 목록에 포커스 없음');
+  assert.match(app, /renderMapSheet\(\);\n  if \(fit\) fitTo\(bounds\);/, '지도를 그릴 때마다 목록도');
+});

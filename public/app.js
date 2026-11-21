@@ -491,7 +491,122 @@ function renderMap({ fit = false } = {}) {
   $('#dayPrev').disabled = ui.day <= 0;
   $('#dayNext').disabled = ui.day >= trip.days.length - 1;
   if (ui.candidate) showCandidate(ui.candidate, { pan: false });
+  renderMapSheet();
   if (fit) fitTo(bounds);
+}
+
+/* ───────── 모바일 지도 하단 시트 ─────────
+ * 지도 탭(900px 이하)에서 지도를 화면 가득 두고, 고른 일차(또는 전체 동선)의 장소 목록을 아래에서 끌어올린다.
+ * 세 단계: 살짝(peek) · 반(half) · 크게(full). 손잡이를 누르면 살짝↔반, 끌면 가까운 단계로 붙는다. */
+const SHEET_STATES = ['peek', 'half', 'full'];
+let sheetState = 'peek';
+function sheetHeights() {
+  const wrap = $('.mapwrap');
+  const H = wrap.clientHeight || 600;
+  const peek = Math.min(112, Math.round(H * 0.4));
+  // 크게: 위쪽 일차 전환·범례 바로 아래까지 (지도 출처 표기 한 줄 자리는 남긴다)
+  const top = $('.map-top')?.getBoundingClientRect();
+  const under = top?.height ? top.bottom - wrap.getBoundingClientRect().top + 34 : H * 0.14;
+  return { peek, half: Math.max(peek, Math.round(H * 0.46)), full: Math.max(peek, Math.round(Math.min(H * 0.86, H - under))) };
+}
+/** 지금 시트가 지도를 가리는 높이 (시트가 없으면 0) */
+function sheetPad() {
+  const el = $('#mapSheet');
+  return el && el.offsetParent && getComputedStyle(el).display !== 'none' ? sheetHeights()[sheetState] : 0;
+}
+function setSheet(state) {
+  sheetState = SHEET_STATES.includes(state) ? state : 'peek';
+  const el = $('#mapSheet');
+  el.dataset.state = sheetState;
+  $('.mapwrap').style.setProperty('--sheet-h', `${sheetHeights()[sheetState]}px`);
+  $('#msHandle').setAttribute('aria-expanded', String(sheetState !== 'peek'));
+  $('#msList').inert = sheetState === 'peek'; // 살짝 상태에서는 가려진 목록에 포커스가 가지 않게
+}
+function renderMapSheet() {
+  if (!trip) return;
+  const focus = trip.days.findIndex((d) => d.id === ui.focusList);
+  const days = focus >= 0 ? [focus] : trip.days.map((_, i) => i);
+  let count = 0;
+  const rows = days.map((i) => {
+    const day = trip.days[i];
+    const route = M.dayRoute(trip, i);
+    const head = focus < 0 ? `<li class="ms-day" style="--c:${dayColor(i)}"><span aria-hidden="true"></span>${esc(dayName(i))}${day.date ? ` · ${esc(shortDate(day.date))}` : ''}</li>` : '';
+    if (!day.items.length) return `${head}<li class="ms-empty">${esc(t('이 날은 아직 장소가 없어요'))}</li>`;
+    count += day.items.length;
+    return head + route.map((p) => {
+      const stay = trip.stays.includes(p);
+      const n = day.items.indexOf(p) + 1;
+      const cat = M.CATEGORIES[p.category];
+      const meta = stay ? t('숙소') : [p.time, cat ? t(cat.label) : ''].filter(Boolean).join(' · ');
+      return `<li><button type="button" class="ms-row" data-ms-item="${esc(p.id)}">
+        <span class="ms-num${stay ? ' stay' : ''}" style="--c:${dayColor(i)}" aria-hidden="true">${stay ? '<svg class="ic"><use href="#i-home"/></svg>' : n}</span>
+        <span class="ms-main"><b>${esc(p.name)}</b>${meta ? `<small>${esc(meta)}</small>` : ''}</span></button></li>`;
+    }).join('');
+  }).join('');
+  const date = focus >= 0 ? trip.days[focus].date : '';
+  $('#msTitle').textContent = focus >= 0 ? `${dayName(focus)}${date ? ` · ${shortDate(date)}` : ''}` : t('전체 동선');
+  $('#msCount').textContent = count ? t('{n}곳', { n: count }) : '';
+  $('#msList').innerHTML = rows;
+  $('#msEdit').hidden = Boolean(ui.readonly) && focus < 0;
+  setSheet(sheetState);
+}
+{
+  const handle = $('#msHandle');
+  let drag = null;
+  let dragged = false;
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.button > 0) return;
+    drag = { y: e.clientY, h: sheetHeights()[sheetState], id: e.pointerId };
+    dragged = false;
+    handle.setPointerCapture(e.pointerId); // 손잡이 밖으로 빨리 끌어도 계속 받는다 (마우스·펜)
+  });
+  handle.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dy = drag.y - e.clientY;
+    if (!dragged && Math.abs(dy) < 6) return;
+    if (!dragged) {
+      dragged = true;
+      $('.mapwrap').classList.add('sheet-dragging');
+    }
+    const hs = sheetHeights();
+    $('.mapwrap').style.setProperty('--sheet-h', `${Math.min(hs.full, Math.max(hs.peek, drag.h + dy))}px`);
+  });
+  const end = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    $('.mapwrap').classList.remove('sheet-dragging');
+    if (dragged) {
+      const h = drag.h + (drag.y - e.clientY);
+      const hs = sheetHeights();
+      setSheet(SHEET_STATES.reduce((a, s) => (Math.abs(hs[s] - h) < Math.abs(hs[a] - h) ? s : a), 'peek'));
+    }
+    drag = null;
+  };
+  handle.addEventListener('pointerup', end);
+  handle.addEventListener('pointercancel', (e) => {
+    if (drag && e.pointerId === drag.id) dragged = true; // 취소되면 원래 단계로
+    $('.mapwrap').classList.remove('sheet-dragging');
+    if (drag) setSheet(sheetState);
+    drag = null;
+  });
+  handle.addEventListener('click', () => {
+    if (dragged) return void (dragged = false); // 끌기 끝의 click은 무시
+    setSheet(sheetState === 'peek' ? 'half' : 'peek');
+  });
+  $('#msList').addEventListener('click', (e) => {
+    const id = e.target.closest('[data-ms-item]')?.dataset.msItem;
+    const m = id && markers.get(id);
+    if (!m) return;
+    setSheet('peek');
+    map.setView(m.getLatLng(), Math.max(map.getZoom(), 15), { animate: false });
+    m.fire('click'); // 지도 장소 요약 카드(길찾기·일정 보기)를 연다
+  });
+  $('#msEdit').addEventListener('click', () => {
+    setSheet('peek');
+    showTab('plan');
+    const focus = trip.days.findIndex((d) => d.id === ui.focusList);
+    if (focus >= 0) requestAnimationFrame(() => $(`#day-${focus}`)?.scrollIntoView({ block: 'start' }));
+  });
+  new ResizeObserver(() => setSheet(sheetState)).observe($('.mapwrap'));
 }
 
 map.on('moveend', updatePulse);
@@ -699,8 +814,11 @@ map.getContainer().addEventListener('click', (e) => {
 });
 
 function fitTo(bounds) {
-  if (bounds.length === 1) map.setView(bounds[0], 15);
-  else if (bounds.length > 1) map.fitBounds(bounds, { padding: [48, 48], maxZoom: 16 });
+  const pad = sheetPad(); // 모바일 지도 시트가 가리는 아래쪽은 비워 두고 맞춘다
+  if (bounds.length === 1) {
+    map.setView(bounds[0], 15, { animate: false });
+    if (pad) map.panBy([0, pad / 2], { animate: false });
+  } else if (bounds.length > 1) map.fitBounds(bounds, { paddingTopLeft: [48, 48], paddingBottomRight: [48, 48 + pad], maxZoom: 16 });
   else if (trip?.center) map.setView([trip.center.lat, trip.center.lng], 12);
 }
 

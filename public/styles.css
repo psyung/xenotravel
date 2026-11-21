@@ -1917,3 +1917,53 @@ dialog.preset-dialog { width: min(520px, calc(100vw - 32px)); }
 /* PDF 일정표: 긴 링크·메모가 A4 표 폭을 밀어내지 않게 (GPT 3차 #14) */
 .print-day table { table-layout: fixed; }
 .print-day td { overflow-wrap: anywhere; word-break: break-word; }
+
+/* ───────── 모바일 지도 하단 시트 (지도 전체 화면 + 끌어올리는 목록) ───────── */
+.map-sheet { display: none; }
+@media (max-width: 900px) {
+  .layout[data-tab="map"] .map-sheet {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 1005; height: var(--sheet-h, 112px);
+    display: flex; flex-direction: column; background: var(--paper); color: var(--ink);
+    border-top: 1px solid var(--line); border-radius: 18px 18px 0 0; box-shadow: 0 -10px 28px rgba(15, 30, 46, .16);
+    transition: height .22s cubic-bezier(.2, .8, .2, 1);
+  }
+  .mapwrap.sheet-dragging .map-sheet { transition: none; }
+  body.picking .map-sheet, .mapwrap:has(#mapPlace:not([hidden])) .map-sheet { display: none !important; }
+  .mapwrap:has(.map-sheet[data-state="full"]) #mapLocate { visibility: hidden; } /* 크게 펼치면 출처 표기 줄과 겹치는 위치 버튼은 잠시 숨긴다 */
+  /* 시트가 있을 때 지도 출처 표기·지도 오류 띠는 시트 위로 */
+  body:not(.picking) .layout[data-tab="map"] .mapwrap:has(#mapPlace[hidden]) .leaflet-bottom { bottom: var(--sheet-h, 112px); }
+  body:not(.picking) .layout[data-tab="map"] .mapwrap:has(#mapPlace[hidden]) .map-error { bottom: calc(var(--sheet-h, 112px) + 8px); }
+}
+.ms-head { display: flex; align-items: center; gap: 8px; padding: 0 12px 0 4px; flex: none; }
+.ms-handle {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; border: 0; background: none;
+  padding: 22px 8px 10px 12px; min-height: 64px; text-align: left; touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.ms-grip { position: absolute; top: 8px; left: 50%; width: 40px; height: 5px; margin-left: -20px; border-radius: 999px; background: color-mix(in srgb, var(--mute) 45%, transparent); }
+.ms-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; max-width: 100%; }
+.ms-title b { font-size: 16px; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ms-title small { flex: none; color: var(--sub); font-size: 12.5px; font-weight: 600; }
+.ms-edit {
+  flex: none; margin-top: 12px; border: 0; border-radius: 999px; padding: 0 12px; min-height: 34px;
+  background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 12.5px;
+}
+.ms-list { list-style: none; margin: 0; padding: 0 12px calc(12px + env(safe-area-inset-bottom)); overflow-y: auto; overscroll-behavior: contain; flex: 1; min-height: 0; }
+.map-sheet[data-state="peek"] .ms-list { overflow: hidden; }
+.ms-row {
+  width: 100%; display: flex; align-items: center; gap: 12px; border: 0; background: none; text-align: left;
+  padding: 9px 6px; min-height: 52px; border-radius: 12px;
+}
+.ms-list li:has(> .ms-row) + li:has(> .ms-row) { border-top: 1px solid var(--line); }
+.ms-row:hover { background: var(--soft); }
+.ms-num {
+  flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--c); color: #fff; font-weight: 800; font-size: 12.5px; font-variant-numeric: tabular-nums;
+}
+.ms-num.stay { background: var(--paper); color: var(--stay); border: 2px solid var(--stay); }
+.ms-main { min-width: 0; display: flex; flex-direction: column; }
+.ms-main b { font-weight: 700; font-size: 14px; overflow-wrap: anywhere; }
+.ms-main small { color: var(--sub); font-size: 12px; font-variant-numeric: tabular-nums; }
+.ms-day { display: flex; align-items: center; gap: 8px; padding: 12px 6px 4px; font-size: 12.5px; font-weight: 800; color: var(--sub); }
+.ms-day span { width: 10px; height: 10px; border-radius: 50%; background: var(--c); }
+.ms-empty { padding: 10px 6px; color: var(--mute); font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { .layout[data-tab="map"] .map-sheet { transition: none; } }
