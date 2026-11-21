@@ -5,7 +5,7 @@
 //  - 지도 타일(Esri): 이용 약관상 오프라인 장기 저장을 하지 않는다. 브라우저 기본 HTTP 캐시만 쓰고,
 //    오프라인이면 앱이 일정 좌표로 그린 SVG 동선 미니맵을 보여 준다. (예전 버전이 저장한 타일 캐시는 activate에서 지운다)
 //  - 검색·날씨·환율 API: 저장하지 않는다 (날씨는 앱이 따로 저장)
-const VERSION = 'v11';
+const VERSION = 'v12';
 const APP = `xenotravel-app-${VERSION}`;
 const LIBS = `xenotravel-libs-${VERSION}`;
 

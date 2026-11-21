@@ -172,7 +172,7 @@ test('P4-6: 파비콘은 밝은 배지 + 흰 탭에서도 보이는 테두리, �
   const fill = /fill="(#[0-9A-F]{6})" stroke="(#[0-9A-F]{6})"/i.exec(svg);
   assert.ok(ratio(fill[1], '#202124') > 10, '다크 탭 위 배지');
   assert.ok(ratio(fill[2], '#FFFFFF') >= 2.5, '흰 탭 위 배지 테두리');
-  assert.ok(ratio('#18181B', fill[1]) > 15, '배지 위 경로 획');
+  assert.ok(ratio(/stroke="(#[0-9A-F]{6})" stroke-width="3\.2"/i.exec(svg)[1], fill[1]) > 15, '배지 위 경로 획');
 });
 
 test('P4-7: 잘못된 공유 주소는 404 (서버: 형식 오류·없는 링크·없는 경로), 404 페이지는 네 언어', async () => {
@@ -642,4 +642,29 @@ test('R5-5: 일자 순서 되돌리기는 일차 id로 — 원래 날이 지워�
   assert.deepEqual(names(tr), ['CD', '', '', '']);
   r.undo(tr);
   assert.deepEqual(names(tr), ['CD', '', '', ''], 'C·D의 원래 날(옛 Day2)이 없으니 지금 자리에, 새 일차로 옮기지 않는다');
+});
+
+/* ───────── 브랜드 색 시안 A (오션 블루) ───────── */
+
+test('팔레트 A: 옛 테라코타 값이 남지 않고, 강조색·일차 색이 AA 대비를 지킨다', () => {
+  const lum = (h) => {
+    const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const ratio = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+  for (const f of ['styles.css', 'app.js', 'index.html', '404.html', 'lib/summary.js', 'icons/logo-xeno-route.svg', 'manifest.webmanifest']) {
+    assert.doesNotMatch(read(f), /#(D94E34|BF3E26|F2745B|A3432E)\b/i, f);
+  }
+  const css = read('styles.css');
+  const root = /:root \{([\s\S]*?)\n\}/.exec(css)[1];
+  const tok = (name, src = root) => new RegExp(`--${name}: (#[0-9A-F]{6})`, 'i').exec(src)[1];
+  for (const bg of [tok('paper'), tok('bg'), tok('accent-soft')]) assert.ok(ratio(tok('accent'), bg) >= 4.5, `강조 글자 ${bg}`);
+  assert.ok(ratio(tok('btn-primary-bg'), '#FFFFFF') >= 4.5, '버튼 흰 글자');
+  assert.ok(ratio(tok('fly'), tok('paper')) >= 4.5, '항공편 글자');
+  const dark = /:root\[data-theme="dark"\] \{([\s\S]*?)\n\}/.exec(css)[1];
+  assert.ok(ratio(tok('accent', dark), tok('paper', dark)) >= 4.5, '다크 강조');
+  assert.ok(ratio(tok('btn-primary-bg', dark), tok('btn-primary-text', dark)) >= 4.5, '다크 버튼 글자');
+  const colors = /const COLORS = \[([^\]]+)\]/.exec(read('app.js'))[1].match(/#[0-9A-F]{6}/gi);
+  assert.equal(new Set(colors).size, 8);
+  for (const c of colors) assert.ok(ratio(c, '#FFFFFF') >= 4.5, `일차 색 ${c} 위 흰 번호`);
 });

@@ -18,9 +18,10 @@ import * as D from './lib/dayops.js';
 import { summaryModel, drawSummary, summaryFileName } from './lib/summary.js';
 
 const undoStack = createUndoStack(); // 실행 취소 스택 (toast·pushUndo가 쓴다, 시작 중 알림도 안전하게 맨 위에 둔다)
-const COLORS = ['#A3432E', '#9C4A28', '#A03754', '#516B53', '#795169', '#576B65', '#82601F', '#626456'];
+// 일차 색: 색상환에서 고르게 벌려 지도 동선이 바로 구분되고, 흰 숫자 대비 5:1 이상 (시안 A)
+const COLORS = ['#0A6FC2', '#C2410C', '#0F7B5F', '#6D4AE8', '#C7254E', '#0E7490', '#92400E', '#475569'];
 const INBOX_COLOR = '#868e96';
-const TREND_COLOR = '#BF3E26';
+const TREND_COLOR = '#C2410C'; // 요즘 뜨는 곳: 브랜드 블루와 겹치지 않는 오렌지
 const dayColor = (i) => COLORS[i % COLORS.length];
 const TODAY = new Date().toISOString().slice(0, 10);
 /** 내장 프리셋 문구의 4개 국어 맵 { ko, en, zh, ja } (번역 사전에서 만든다) */

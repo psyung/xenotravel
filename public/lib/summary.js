@@ -9,7 +9,7 @@ import { shareSummary } from './share.js';
 export const SUMMARY_W = 1080;
 
 /** 이미지에 들어갈 내용만 뽑는다. 장소 이름 외의 사용자 입력(메모·주소·링크·예약번호·지출)은 넣지 않는다. */
-export function summaryModel(trip, { colors = ['#D94E34'], maxDays = 10, perDay = 3 } = {}) {
+export function summaryModel(trip, { colors = ['#0A6FC2'], maxDays = 10, perDay = 3 } = {}) {
   const { title, line } = shareSummary(trip);
   const days = trip.days.map((d, i) => {
     const names = d.items.map((it) => String(it.name ?? '').trim()).filter(Boolean);
@@ -104,8 +104,8 @@ export function summaryFileName(trip, now = new Date()) {
 }
 
 export const SUMMARY_THEMES = {
-  light: { bg: '#FAF9F6', card: '#FFFFFF', ink: '#18181B', sub: '#52525B', mute: '#71717A', line: '#E4E4E7', grid: '#EFEDE8', accent: '#D94E34', pinText: '#FFFFFF', stay: '#14b8a6' },
-  dark: { bg: '#121214', card: '#1C1C1F', ink: '#F4F4F5', sub: '#C4C4CC', mute: '#A1A1AA', line: '#2E2E33', grid: '#232327', accent: '#F2745B', pinText: '#FFFFFF', stay: '#33C7C7' },
+  light: { bg: '#F5F8FC', card: '#FFFFFF', ink: '#0F1E2E', sub: '#475569', mute: '#64748B', line: '#DFE7F0', grid: '#E6EDF5', accent: '#0A6FC2', pinText: '#FFFFFF', stay: '#14b8a6' },
+  dark: { bg: '#0D141C', card: '#151F2A', ink: '#EEF3F8', sub: '#A9B6C4', mute: '#8E9CAC', line: '#263445', grid: '#1B2734', accent: '#4AA8F5', pinText: '#FFFFFF', stay: '#33C7C7' },
 };
 
 const FONT = '"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "PingFang SC", "Microsoft YaHei", "Hiragino Sans", "Yu Gothic", sans-serif';

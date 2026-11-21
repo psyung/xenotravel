@@ -23,11 +23,11 @@
 2. **`docs/WARNINGS_AND_GUARDRAILS.md`**
    * 과거 결함의 재발을 막기 위한 절대 금지 규칙과 QA 방어 가드레일입니다.
 3. **`docs/DESIGN_AND_BRAND_PRINCIPLES.md`**
-   * 확정된 브랜드 컬러(`Charcoal Monochrome + Terracotta Coral`), 인라인 언어 스위처(`KO EN 中 日`), 카드 및 지도 필터 시각 원칙입니다.
+   * 확정된 브랜드 컬러(`Ink Navy + Ocean Blue`, 2026-11 변경), 인라인 언어 스위처(`KO EN 中 日`), 카드 및 지도 필터 시각 원칙입니다.
 4. **`docs/ARCHITECTURE_AND_I18N_PRINCIPLES.md`**
    * 단일 상태 원천, 1-클릭 다크모드, 샘플 여행 사용자 수정 보호 플래그(`isUserModified`), 4개 국어 스키마 원칙입니다.
 5. **`docs/brand_logo_and_favicon_guidelines.md` & `public/icons/logo-xeno-route.svg`**
-   * 최종 확정된 비대칭 S-곡선 경로 + 출발 링 + 테라코타 코랄 목적지 포인트 로고 규격입니다.
+   * 최종 확정된 비대칭 S-곡선 경로 + 출발 링 + 오션 블루 목적지 포인트 로고 규격입니다.
 6. **`docs/CODEX_PHASE2_POLISH_AND_ROADMAP_SPEC.md` & `docs/codex_integrated_patch_specification.md`**
    * 1·2차 완료 패치 및 기능 구현 기준 아카이브 문서입니다.
 7. **`docs/QA_AND_NEXT_STEPS_PROMPT.md`**
