@@ -683,3 +683,44 @@ test('모바일 지도 하단 시트: 지도 탭에서만, 장소 카드·지도
   assert.match(app, /\$\('#msList'\)\.inert = sheetState === 'peek'/, '살짝 상태에선 가려진 목록에 포커스 없음');
   assert.match(app, /renderMapSheet\(\);\n  if \(fit\) fitTo\(bounds\);/, '지도를 그릴 때마다 목록도');
 });
+
+/* ───────── GPT 교차 검수 6차 반영 ───────── */
+
+test('R6-1·2: 오프라인 대체 첫 화면은 <base>로 자산을 앱 루트에서 찾고, 로컬 빌드 값은 파일 내용 해시', () => {
+  const sw = read('sw.js');
+  assert.match(sw, /if \(req\.mode === 'navigate'\) return \(await appShell\(cache\)\) \?\? Response\.error\(\);/);
+  assert.match(sw, /\.replace\('<head>', `<head>\\n  <base href="\$\{new URL\('\.\/', sw\.registration\.scope\)\.pathname\}">`\)/);
+  assert.match(read('index.html'), /^<head>$/m, 'index.html에 <head> 태그가 그대로 있다');
+  const server = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  assert.match(server, /withSwBuild\(body\.toString\('utf8'\), `\$\{COMMIT\}-\$\{await publicHash\(root\)\}`\)/);
+  assert.match(server, /h\.update\(path\.relative\(dir, p\)\)\.update\('\\0'\)\.update\(await readFile\(p\)\)/);
+});
+
+test('R6-3·5·6: 시트 손잡이는 세 단계를 돌고(같은 높이는 건너뜀), 높이는 살짝 ≤ 반 ≤ 크게, 위치 버튼은 시트가 보일 때만 숨김', () => {
+  const app = read('app.js');
+  assert.match(app, /const order = SHEET_STATES\.filter\(\(s, i\) => i === 0 \|\| hs\[s\] > hs\[SHEET_STATES\[i - 1\]\]\);/);
+  assert.match(app, /if \(e\.detail && performance\.now\(\) < suppressClick\) return;/, '키보드 활성화(detail 0)는 막지 않는다');
+  assert.match(app, /half: Math\.min\(full, Math\.max\(peek, Math\.round\(H \* 0\.46\)\)\), full/);
+  assert.match(app, /card\.querySelector\('a, button'\)\?\.focus\(\{ preventScroll: true \}\);/, '시트에서 연 카드로 포커스');
+  const css = read('styles.css');
+  assert.match(css, /body:not\(\.picking\) \.layout\[data-tab="map"\] \.mapwrap:has\(#mapPlace\[hidden\]\):has\(\.map-sheet\[data-state="full"\]\) #mapLocate \{ visibility: hidden; \}/);
+});
+
+test('R6-7: 상태색 바탕 글자(on-solid)는 라이트·다크 모두 4.5:1 이상, 흰 글자 고정 배지가 남지 않는다', () => {
+  const lum = (h) => {
+    const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const ratio = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+  const css = read('styles.css');
+  const lines = css.match(/--on-solid: #[0-9A-F]{6};[^\n]*/gi);
+  assert.equal(lines.length, 3, '라이트 · 시스템 다크 · 다크 고정');
+  for (const l of lines) {
+    const on = /--on-solid: (#[0-9A-F]{6})/i.exec(l)[1];
+    for (const k of ['stay', 'ok', 'hot', 'fly']) assert.ok(ratio(on, new RegExp(`--${k}-solid: (#[0-9A-F]{6})`, 'i').exec(l)[1]) >= 4.5, `${k} ${l.slice(0, 30)}`);
+  }
+  for (const sel of ['.nights-chip', '.stay-tag', '.fl-ref', '.item.visited .num']) {
+    const rule = css.split('\n').find((x) => x.startsWith(`${sel} {`));
+    assert.doesNotMatch(rule, /color: #fff/, sel);
+  }
+});

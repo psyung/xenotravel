@@ -16,6 +16,7 @@
   --warn: #D97000; --warn-soft: #FFF4E5;
   --stay: #0B9494; --stay-soft: #E3F6F6;
   --fly: #C2410C; --fly-soft: #FFF1E8;
+  --on-solid: #FFFFFF; --stay-solid: #0A7C7C; --ok-solid: #037A49; --hot-solid: #D12A38; --fly-solid: #C2410C; /* 상태색 바탕 + 글자 (4.5:1+) */
   --shadow: 0 8px 24px rgba(15, 30, 46, .08);
   --shadow-pop: 0 12px 32px rgba(15, 30, 46, .14);
   --card-shadow: 0 1px 3px rgba(15, 30, 46, .05);
@@ -37,6 +38,7 @@
     --hot: #FF6B75; --hot-soft: #3A1F23; --ok: #2FD08A; --ok-soft: #15301F;
     --warn: #FFAA3B; --warn-soft: #36291A; --stay: #33C7C7; --stay-soft: #152E2E;
     --fly: #FDBA74; --fly-soft: #3A2414;
+    --on-solid: #0D141C; --stay-solid: #33C7C7; --ok-solid: #2FD08A; --hot-solid: #FF6B75; --fly-solid: #FDBA74;
     --shadow: 0 8px 24px rgba(0, 0, 0, .4); --shadow-pop: 0 12px 32px rgba(0, 0, 0, .55);
     --card-shadow: none;
     --aura-1: rgba(74, 168, 245, .22); --aura-2: rgba(56, 189, 248, .16); --aura-3: rgba(251, 191, 36, .08);
@@ -55,6 +57,7 @@
   --hot: #FF6B75; --hot-soft: #3A1F23; --ok: #2FD08A; --ok-soft: #15301F;
   --warn: #FFAA3B; --warn-soft: #36291A; --stay: #33C7C7; --stay-soft: #152E2E;
   --fly: #FDBA74; --fly-soft: #3A2414;
+  --on-solid: #0D141C; --stay-solid: #33C7C7; --ok-solid: #2FD08A; --hot-solid: #FF6B75; --fly-solid: #FDBA74;
   --shadow: 0 8px 24px rgba(0, 0, 0, .4); --shadow-pop: 0 12px 32px rgba(0, 0, 0, .55);
   --card-shadow: none;
   --aura-1: rgba(74, 168, 245, .22); --aura-2: rgba(56, 189, 248, .16); --aura-3: rgba(251, 191, 36, .08);
@@ -125,7 +128,7 @@ a { color: var(--brand-text); text-decoration: none; }
 .pnav .pg.on { background: var(--control); color: var(--control-text); }
 .check-badge {
   display: inline-grid; place-items: center; min-width: 16px; height: 16px; padding: 0 4px; margin-left: 4px; border-radius: 999px;
-  background: var(--hot); color: #fff; font-size: 10px; font-weight: 700; vertical-align: 1px;
+  background: var(--hot-solid); color: var(--on-solid); font-size: 10px; font-weight: 700; vertical-align: 1px;
 }
 .actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 .menu { position: relative; }
@@ -202,10 +205,10 @@ a { color: var(--brand-text); text-decoration: none; }
 .tile b small { font-size: 13px; font-weight: 600; margin-left: 2px; color: var(--sub); }
 .tile.wide { grid-column: span 2; }
 .tile.dday {
-  grid-row: span 2; justify-content: space-between; color: #fff; border: 0;
+  grid-row: span 2; justify-content: space-between; color: var(--on-solid); border: 0;
   background: linear-gradient(150deg, var(--accent) 0%, var(--accent-ink) 100%); box-shadow: 0 10px 24px -12px color-mix(in srgb, var(--accent) 80%, transparent);
 }
-.tile.dday span { color: rgba(255, 255, 255, .85); }
+.tile.dday span { color: color-mix(in srgb, var(--on-solid) 88%, transparent); }
 .tile.dday b { font-size: 32px; }
 
 .notice { display: flex; gap: 10px; padding: 10px 14px; border-radius: 12px; background: var(--warn-soft); font-size: 13px; }
@@ -359,7 +362,7 @@ body[data-view="board"] .board-only { display: inline-flex; }
 .r-addr { color: var(--mute); font-size: 12px; }
 .stay-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; padding: 10px 12px; font-size: 13px; border-radius: 10px; background: var(--stay-soft); }
 .stay-opts .hint { color: var(--sub); font-size: 12px; }
-.nights-chip { display: inline-block; padding: 1px 8px; border-radius: 6px; background: var(--stay); color: #fff; font-size: 12px; font-weight: 700; }
+.nights-chip { display: inline-block; padding: 1px 8px; border-radius: 6px; background: var(--stay-solid); color: var(--on-solid); font-size: 12px; font-weight: 700; }
 
 /* ───────── 날짜 카드 ───────── */
 .days { display: flex; flex-direction: column; gap: 12px; }
@@ -405,7 +408,7 @@ body[data-view="board"] .board-only { display: inline-flex; }
 .rp-tag { flex: none; font-size: 11px; color: var(--mute); }
 .rp-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 10px; }
 .rp-actions .btn { height: 34px; font-size: 13px; }
-.route-done { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0 4px; padding: 6px 6px 6px 12px; border-radius: 10px; background: var(--ok-soft); color: var(--ok); font-size: 12px; font-weight: 600; }
+.route-done { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0 4px; padding: 6px 6px 6px 12px; border-radius: 10px; background: var(--ok-soft); color: color-mix(in srgb, var(--ok) 50%, var(--ink)); font-size: 12px; font-weight: 600; }
 .route-done button { border: 0; background: none; color: var(--sub); font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 6px; }
 .route-done button:hover { background: var(--paper); color: var(--ink); }
 
@@ -469,14 +472,14 @@ body[data-view="board"] .board-only { display: inline-flex; }
 .stay-ic { display: none; }
 .stay-pos { flex: none; font-size: 12px; font-weight: 700; color: var(--stay); }
 .stay-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 13px; }
-.stay-tag { flex: none; font-size: 11px; padding: 0 6px; line-height: 18px; border-radius: 5px; background: var(--stay); color: #fff; font-weight: 600; }
+.stay-tag { flex: none; font-size: 11px; padding: 0 6px; line-height: 18px; border-radius: 5px; background: var(--stay-solid); color: var(--on-solid); font-weight: 600; }
 .stay-editor { margin-top: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); padding: 12px; }
 .stay-range { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: end; }
 .flight-main { width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; padding: 8px 12px; border-radius: 12px; border: 0; background: var(--fly-soft); color: var(--ink); }
 .fl-ic { color: var(--fly); display: inline-flex; }
 .fl-kind { color: var(--fly); font-weight: 700; font-size: 12px; flex: none; }
 .fl-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 13px; }
-.fl-ref { flex: none; font-size: 11px; padding: 0 6px; line-height: 18px; border-radius: 5px; background: var(--fly); color: #fff; font-weight: 600; }
+.fl-ref { flex: none; font-size: 11px; padding: 0 6px; line-height: 18px; border-radius: 5px; background: var(--fly-solid); color: var(--on-solid); font-weight: 600; }
 /* 빈 날: 안내 상자 자체가 끌어다 놓는 자리 */
 .days .items:empty {
   min-height: 46px; margin: 4px 0 4px 56px; border: 1px dashed var(--line); border-radius: 12px;
@@ -679,7 +682,7 @@ dialog#flightDialog { width: min(520px, calc(100vw - 32px)); }
 .cf-row label { display: flex; gap: 8px; align-items: baseline; font-size: 13px; }
 .cf-row label span { color: var(--sub); overflow-wrap: anywhere; }
 .btn.danger { border-color: color-mix(in srgb, var(--hot) 40%, var(--line)); }
-.btn.primary.danger { background: var(--hot); border-color: var(--hot); color: #fff !important; }
+.btn.primary.danger { background: var(--hot-solid); border-color: var(--hot-solid); color: var(--on-solid) !important; }
 #copyText { width: 100%; margin-top: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--soft); color: var(--ink); font-size: 13px; resize: vertical; }
 .privacy-dialog { width: min(640px, calc(100vw - 32px)); display: none; flex-direction: column; overflow: hidden; padding: 0; max-height: calc(100dvh - 32px); }
 .privacy-dialog[open] { display: flex; }
@@ -914,7 +917,7 @@ body[data-has-trip="no"] .trip-only { display: none !important; }
 .tc-open:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
 .tc-cover {
   position: relative; height: 92px; display: flex; align-items: flex-end; justify-content: space-between; padding: 12px 14px;
-  background: linear-gradient(135deg, var(--c), color-mix(in srgb, var(--c) 45%, var(--accent-ink))); color: #fff;
+  background: linear-gradient(135deg, var(--c), color-mix(in srgb, var(--c) 45%, #08365F)); color: #fff;
 }
 .tc-dest { font-size: 22px; font-weight: 800; letter-spacing: -0.03em; }
 .tc-dday { position: absolute; top: 10px; left: 12px; padding: 0 8px; line-height: 22px; border-radius: 999px; background: rgba(255, 255, 255, .22); font-size: 12px; font-weight: 700; }
@@ -1308,11 +1311,11 @@ button.chip.wx-ref:hover:not(:disabled) { color: var(--ink); border-color: var(-
 .pay-btn:hover { border-color: var(--ok); color: var(--ok); }
 .paid-note { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; color: var(--ok); font-size: 12.5px; font-weight: 600; }
 .paid-note button { height: 28px; padding: 0 8px; color: var(--sub); }
-.item.visited .num { background: var(--ok); color: #fff; }
+.item.visited .num { background: var(--ok-solid); color: var(--on-solid); }
 .item.visited .nm { color: var(--sub); }
 button.td-num { border: 0; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; padding: 0; }
 button.td-num:hover { box-shadow: 0 0 0 2px var(--ok-soft); }
-.td-row.visited .td-num, .td-row.visited.next .td-num { background: var(--ok); color: #fff; }
+.td-row.visited .td-num, .td-row.visited.next .td-num { background: var(--ok-solid); color: var(--on-solid); }
 .td-row.visited .td-body b { color: var(--sub); }
 .td-body b .cost-tag { font-size: 10.5px; }
 /* 편집 창 칸이 카드 밖으로 밀리지 않게 */
@@ -1929,7 +1932,8 @@ dialog.preset-dialog { width: min(520px, calc(100vw - 32px)); }
   }
   .mapwrap.sheet-dragging .map-sheet { transition: none; }
   body.picking .map-sheet, .mapwrap:has(#mapPlace:not([hidden])) .map-sheet { display: none !important; }
-  .mapwrap:has(.map-sheet[data-state="full"]) #mapLocate { visibility: hidden; } /* 크게 펼치면 출처 표기 줄과 겹치는 위치 버튼은 잠시 숨긴다 */
+  /* 크게 펼친 시트가 실제로 보일 때만 출처 표기 줄과 겹치는 위치 버튼을 잠시 숨긴다 (GPT 6차 #6) */
+  body:not(.picking) .layout[data-tab="map"] .mapwrap:has(#mapPlace[hidden]):has(.map-sheet[data-state="full"]) #mapLocate { visibility: hidden; }
   /* 시트가 있을 때 지도 출처 표기·지도 오류 띠는 시트 위로 */
   body:not(.picking) .layout[data-tab="map"] .mapwrap:has(#mapPlace[hidden]) .leaflet-bottom { bottom: var(--sheet-h, 112px); }
   body:not(.picking) .layout[data-tab="map"] .mapwrap:has(#mapPlace[hidden]) .map-error { bottom: calc(var(--sheet-h, 112px) + 8px); }

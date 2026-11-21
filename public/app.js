@@ -243,7 +243,9 @@ function renderMiniMap() {
     return side === 'top' ? r.bottom - box.top : side === 'right' ? box.right - r.left : box.bottom - r.top;
   };
   const TOP = Math.min(H * 0.45, Math.max(40, edge('.map-top', 'top')) + 14);
-  const BOTTOM = Math.min(H * 0.3, Math.max(24, edge('#tileError', 'bottom')) + 18);
+  // 아래쪽: 안내 띠(시트가 있으면 시트 위에 떠 있다)까지 비운다. 시트가 가리는 높이는 30% 상한과 별개로 더한다 (GPT 6차 #4)
+  const sheetH = sheetPad();
+  const BOTTOM = Math.min(H * 0.3 + sheetH, Math.max(24 + sheetH, edge('#tileError', 'bottom')) + 18);
   const PADL = 26;
   const PADR = Math.min(W * 0.3, Math.max(26, edge('.mapwrap .leaflet-control-zoom', 'right')) + 10);
   let body = '';
@@ -507,7 +509,9 @@ function sheetHeights() {
   // 크게: 위쪽 일차 전환·범례 바로 아래까지 (지도 출처 표기 한 줄 자리는 남긴다)
   const top = $('.map-top')?.getBoundingClientRect();
   const under = top?.height ? top.bottom - wrap.getBoundingClientRect().top + 34 : H * 0.14;
-  return { peek, half: Math.max(peek, Math.round(H * 0.46)), full: Math.max(peek, Math.round(Math.min(H * 0.86, H - under))) };
+  // 낮은 화면에서도 살짝 ≤ 반 ≤ 크게 (겹치면 같은 높이로 합친다, GPT 6차 #5)
+  const full = Math.max(peek, Math.round(Math.min(H * 0.86, H - under)));
+  return { peek, half: Math.min(full, Math.max(peek, Math.round(H * 0.46))), full };
 }
 /** 지금 시트가 지도를 가리는 높이 (시트가 없으면 0) */
 function sheetPad() {
@@ -515,12 +519,17 @@ function sheetPad() {
   return el && el.offsetParent && getComputedStyle(el).display !== 'none' ? sheetHeights()[sheetState] : 0;
 }
 function setSheet(state) {
+  const prev = sheetState;
   sheetState = SHEET_STATES.includes(state) ? state : 'peek';
   const el = $('#mapSheet');
   el.dataset.state = sheetState;
   $('.mapwrap').style.setProperty('--sheet-h', `${sheetHeights()[sheetState]}px`);
   $('#msHandle').setAttribute('aria-expanded', String(sheetState !== 'peek'));
   $('#msList').inert = sheetState === 'peek'; // 살짝 상태에서는 가려진 목록에 포커스가 가지 않게
+  // 오프라인 미니맵은 시트를 뺀 자리에 다시 그린다. 크게 펼치면 가려진 핀은 탭 순서에서도 뺀다 (GPT 6차 #4)
+  const mini = $('#miniMap');
+  if (mini) mini.inert = sheetPad() > 0 && sheetState === 'full';
+  if (ui.tilesDown && prev !== sheetState && !mini?.hidden) renderMiniMap();
 }
 function renderMapSheet() {
   if (!trip) return;
@@ -554,6 +563,7 @@ function renderMapSheet() {
   const handle = $('#msHandle');
   let drag = null;
   let dragged = false;
+  let suppressClick = 0; // 끌기를 마친 직후의 click만 무시한다 (키보드 Enter·Space는 영향 없음)
   handle.addEventListener('pointerdown', (e) => {
     if (e.button > 0) return;
     drag = { y: e.clientY, h: sheetHeights()[sheetState], id: e.pointerId };
@@ -578,19 +588,24 @@ function renderMapSheet() {
       const h = drag.h + (drag.y - e.clientY);
       const hs = sheetHeights();
       setSheet(SHEET_STATES.reduce((a, s) => (Math.abs(hs[s] - h) < Math.abs(hs[a] - h) ? s : a), 'peek'));
+      suppressClick = performance.now() + 400;
     }
+    dragged = false;
     drag = null;
   };
   handle.addEventListener('pointerup', end);
-  handle.addEventListener('pointercancel', (e) => {
-    if (drag && e.pointerId === drag.id) dragged = true; // 취소되면 원래 단계로
+  handle.addEventListener('pointercancel', () => {
     $('.mapwrap').classList.remove('sheet-dragging');
-    if (drag) setSheet(sheetState);
+    if (drag) setSheet(sheetState); // 취소되면 원래 단계로
+    dragged = false;
     drag = null;
   });
-  handle.addEventListener('click', () => {
-    if (dragged) return void (dragged = false); // 끌기 끝의 click은 무시
-    setSheet(sheetState === 'peek' ? 'half' : 'peek');
+  handle.addEventListener('click', (e) => {
+    if (e.detail && performance.now() < suppressClick) return; // 끌기 끝의 click은 무시
+    const hs = sheetHeights();
+    // 살짝 → 반 → 크게 → 살짝 (높이가 같은 단계는 건너뛴다) — 키보드·스크린리더로도 세 단계 모두 (GPT 6차 #3)
+    const order = SHEET_STATES.filter((s, i) => i === 0 || hs[s] > hs[SHEET_STATES[i - 1]]);
+    setSheet(order[(order.indexOf(sheetState) + 1) % order.length] ?? 'peek');
   });
   $('#msList').addEventListener('click', (e) => {
     const id = e.target.closest('[data-ms-item]')?.dataset.msItem;
@@ -599,6 +614,10 @@ function renderMapSheet() {
     setSheet('peek');
     map.setView(m.getLatLng(), Math.max(map.getZoom(), 15), { animate: false });
     m.fire('click'); // 지도 장소 요약 카드(길찾기·일정 보기)를 연다
+    // 시트는 카드가 열리면 숨는다 → 포커스를 카드로, 닫으면 이 행으로 돌아온다 (GPT 6차 #3)
+    const card = $('#mapPlace');
+    card.dataset.fromSheet = id;
+    card.querySelector('a, button')?.focus({ preventScroll: true });
   });
   $('#msEdit').addEventListener('click', () => {
     setSheet('peek');
@@ -607,6 +626,8 @@ function renderMapSheet() {
     if (focus >= 0) requestAnimationFrame(() => $(`#day-${focus}`)?.scrollIntoView({ block: 'start' }));
   });
   new ResizeObserver(() => setSheet(sheetState)).observe($('.mapwrap'));
+  new ResizeObserver(() => setSheet(sheetState)).observe($('.map-top')); // 범례를 펼치면 '크게' 높이도 다시
+  visualViewport?.addEventListener('resize', () => setSheet(sheetState)); // 화면 키보드·회전
 }
 
 map.on('moveend', updatePulse);
@@ -633,6 +654,7 @@ function directionsHtml(item, { from = prevPointOf(item), cls = 'dir-links' } = 
 
 function showMapPlace(item, detail, hasSchedule, marker) {
   const card = $('#mapPlace');
+  delete card.dataset.fromSheet; // 지도 핀에서 열면 닫을 때 핀으로 돌아간다 (시트 행에서 열면 호출한 쪽이 다시 정한다)
   ui.candidate = null;
   markers.get(card.dataset.item)?.getElement()?.classList.remove('map-pin-selected');
   card.dataset.item = item.id;
@@ -705,7 +727,13 @@ $('#mapPlace').addEventListener('click', (e) => {
     clearCandidate();
     const marker = markers.get(card.dataset.item)?.getElement();
     marker?.classList.remove('map-pin-selected');
-    marker?.focus({ preventScroll: true });
+    const fromSheet = card.dataset.fromSheet;
+    delete card.dataset.fromSheet;
+    const row = fromSheet && [...$$('#msList [data-ms-item]')].find((b) => b.dataset.msItem === fromSheet);
+    if (row) {
+      setSheet('half'); // 행이 보이고 포커스를 받을 수 있게 (살짝 상태 목록은 inert)
+      row.focus({ preventScroll: false });
+    } else marker?.focus({ preventScroll: true });
   }
 });
 

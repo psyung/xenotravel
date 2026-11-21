@@ -5,8 +5,8 @@
 //   /s/<id> 페이지에는 여행 제목·요약을 미리보기 태그(og:*)로 넣어 카톡·메신저에 카드로 보이게 한다.
 //   공유 데이터는 SHARE_DIR(기본 data/shares)에 파일 하나씩 저장한다.
 import http from 'node:http';
-import { readFile, writeFile, mkdir, readdir, stat } from 'node:fs/promises';
-import { randomInt } from 'node:crypto';
+import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
+import { randomInt, createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodeShare, shareSummary, SHORT_ID, CODE_RE } from './public/lib/share.js';
@@ -158,14 +158,18 @@ async function sharePage(req, res, id) {
   res.end(html);
 }
 
-/** 폴더 안 파일의 가장 최근 수정 시각 (ms) */
-async function newestMtime(dir) {
-  let max = 0;
-  for (const e of await readdir(dir, { withFileTypes: true })) {
-    const p = path.join(dir, e.name);
-    max = Math.max(max, e.isDirectory() ? await newestMtime(p) : Math.trunc((await stat(p)).mtimeMs));
-  }
-  return max;
+/** 폴더 안 모든 파일의 경로·내용 해시 (sw.js 자신은 빼고, 8자리). 수정 시각을 보존한 교체도 알아챈다 (GPT 6차 #2) */
+async function publicHash(dir) {
+  const h = createHash('sha1');
+  const walk = async (d) => {
+    for (const e of (await readdir(d, { withFileTypes: true })).sort((a, b) => (a.name < b.name ? -1 : 1))) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) await walk(p);
+      else if (p !== path.join(dir, 'sw.js')) h.update(path.relative(dir, p)).update('\0').update(await readFile(p));
+    }
+  };
+  await walk(dir);
+  return h.digest('hex').slice(0, 8);
 }
 
 async function notFound(res) {
@@ -195,8 +199,8 @@ async function staticFile(res, pathname) {
   try {
     let body = await readFile(file);
     if (pathname === '/index.html') body = withBuildMeta(body.toString('utf8'), COMMIT);
-    // 로컬: 공개 파일이 바뀔 때마다 서비스 워커 빌드 값도 바뀌게 (커밋 + 가장 최근 수정 시각) → 오프라인 저장본을 새로 받는다
-    if (pathname === '/sw.js') body = withSwBuild(body.toString('utf8'), `${COMMIT}-${(await newestMtime(root)).toString(36)}`);
+    // 로컬: 공개 파일 내용이 바뀔 때마다 서비스 워커 빌드 값도 바뀌게 (커밋 + 내용 해시) → 오프라인 저장본을 새로 받는다
+    if (pathname === '/sw.js') body = withSwBuild(body.toString('utf8'), `${COMMIT}-${await publicHash(root)}`);
     res.writeHead(200, {
       'content-type': TYPES[path.extname(file)] ?? 'application/octet-stream',
       'cache-control': 'no-cache',

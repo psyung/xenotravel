@@ -111,9 +111,20 @@ async function networkFirst(req) {
     const hit = await cache.match(req, { ignoreSearch: true });
     if (hit) return hit;
     // 화면 이동(주소창, 홈 화면 아이콘)은 앱 첫 화면으로
-    if (req.mode === 'navigate') return (await cache.match('index.html')) ?? Response.error();
+    if (req.mode === 'navigate') return (await appShell(cache)) ?? Response.error();
     throw err;
   }
+}
+
+/**
+ * 오프라인 화면 이동의 대체 첫 화면. 공유 주소(/s/<id>)처럼 앱 루트가 아닌 경로에서도
+ * styles.css·app.js를 앱 루트에서 찾도록 <base>를 넣는다 (GPT 6차 #1 — 서버의 공유 페이지와 같은 처리)
+ */
+async function appShell(cache) {
+  const hit = await cache.match('index.html');
+  if (!hit) return null;
+  const html = (await hit.text()).replace('<head>', `<head>\n  <base href="${new URL('./', sw.registration.scope).pathname}">`);
+  return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });
 }
 
 async function cacheFirst(req) {
