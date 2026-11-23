@@ -24,7 +24,7 @@ test('sw.js: 오프라인에 필요한 앱 파일이 빠짐없이 들어 있다'
 test('sw.js: index.html이 불러오는 CDN 파일을 모두 저장한다', () => {
   const html = readFileSync(new URL('index.html', pub), 'utf8');
   const cdn = [...html.matchAll(/(?:src|href)="(https:\/\/(?:cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net)[^"]+)"/g)].map((m) => m[1]);
-  assert.ok(cdn.length >= 3);
+  assert.ok(cdn.length >= 1); // S-2: 스크립트는 vendor/로 옮기고 CDN에는 글꼴 CSS만 남는다
   const libs = list('LIB_URLS');
   for (const u of cdn) assert.ok(libs.includes(u), `${u}이(가) LIB_URLS에 없어요`);
 });

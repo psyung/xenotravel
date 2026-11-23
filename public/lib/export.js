@@ -5,9 +5,30 @@ import { t } from './i18n.js';
 const COL_WIDTHS = { 일차: 8, 날짜: 11, 순서: 5, 시간: 7, 종류: 6, 장소: 28, 주소: 40, 메모: 40, 링크: 30, 구글맵: 22, 위도: 11, 경도: 11 };
 const LINK_COLS = ['링크', '구글맵'];
 
-export function exportXlsx(trip) {
-  const XLSX = globalThis.XLSX;
-  if (!XLSX) throw new Error(t('엑셀 라이브러리를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.'));
+// S-3: SheetJS는 페이지를 열 때가 아니라 [엑셀 내보내기]를 누를 때 vendor/에서 불러온다 (공식 배포본 0.20.3 고정)
+export const XLSX_SRC = 'vendor/xlsx/xlsx.full.min.js';
+let xlsxLoading = null;
+/** SheetJS를 한 번만 불러온다. 실패하면 다음 클릭에 다시 시도한다 */
+export function loadXlsx(doc = globalThis.document) {
+  if (globalThis.XLSX) return Promise.resolve(globalThis.XLSX);
+  xlsxLoading ??= new Promise((resolve, reject) => {
+    const s = doc.createElement('script');
+    s.src = XLSX_SRC;
+    s.onload = () => (globalThis.XLSX ? resolve(globalThis.XLSX) : reject(new Error('XLSX')));
+    s.onerror = () => {
+      s.remove();
+      reject(new Error('XLSX'));
+    };
+    doc.head.append(s);
+  }).catch(() => {
+    xlsxLoading = null;
+    throw new Error(t('엑셀 라이브러리를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.'));
+  });
+  return xlsxLoading;
+}
+
+export async function exportXlsx(trip) {
+  const XLSX = await loadXlsx();
   const rows = tripToRows(trip);
   const aoa = [EXPORT_HEADER.map((h) => t(h)), ...rows.map((r) => EXPORT_HEADER.map((h) => r[h] ?? ''))];
   const ws = XLSX.utils.aoa_to_sheet(aoa);

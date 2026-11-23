@@ -176,7 +176,7 @@ test('P4-6: 파비콘은 밝은 배지 + 흰 탭에서도 보이는 테두리, �
 });
 
 test('P4-7: 잘못된 공유 주소는 404 (서버: 형식 오류·없는 링크·없는 경로), 404 페이지는 네 언어', async () => {
-  const html = read('404.html');
+  const html = read('404.html') + read('404.js'); // 문구: 한국어는 404.html, 나머지 언어는 404.js (S-1: 인라인 스크립트 없음)
   for (const s of ['페이지나 공유 링크를 찾을 수 없어요', 'Page or shared link not found', '找不到该页面或分享链接', 'ページまたは共有リンクが見つかりません']) assert.ok(html.includes(s));
   const port = 5300 + Math.floor(Math.random() * 400);
   const srv = spawn(process.execPath, ['server.js'], { cwd: new URL('..', import.meta.url), env: { ...process.env, PORT: String(port), SHARE_DIR: '/nonexistent-share-dir' }, stdio: 'pipe' });

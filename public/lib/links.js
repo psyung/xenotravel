@@ -1,7 +1,8 @@
 // 붙여넣은 지도 링크나 "위도, 경도" 텍스트에서 위치를 읽는다.
 // 반환: null(링크/좌표 아님) | {lat, lng, name} | {query} (좌표 없이 장소 이름만 있음) | {error}
 //   error: 'short-link'(짧은 링크) | 'unsupported'(위치를 못 읽는 링크) | 'range'(좌표 범위 밖)
-import { t } from './i18n.js';
+import { t, k } from './i18n.js';
+import { LIMITS, limitError } from './limits.js';
 
 const NUM = '(-?\\d{1,3}(?:\\.\\d+)?)';
 const COORD_RE = new RegExp(`^${NUM}\\s*,\\s*${NUM}$`);
@@ -128,7 +129,14 @@ export function parseCsv(text) {
   return rows.filter((r) => r.some((c) => c.trim()));
 }
 
+/** 장소 일괄 가져오기: 한 번에 LIMITS.places개를 넘으면 아무것도 넣지 않고 이유를 알린다 (S-5) */
 export function parseLocationList(text) {
+  const out = parseLocationListAll(text);
+  if (out.places.length + out.names.length > LIMITS.places) return { ...out, places: [], names: [], error: limitError(k('장소 수'), LIMITS.places).message };
+  return out;
+}
+
+function parseLocationListAll(text) {
   const out = { places: [], names: [], shortLinks: 0, unsupported: 0 };
   const s = String(text ?? '').replace(/^﻿/, '').trim();
   if (!s) return out;

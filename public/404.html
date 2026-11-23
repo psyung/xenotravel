@@ -6,6 +6,7 @@
   <meta name="robots" content="noindex">
   <title>XenoTravel · 404</title>
   <link rel="icon" type="image/svg+xml" href="/icons/logo-xeno-route.svg">
+  <script src="/boot.js"></script><!-- 앱과 같은 언어·밝기 규칙 (S-1: 인라인 스크립트 없음) -->
   <style>
     /* 앱 스타일시트 없이도 보이게 최소 토큰만 (잉크 네이비 + 오션 블루) */
     :root { --bg: #F5F8FC; --paper: #FFFFFF; --ink: #0F1E2E; --sub: #475569; --line: #DFE7F0; --accent: #0A6FC2; color-scheme: light; }
@@ -31,30 +32,6 @@
     <p id="p">주소가 잘못되었거나 만료된 공유 링크예요. 보낸 사람에게 링크를 다시 받아 주세요. 내 여행은 이 브라우저에 그대로 있어요.</p>
     <a class="btn" id="a" href="/">XenoTravel 홈으로</a>
   </main>
-  <script>
-    // 앱과 같은 언어·밝기 (저장값 → 브라우저 언어). 앱 파일 없이 동작해야 해서 문구를 여기에 둔다.
-    (function () {
-      var T = {
-        en: ['Page or shared link not found', 'The address is wrong or the shared link has expired. Ask the sender for a new link. Your own trips are still saved in this browser.', 'Go to XenoTravel home', 'en'],
-        zh: ['找不到该页面或分享链接', '地址有误或分享链接已失效。请向发送者重新索取链接。你的行程仍保存在此浏览器中。', '返回 XenoTravel 首页', 'zh-Hans'],
-        ja: ['ページまたは共有リンクが見つかりません', 'アドレスが間違っているか、共有リンクの期限が切れています。送信者にもう一度リンクをもらってください。あなたの旅行はこのブラウザに保存されたままです。', 'XenoTravel ホームへ', 'ja'],
-      };
-      var l = null;
-      try { l = localStorage.getItem('xenotravel:lang'); } catch (e) {}
-      // 앱과 같은 규칙: 저장된 언어가 없으면 한국어 (홈으로 갔을 때 언어가 바뀌지 않게, GPT 3차 #15)
-      if (!l) l = 'ko';
-      var s = T[l];
-      if (s) {
-        document.documentElement.lang = s[3];
-        document.getElementById('h').textContent = s[0];
-        document.getElementById('p').textContent = s[1];
-        document.getElementById('a').textContent = s[2];
-      }
-      try {
-        var th = JSON.parse(localStorage.getItem('xenotravel:prefs') || '{}').theme;
-        if (th === 'light' || th === 'dark') document.documentElement.dataset.theme = th;
-      } catch (e) {}
-    })();
-  </script>
+  <script src="/404.js"></script>
 </body>
 </html>

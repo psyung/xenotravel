@@ -2,7 +2,8 @@
 // # 뒤(fragment)는 브라우저가 서버로 보내지 않으므로 일정 내용이 서버 로그에도 남지 않는다.
 // 링크는 만든 순간의 사본이라, 일정을 고친 뒤에는 링크를 다시 만들어 보내야 한다.
 import { uid, validateTrip } from './model.js';
-import { t, monthDay, tripLength } from './i18n.js';
+import { LIMITS, limitError } from './limits.js';
+import { t, k, monthDay, tripLength } from './i18n.js';
 
 /** 짧은 링크 id: 영문·숫자 8자 */
 export const SHORT_ID = /^[A-Za-z0-9]{8}$/;
@@ -145,6 +146,7 @@ export async function decodeShare(code) {
   const fail = () => {
     throw new Error(t('공유 링크가 잘렸거나 올바르지 않아요. 링크 전체를 다시 복사해 주세요.'));
   };
+  if (String(code ?? '').length > LIMITS.shareCode) throw limitError(k('공유 링크 글자 수'), LIMITS.shareCode); // S-5
   const [format, data] = String(code ?? '').split('.');
   if (format !== FORMAT || !data) fail();
   let raw;
@@ -156,7 +158,8 @@ export async function decodeShare(code) {
   }
   try {
     return fromSnapshot(raw);
-  } catch {
+  } catch (err) {
+    if (err?.code === 'limit') throw err; // 크기 제한은 그 이유를 그대로 알린다
     fail();
   }
 }

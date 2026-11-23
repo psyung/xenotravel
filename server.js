@@ -26,6 +26,9 @@ const TYPES = {
   '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
 
+// 보안 응답 헤더(S-1): vercel.json의 전체 경로 규칙을 그대로 써서 로컬과 배포가 같게 한다
+const SECURITY_HEADERS = (JSON.parse(await readFile(path.join(here, 'vercel.json'), 'utf8')).headers ?? []).find((h) => h.source === '/(.*)')?.headers ?? [];
+
 // 배포 식별자 (빌드 커밋 7자리): index.html 메타와 /version.json에 넣는다 (Vercel은 scripts/build-version.mjs가 파일로 만든다)
 const COMMIT = buildCommit();
 const BUILT_AT = new Date().toISOString();
@@ -213,6 +216,7 @@ async function staticFile(res, pathname) {
 
 http
   .createServer(async (req, res) => {
+    for (const { key, value } of SECURITY_HEADERS) res.setHeader(key, value);
     let pathname;
     try {
       pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);

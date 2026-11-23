@@ -4,6 +4,16 @@
   "buildCommand": "node scripts/build-version.mjs",
   "outputDirectory": "public",
   "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Permissions-Policy", "value": "geolocation=(self), web-share=(self), clipboard-write=(self), camera=(), microphone=(), payment=(), usb=(), serial=(), bluetooth=(), hid=(), midi=(), magnetometer=(), gyroscope=(), accelerometer=(), browsing-topics=()" },
+        { "key": "Content-Security-Policy-Report-Only", "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src 'self' data: https://cdn.jsdelivr.net; img-src 'self' data: blob: https://server.arcgisonline.com; connect-src 'self' https://photon.komoot.io https://nominatim.openstreetmap.org https://api.open-meteo.com https://archive-api.open-meteo.com https://open.er-api.com https://cdn.jsdelivr.net; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" }
+      ]
+    },
     { "source": "/version.json", "headers": [{ "key": "cache-control", "value": "no-cache" }] },
     { "source": "/sw.js", "headers": [{ "key": "cache-control", "value": "no-cache" }] },
     { "source": "/404.html", "headers": [{ "key": "cache-control", "value": "no-cache" }] }

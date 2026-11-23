@@ -83,6 +83,8 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ESC[c]);
+/** href 출력 (S-4): http/https만 통과(safeUrl)시키고 이스케이프한다. 앱이 만든 지도 주소도 같은 길로 */
+const href = (u) => esc(M.safeUrl(u));
 const debounce = (fn, ms) => {
   let timer;
   const run = (...a) => {
@@ -648,7 +650,7 @@ function directionsHtml(item, { from = prevPointOf(item), cls = 'dir-links' } = 
   if (!links.length) return '';
   const label = from ? t('{name}에서 출발', { name: from.name || t('직전 장소') }) : t('현재 위치에서 출발');
   return `<span class="${cls}" role="group" aria-label="${esc(t('길찾기'))} · ${esc(label)}" title="${esc(label)}"><span class="dir-label">${esc(t('길찾기'))}</span>${links
-    .map((x) => `<a href="${esc(x.url)}" target="_blank" rel="noopener" data-dir="${x.id}">${esc(x.label)}</a>`)
+    .map((x) => `<a href="${href(x.url)}" target="_blank" rel="noopener" data-dir="${x.id}">${esc(x.label)}</a>`)
     .join('')}</span>`;
 }
 
@@ -803,7 +805,7 @@ function trendSectionHtml() {
         <div class="tc-area">${esc(loc.area)}${p.approx ? ` · ${esc(t('대략 위치'))}` : ''}</div>
         <p class="tc-sum"${origAttr(loc)}>${esc(loc.summary)}${origTag(loc)}</p>
         <div class="tc-foot">
-          <span class="tc-src">${esc(t('출처'))} ${p.sources.map((s, i) => `<a href="${esc(s.url)}" target="_blank" rel="noopener" title="${esc(s.title)}" aria-label="${esc(t('출처 {n}: {title}', { n: i + 1, title: s.title }))}">${i + 1}</a>`).join(' ')}</span>
+          <span class="tc-src">${esc(t('출처'))} ${p.sources.map((s, i) => `<a href="${href(s.url)}" target="_blank" rel="noopener" title="${esc(s.title)}" aria-label="${esc(t('출처 {n}: {title}', { n: i + 1, title: s.title }))}">${i + 1}</a>`).join(' ')}</span>
           <button class="tc-add" data-action="add-trend" aria-label="${esc(t('{name} 일정에 담기', { name: loc.name }))}">${esc(t('+ 담기'))}</button>
         </div>
       </li>`,
@@ -1490,7 +1492,7 @@ function stayRowHtml(stay, dayIndex, pos, flags, leg = null) {
         <label>${esc(t('링크'))}<input type="url" data-sfield="url" value="${esc(stay.url)}" placeholder="${esc(t('예약 페이지'))}"></label>
         ${stay.address ? `<p class="addr">${esc(stay.address)}</p>` : ''}
         <div class="editor-actions">
-          <a href="${M.googleMapsUrl(stay)}" target="_blank" rel="noopener">${esc(t('구글맵에서 열기 ↗'))}</a>
+          <a href="${href(M.googleMapsUrl(stay))}" target="_blank" rel="noopener">${esc(t('구글맵에서 열기 ↗'))}</a>
           <button data-action="stay-delete" data-stay="${stay.id}" class="danger">${esc(t('숙소 삭제'))}</button>
         </div>
       </div>`
@@ -1512,7 +1514,7 @@ function legHtml(leg) {
     ? t('도보 약 {min}분 · {km}', { min: leg.walkMin, km: M.formatKm(leg.km) })
     : t('{km} · 대중교통', { km: M.formatKm(leg.km) });
   const mode = leg.mode === 'walking' ? t('도보') : t('대중교통');
-  return `<a class="leg" href="${leg.url}" target="_blank" rel="noopener"
+  return `<a class="leg" href="${href(leg.url)}" target="_blank" rel="noopener"
       title="${esc(t('직선거리 기준 어림값이에요. 누르면 구글맵 길찾기({mode})가 열려요', { mode }))}">
       <span class="leg-how">${esc(how)}</span><span class="leg-go">${esc(t('길찾기'))}</span></a>`;
 }
@@ -1524,10 +1526,10 @@ function detailHtml(x, { stay = false } = {}) {
   return `<div class="editor detail">
       ${stay ? `<p><b>${esc(t('{n}박', { n: x.nights }))}</b>${range.checkIn ? ` · ${esc(M.formatDate(range.checkIn))} ~ ${esc(M.formatDate(range.checkOut))}` : ''}</p>` : ''}
       ${x.memo ? `<p class="memo-text">${esc(x.memo)}</p>` : ''}
-      ${url ? `<p><a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a></p>` : ''}
+      ${url ? `<p><a href="${href(url)}" target="_blank" rel="noopener">${esc(url)}</a></p>` : ''}
       ${x.address ? `<p class="addr">${esc(x.address)}</p>` : ''}
       ${directionsHtml(x, stay ? { from: null } : {})}
-      <div class="editor-actions"><a href="${M.googleMapsUrl(x)}" target="_blank" rel="noopener">${esc(t('구글맵에서 열기 ↗'))}</a></div>
+      <div class="editor-actions"><a href="${href(M.googleMapsUrl(x))}" target="_blank" rel="noopener">${esc(t('구글맵에서 열기 ↗'))}</a></div>
     </div>`;
 }
 
@@ -1619,7 +1621,7 @@ function itemHtml(it, i, isDay, leg = null, listItems = null, overlap = '') {
       ${it.address ? `<p class="addr">${esc(it.address)}</p>` : ''}
       ${directionsHtml(it)}
       <div class="editor-actions">
-        <a href="${M.googleMapsUrl(it)}" target="_blank" rel="noopener">${esc(t('구글맵에서 열기 ↗'))}</a>
+        <a href="${href(M.googleMapsUrl(it))}" target="_blank" rel="noopener">${esc(t('구글맵에서 열기 ↗'))}</a>
         <span class="ea-buttons"><button data-action="place-move" aria-haspopup="dialog">${esc(t('다른 일차로 이동'))}</button> <button data-action="place-copy" aria-haspopup="dialog">${esc(t('다른 일차로 복제'))}</button> <button data-action="duplicate">${esc(t('같은 날 복제'))}</button> <button data-action="delete" class="danger">${esc(t('삭제'))}</button></span>
       </div>
     </div>`
@@ -1899,7 +1901,7 @@ function dayBodyHtml(l) {
 function dayToolsHtml(l) {
   const st = M.dayStays(trip, l.dayIndex);
   const url = M.routeDirectionsUrl(M.dayRoute(trip, l.dayIndex));
-  const link = url ? `<a class="route-link" href="${url}" target="_blank" rel="noopener" title="${esc(t('이 날 동선 전체를 구글맵 길찾기로 열기'))}">${esc(t('길찾기'))}</a>` : '';
+  const link = url ? `<a class="route-link" href="${href(url)}" target="_blank" rel="noopener" title="${esc(t('이 날 동선 전체를 구글맵 길찾기로 열기'))}">${esc(t('길찾기'))}</a>` : '';
   const copy = `<button data-action="day-copy" data-day="${l.dayIndex}" title="${esc(t('이 날 일정을 카톡에 붙일 글로 복사해요'))}">${esc(t('카톡용 복사'))}</button>`;
   const route = link + copy;
   if (ui.readonly) return route;
@@ -2898,9 +2900,9 @@ async function onDatesChange() {
 $('#startDate').addEventListener('change', onDatesChange);
 $('#endDate').addEventListener('change', onDatesChange);
 
-$('#exportXlsx').addEventListener('click', () => {
+$('#exportXlsx').addEventListener('click', async () => {
   try {
-    exportXlsx(trip);
+    await exportXlsx(trip);
   } catch (err) {
     toast(err.message, 4000);
   }
@@ -3741,7 +3743,7 @@ function todayRowHtml(it, n, isNext) {
       <div class="td-acts">
         ${canPay ? `<button type="button" data-today="pay" data-id="${it.id}" title="${esc(t('예정 비용 그대로 가계부에 기록'))}" aria-label="${esc(t('{name} 결제 기록', { name: it.name }))}">${esc(t('결제'))}</button>` : ''}
         <button type="button" data-today="copy" data-text="${esc(addr)}" title="${esc(t('주소 복사 (택시 기사에게 보여주기)'))}" aria-label="${esc(t('{name} 주소 복사', { name: it.name }))}">${esc(t('주소'))}</button>
-        <a href="${M.directionsFromHereUrl(it)}" target="_blank" rel="noopener" title="${esc(t('지금 위치에서 길찾기'))}" aria-label="${esc(t('{name} 길찾기', { name: it.name }))}">${esc(t('길찾기'))}</a>
+        <a href="${href(M.directionsFromHereUrl(it))}" target="_blank" rel="noopener" title="${esc(t('지금 위치에서 길찾기'))}" aria-label="${esc(t('{name} 길찾기', { name: it.name }))}">${esc(t('길찾기'))}</a>
       </div>
     </li>`;
 }
@@ -3766,7 +3768,7 @@ function renderToday() {
     ${
       s
         ? `<div class="td-stay"><div><span>${esc(t('오늘 밤 숙소'))}</span><b>${esc(s.name)}</b>${s.address ? `<small>${esc(s.address)}</small>` : ''}</div>
-          <div class="td-acts"><button type="button" data-today="copy" data-text="${esc(stayAddr)}">${esc(t('주소'))}</button><a href="${M.directionsFromHereUrl(s)}" target="_blank" rel="noopener">${esc(t('숙소로 가기'))}</a></div></div>`
+          <div class="td-acts"><button type="button" data-today="copy" data-text="${esc(stayAddr)}">${esc(t('주소'))}</button><a href="${href(M.directionsFromHereUrl(s))}" target="_blank" rel="noopener">${esc(t('숙소로 가기'))}</a></div></div>`
         : ''
     }
     <div class="td-foot">

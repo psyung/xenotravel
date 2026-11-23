@@ -1022,4 +1022,12 @@ export const MESSAGES = {
   "{n}개 중 {i}번째: {name} · Enter로 추가": ["{i} of {n}: {name} · press Enter to add", "第 {i} 个，共 {n} 个：{name} · 按 Enter 添加", "{n}件中{i}件目：{name} · Enterで追加"],
   "일정이 너무 커서 링크로 보낼 수 없어요. 일정 파일(JSON)을 보내고, 받는 사람에게 ‘백업 파일 불러오기’를 안내하세요.": ["This trip is too large to send as a link. Send the trip file (JSON) and ask the recipient to use ‘Import backup file’.", "行程太大，无法以链接发送。请发送行程文件（JSON），并告诉对方使用“导入备份文件”。", "旅程が大きすぎてリンクでは送れません。旅程ファイル（JSON）を送り、受け取る人に「バックアップファイルを読み込む」を案内してください。"],
   "일정 파일이 10MB를 넘어 받는 사람이 열 수 없어요. ‘메모·예약번호 제외’를 켜고 다시 저장해 주세요": ["The trip file is over 10MB, so the recipient can’t open it. Turn on ‘Exclude notes and booking numbers’ and save again", "行程文件超过 10MB，对方无法打开。请打开“不含备注和预订号”后重新保存", "旅程ファイルが10MBを超えていて受け取る人が開けません。「メモ・予約番号を除外」をオンにして保存し直してください"],
+  "데이터가 너무 커서 가져올 수 없어요: {what} 최대 {max}": ["The data is too large to import: {what} up to {max}","数据过大，无法导入：{what}最多 {max}","データが大きすぎて読み込めません：{what}は最大 {max}"],
+  "일수": ["days","天数","日数"],
+  "장소 수": ["places","地点数","スポット数"],
+  "지출 수": ["expenses","支出笔数","支出件数"],
+  "이름 글자 수": ["name length (characters)","名称字数","名前の文字数"],
+  "메모 글자 수": ["memo length (characters)","备注字数","メモの文字数"],
+  "링크 글자 수": ["link length (characters)","链接字数","リンクの文字数"],
+  "공유 링크 글자 수": ["shared link length (characters)","分享链接字数","共有リンクの文字数"],
 };
