@@ -358,7 +358,7 @@ body[data-view="board"] .board-only { display: inline-flex; }
 #search:focus { outline: 2px solid var(--accent); background: var(--paper); }
 #pickBtn { height: 40px; }
 .target { display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--sub); font-size: 13px; }
-.target select, .stay-opts input, .trend-city, .move-to, select.inp {
+.target select, .trend-city, .move-to, select.inp {
   border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; background: var(--paper); color: var(--ink); font-weight: 500; font-size: 13px;
 }
 .results {
@@ -374,9 +374,6 @@ body[data-view="board"] .board-only { display: inline-flex; }
 .results li.msg:hover { background: none; }
 .r-name { font-weight: 600; }
 .r-addr { color: var(--mute); font-size: 12px; }
-.stay-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; padding: 10px 12px; font-size: 13px; border-radius: 10px; background: var(--stay-soft); }
-.stay-opts .hint { color: var(--sub); font-size: 12px; }
-.nights-chip { display: inline-block; padding: 1px 8px; border-radius: 6px; background: var(--stay-solid); color: var(--on-solid); font-size: 12px; font-weight: 700; }
 
 /* ───────── 날짜 카드 ───────── */
 .days { display: flex; flex-direction: column; gap: 12px; }
@@ -488,7 +485,6 @@ body[data-view="board"] .board-only { display: inline-flex; }
 .stay-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 13px; }
 .stay-tag { flex: none; font-size: 11px; padding: 0 6px; line-height: 18px; border-radius: 5px; background: var(--stay-solid); color: var(--on-solid); font-weight: 600; }
 .stay-editor { margin-top: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); padding: 12px; }
-.stay-range { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: end; }
 .flight-main { width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; padding: 8px 12px; border-radius: 12px; border: 0; background: var(--fly-soft); color: var(--ink); }
 .fl-ic { color: var(--fly); display: inline-flex; }
 .fl-kind { color: var(--fly); font-weight: 700; font-size: 12px; flex: none; }
@@ -889,7 +885,6 @@ body.readonly .trip-title { pointer-events: none; }
   .layout[data-view="board"] .days { scroll-snap-type: x mandatory; }
   .layout[data-view="board"] .trend-col, .layout[data-view="board"] .daycard { flex-basis: 84vw; scroll-snap-align: start; }
   body[data-view="board"] .board-only { display: none; }
-  .stay-range { grid-template-columns: 1fr 1fr; }
 }
 
 /* ═════════ 메인 페이지 ═════════ */
@@ -1155,8 +1150,6 @@ button.kpi:hover { border-color: var(--accent); }
 .home-new .dp-field { height: auto; padding: 2px 0; border: 0; background: none; font-size: 15px; }
 .home-new .dp-field .dp-ic { display: none; }
 .home-new label:has(.dp-field) { cursor: pointer; }
-.stay-range label, .stay-opts label { min-width: 0; }
-.stay-range .dp-field { width: 100%; height: 34px; }
 .flight-form .dp-dt { display: flex; gap: 6px; min-width: 0; }
 .flight-form .dp-field { flex: 1; height: 40px; border: 0; border-radius: 10px; background: var(--soft); font-weight: 500; font-size: 14px; padding: 0 12px; }
 .flight-form .dp-time, .dp-time { width: 132px; flex: none; height: 40px; border: 0; border-radius: 10px; padding: 0 10px; background: var(--soft); color: var(--ink); font-variant-numeric: tabular-nums; }
@@ -1523,7 +1516,7 @@ body.picking .leaflet-bottom.leaflet-right { opacity: .4; pointer-events: none; 
 @media (max-width: 480px) {
   .menu-pop .menu-narrow { display: block !important; }
   hr.menu-narrow { display: block !important; }
-  #themeBtn, #flightsBtn, #shareBtn { display: none !important; }
+  #themeBtn, #flightsBtn, #staysBtn, #shareBtn { display: none !important; }
   .tripsw { flex: 1 1 auto; }
   .tripsw summary { max-width: none; }
   .topbar { gap: 4px; padding-inline: 8px; }
@@ -1553,15 +1546,15 @@ body.picking .leaflet-bottom.leaflet-right { opacity: .4; pointer-events: none; 
 .check-top .bulk button { min-height: 32px; padding-inline: 6px; }
 .check-top .bulk button:disabled { opacity: .55; }
 .check-tabs { display: none; }
-#flightDialog[open], #bulkDialog[open] {
+#flightDialog[open], #bulkDialog[open], dialog.p3-dialog[open] {
   display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden;
 }
-:is(#flightDialog, #bulkDialog) > .dialog-heading { margin: 0; padding: 14px 18px 10px; font-size: 18px; }
-:is(#flightDialog, #bulkDialog) > .dialog-body {
+:is(#flightDialog, #bulkDialog, .p3-dialog) > .dialog-heading { margin: 0; padding: 14px 18px 10px; font-size: 18px; }
+:is(#flightDialog, #bulkDialog, .p3-dialog) > .dialog-body {
   min-height: 0; overflow: auto; overscroll-behavior: contain; padding-block: 6px;
 }
-:is(#flightDialog, #bulkDialog) > .dialog-body::before { display: none; }
-:is(#flightDialog, #bulkDialog) > .dialog-actions {
+:is(#flightDialog, #bulkDialog, .p3-dialog) > .dialog-body::before { display: none; }
+:is(#flightDialog, #bulkDialog, .p3-dialog) > .dialog-actions {
   margin: 0; padding: 8px 18px max(10px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line);
 }
 @media (max-width: 767px) {
@@ -1999,7 +1992,7 @@ dialog.preset-dialog { width: min(520px, calc(100vw - 32px)); }
 dialog:modal { margin: auto; }
 @media (max-width: 599px) {
   dialog:modal, dialog#flightDialog:modal, dialog#new-trip-modal:modal, dialog.share-dialog:modal, dialog.bulk-dialog:modal,
-  dialog.dayops-dialog:modal, dialog.preset-dialog:modal, dialog.privacy-dialog:modal, dialog.ask-dialog:modal {
+  dialog.dayops-dialog:modal, dialog.preset-dialog:modal, dialog.privacy-dialog:modal, dialog.ask-dialog:modal, dialog.p3-dialog:modal {
     width: 100%; max-width: 100%; margin: auto 0 0; border-radius: 22px 22px 0 0;
     max-height: min(88dvh, calc(100dvh - env(safe-area-inset-top) - 12px)); padding-bottom: env(safe-area-inset-bottom);
   }
@@ -2043,7 +2036,6 @@ dialog:modal { margin: auto; }
 .mini-tabs, .mini-map-toggle { display: none; }
 .search.card.compact { position: fixed; top: calc(var(--head) + var(--offbar, 0px) + var(--savebar, 0px)); z-index: 25; padding: 6px 8px; border-radius: 0 0 12px 12px; box-shadow: var(--card-shadow); }
 .search.card.compact:not(:focus-within):not(:has(.results li)) .target-row,
-.search.card.compact:not(:focus-within):not(:has(.results li)) .stay-opts,
 .search.card.compact .results:not(:has(li)) { display: none !important; }
 /* 검색 중(입력·결과)에는 "추가할 곳"과 숙소 날짜를 다시 보여 준다 (보이지 않는 대상·날짜로 추가되지 않게) */
 .search.card.compact:is(:focus-within, :has(.results li)) { max-height: calc(100dvh - var(--head) - 16px); overflow-y: auto; }
@@ -2099,3 +2091,30 @@ dialog:modal { margin: auto; }
 .uis-check { flex: none; width: 16px; height: 16px; margin-left: auto; color: var(--accent); visibility: hidden; }
 .uis-list li[aria-selected="true"] .uis-check { visibility: visible; }
 .uis-empty { color: var(--mute); justify-content: center; }
+
+/* Stay editor and itinerary place index use the same modal and sheet layout. */
+dialog.p3-dialog { width: min(520px, calc(100vw - 32px)); overflow-wrap: anywhere; }
+.p3-form, .p3-results { display: grid; gap: 8px; }
+.p3-form fieldset { min-inline-size: 0; margin: 0; padding: 8px; border: 1px solid var(--line); border-radius: 10px; }
+.p3-form label:not(.p3-check) { display: grid; min-width: 0; gap: 4px; }
+.p3-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.p3-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.p3-form input:not([type="checkbox"]), .p3-form textarea, .p3-form .dp-field, .p3-form select {
+  width: 100%; min-width: 0; min-height: 40px; box-sizing: border-box;
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; background: var(--soft); color: var(--ink);
+}
+.p3-form .flatpickr-wrapper { min-width: 0; }
+.p3-form .p3-check, .p3-sort { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 40px; }
+.p3-form .p3-check input { width: 20px; height: 20px; accent-color: var(--accent); }
+.p3-dialog button, .p3-actions > button, #stayShortcut, #placeGroupsBtn, [data-action="stay-here"] { min-height: 40px; }
+.p3-dialog .dialog-actions { flex-wrap: wrap; }
+#stayList .icon { width: 40px; }
+#stayList [aria-pressed="true"] strong { color: var(--accent); }
+.p3-row { padding: 12px 0; display: grid; gap: 6px; border-bottom: 1px solid var(--line); }
+.p3-row h3 { margin: 0; }
+.p3-row small { color: var(--sub); }
+.place-visit { border-radius: 999px; background: var(--soft); }
+#placeGroupsBtn { margin-block: 8px; }
+.tile[data-open-place-groups] { min-height: 40px; text-align: start; cursor: pointer; }
+.tile[data-open-place-groups]:is(:hover, :focus-visible, :active) { border-color: var(--accent); }
+#staysBtn, [data-menu="stays"], [data-ctx-add="stay"] { min-height: 40px; }

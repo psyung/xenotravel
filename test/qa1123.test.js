@@ -73,8 +73,8 @@ test('P0-9: 숙소 기간 밖 날짜 → 늘릴 기간 (체크아웃 날은 밤�
 test('P0-9: 숙소 달력은 여행 기간 밖을 막지 않고 흐리게만 (data-dp-soft-*)', () => {
   const app = appSource();
   assert.doesNotMatch(app, /inEl\.min = M\.dateAtIndex\(trip, 0\)/);
-  assert.match(app, /data-dp-soft-min=/);
-  assert.match(app, /data-dp-soft-max=/);
+  assert.match(app, /checkIn\.dataset\.dpSoftMin\s*=/);
+  assert.match(app, /checkOut\.dataset\.dpSoftMax\s*=/);
   assert.match(read('lib/datepicker.js'), /getDayParts/);
   assert.match(read('styles.css'), /::part\(off-trip\)/);
   assert.match(app, /extendTripFor\(checkIn, checkOut, \{ checkout: true \}\)/);
@@ -324,7 +324,7 @@ test('교차 리뷰 #1: 최대 일수를 넘는 늘리기는 하지 않는다 (�
   assert.equal(M.extendedRange(t, '2026-11-22', '2026-11-24', { checkout: true }).tooLong, true);
   const short = M.createTrip({ title: 'J', startDate: '2026-11-23', endDate: '2026-11-30' });
   assert.equal(M.extendedRange(short, '2026-11-22', '2026-11-24', { checkout: true }).tooLong, false);
-  assert.match(appSource(), /if \(r\.tooLong\) \{/);
+  assert.match(appSource(), /if \(!r\.tooLong\) actions\.push\(\{ value: 'extend'/);
 });
 
 test('교차 리뷰 #2: 통화만 바꾼 지출도 "고친 지출", 예전 기록(auto 없음)은 물어본다', () => {

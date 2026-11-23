@@ -598,7 +598,7 @@ test('R3-4·7·9·10: 항공편만 있는 날 PDF · 미리보기 표식에 항�
   const app = appSource();
   assert.match(app, /if \(!route\.length\) \{\n      div\.remove\(\);/);
   assert.match(app, /\(trip\.flights \?\? \[\]\)\.map\(\(f\) => \[f\.id, f\.kind, f\.departAt, f\.arriveAt, f\.flightNo, f\.from, f\.to\]\)/, '편명·공항도 (4차 #4)');
-  assert.match(app, /d\.items\.map\(\(x\) => \[x\.id, x\.time, x\.name\]\)/, '장소 이름도 (5차 #3)');
+  assert.match(app, /d\.items\.map\(\(x\) => \[x\.id, x\.time, x\.name, x\.lat, x\.lng, x\.url\]\)/, '장소 이름과 중복 판정 정보도');
   assert.match(app, /\(trip\.stays \?\? \[\]\)\.map\(\(s\) => \[s\.id, s\.startIndex, s\.nights, s\.name\]\)/);
   assert.match(app, /if \(!li\) return;\n  if \(ui\.resultsFor !== searchEl\.value\.trim\(\)\) return void runSearch/);
   assert.match(app, /if \(ctx\.trip !== forTrip \|\| seq !== rateRequest\) return;\n/, '최신 요청만 성공을 알린다 (5차 #7)');
@@ -722,7 +722,7 @@ test('R6-7: 상태색 바탕 글자(on-solid)는 라이트·다크 모두 4.5:1 
     const on = /--on-solid: (#[0-9A-F]{6})/i.exec(l)[1];
     for (const k of ['stay', 'ok', 'hot', 'fly']) assert.ok(ratio(on, new RegExp(`--${k}-solid: (#[0-9A-F]{6})`, 'i').exec(l)[1]) >= 4.5, `${k} ${l.slice(0, 30)}`);
   }
-  for (const sel of ['.nights-chip', '.stay-tag', '.fl-ref', '.item.visited .num']) {
+  for (const sel of ['.stay-tag', '.fl-ref', '.item.visited .num']) {
     const rule = css.split('\n').find((x) => x.startsWith(`${sel} {`));
     assert.doesNotMatch(rule, /color: #fff/, sel);
   }

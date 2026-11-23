@@ -50,6 +50,8 @@ const APP_FILES = [
   'lib/datepicker.js',
   'lib/destinations.js',
   'lib/dayops.js',
+  'lib/place-groups.js',
+  'lib/stays.js',
   'lib/export.js',
   'lib/geo.js',
   'lib/i18n.js',

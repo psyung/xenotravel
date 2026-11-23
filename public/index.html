@@ -53,6 +53,7 @@
       </nav>
       <div class="actions">
         <button id="shareBtn" class="pill page-trip" data-i18n-attr="title=앱 설치 없이 볼 수 있는 링크 만들기;aria-label=공유"><svg class="ic" aria-hidden="true"><use href="#i-share"/></svg><span class="hide-sm" data-i18n="공유">공유</span></button>
+        <button id="staysBtn" class="pill page-trip edit-only" data-i18n-attr="aria-label=숙소"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg><span class="hide-sm" data-i18n="숙소">숙소</span></button>
         <button id="flightsBtn" class="pill page-trip" data-i18n-attr="aria-label=항공편"><svg class="ic" aria-hidden="true"><use href="#i-ticket"/></svg><span class="hide-sm" data-i18n="항공편">항공편</span></button>
         <details class="menu">
           <summary class="pill round" data-i18n-attr="aria-label=더보기"><svg class="ic" aria-hidden="true"><use href="#i-more"/></svg><span id="backupDot" aria-hidden="true" hidden></span></summary>
@@ -61,6 +62,7 @@
             <button id="exportPdf" class="page-trip" data-i18n="PDF (인쇄용)">PDF (인쇄용)</button>
             <button data-menu="calendar" class="page-trip" data-i18n="캘린더에 추가 (.ics)">캘린더에 추가 (.ics)</button>
             <hr class="menu-narrow">
+            <button data-menu="stays" class="page-trip menu-narrow edit-only" data-i18n="숙소">숙소</button>
             <button data-menu="flights" class="page-trip menu-narrow edit-only" data-i18n="항공편">항공편</button>
             <button data-menu="share" class="page-trip menu-narrow" data-i18n="공유">공유</button>
             <button data-menu="theme" id="themeMenu" class="menu-narrow"></button>
@@ -176,18 +178,13 @@
             </div>
             <div class="target-row">
               <label class="target"><span data-i18n="추가할 곳">추가할 곳</span> <select id="target" data-ui-select></select></label>
+              <button type="button" id="stayShortcut" class="btn" data-i18n="숙소로 추가">숙소로 추가</button>
               <button type="button" id="bulkBtn" class="linkbtn" data-i18n="링크 여러 개 담기" data-i18n-attr="title=구글맵 링크 여러 개, 구글 테이크아웃 저장 장소 파일">링크 여러 개 담기</button>
-            </div>
-            <div id="stayOpts" class="stay-opts" data-dp-pair="숙소 날짜" data-dp-min-nights="1" hidden>
-              <label><span data-i18n="체크인">체크인</span> <input type="date" id="stayIn" data-dp="start" aria-label="체크인"></label>
-              <span class="arrow">→</span>
-              <label><span data-i18n="체크아웃">체크아웃</span> <input type="date" id="stayOut" data-dp="end" aria-label="체크아웃"></label>
-              <span id="stayNightsLabel" class="nights-chip"></span>
-              <span class="hint" data-i18n="숙소 이름을 검색하거나 ‘지도에서 찍기’로 위치를 골라요.">숙소 이름을 검색하거나 ‘지도에서 찍기’로 위치를 골라요.</span>
             </div>
             <ul id="results" class="results" hidden></ul>
             <span id="resultsStatus" class="sr-only" role="status" aria-live="polite"></span>
           </div>
+          <button type="button" id="placeGroupsBtn" class="btn" data-open-place-groups data-i18n="장소 모아보기">장소 모아보기</button>
           <div id="planEmpty"></div>
           <div id="dayTabs" class="daytabs" role="tablist" data-i18n-attr="aria-label=날짜로 이동"></div>
           <div id="days" class="days"></div>
@@ -295,6 +292,49 @@
       <button type="submit" id="flightSubmit" form="flightForm" class="btn primary"></button>
     </div>
   </dialog>
+  <dialog id="stayDialog" class="p3-dialog" aria-labelledby="stayTitle">
+    <h2 class="dialog-heading" id="stayTitle" data-i18n="숙소">숙소</h2>
+    <div class="dialog-body">
+      <ul id="stayList" class="trip-list"></ul>
+      <form id="stayForm" class="p3-form">
+        <h3 id="stayFormTitle"></h3>
+        <label><span data-i18n="숙소 이름">숙소 이름</span><input name="name" maxlength="200" required></label>
+        <fieldset>
+          <legend data-i18n="숙소 위치">숙소 위치</legend>
+          <div class="p3-actions">
+            <input id="stayLocationQuery" type="search" data-i18n-attr="aria-label=위치 검색;placeholder=위치 검색">
+            <button type="button" id="staySearchBtn" class="btn" data-i18n="검색">검색</button>
+            <button type="button" id="stayPickBtn" class="btn" data-i18n="지도에서 찍기">지도에서 찍기</button>
+          </div>
+          <p id="stayLocation" class="fine" role="status"></p>
+          <div id="staySearchResults" class="p3-results"></div>
+        </fieldset>
+        <div class="p3-fields" data-dp-pair="숙소 날짜" data-dp-min-nights="1">
+          <label><span data-i18n="체크인">체크인</span><input name="checkIn" type="date" data-dp="start" aria-label="체크인"></label>
+          <label><span data-i18n="체크아웃">체크아웃</span><input name="checkOut" type="date" data-dp="end" aria-label="체크아웃"></label>
+        </div>
+        <div class="p3-fields">
+          <label><span data-i18n="체크인 시간">체크인 시간</span><input name="checkInTime" type="time"></label>
+          <label><span data-i18n="체크아웃 시간">체크아웃 시간</span><input name="checkOutTime" type="time"></label>
+          <label><span data-i18n="예약번호">예약번호</span><input name="bookingRef" maxlength="200" autocomplete="off"></label>
+          <label><span data-i18n="전화번호">전화번호</span><input name="phone" type="tel" maxlength="200"></label>
+          <label><span data-i18n="숙박 금액">숙박 금액</span><input name="price" type="number" min="0" step="any"></label>
+          <label><span data-i18n="통화">통화</span><select name="cur" data-ui-select>
+            <option value="local" data-i18n="현지 통화">현지 통화</option><option value="KRW">KRW</option>
+          </select></label>
+        </div>
+        <label class="p3-check"><input type="checkbox" name="paid"><span data-i18n="결제 완료">결제 완료</span></label>
+        <label><span data-i18n="메모">메모</span><textarea name="memo" maxlength="5000"></textarea></label>
+        <label><span data-i18n="링크">링크</span><input name="url" type="url" maxlength="2000"></label>
+        <p id="stayError" class="form-error" role="alert" hidden></p>
+      </form>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" id="stayNew" class="btn" data-i18n="새로 입력">새로 입력</button>
+      <button type="button" id="stayClose" class="btn ghost" data-i18n="닫기">닫기</button>
+      <button type="submit" form="stayForm" class="btn primary" data-i18n="저장">저장</button>
+    </div>
+  </dialog>
   <dialog id="bulkDialog" class="bulk-dialog" aria-labelledby="bulkTitle">
     <h2 class="dialog-heading" id="bulkTitle" data-i18n="장소 여러 개 한 번에 담기">장소 여러 개 한 번에 담기</h2>
     <div class="dialog-body">
@@ -359,6 +399,20 @@
   </dialog>
 
   <!-- Phase 4: 다른 일차로 이동·복제 / 일자 순서 바꾸기 (미리보기 → 확정). 내용은 app.js가 채운다 -->
+  <dialog id="placeGroupsDialog" class="p3-dialog" aria-labelledby="placeGroupsTitle">
+    <h2 class="dialog-heading" id="placeGroupsTitle" data-i18n="장소 모아보기">장소 모아보기</h2>
+    <div class="dialog-body">
+      <label class="p3-sort"><span data-i18n="정렬">정렬</span>
+        <select id="placeGroupsSort" data-ui-select>
+          <option value="visit" data-i18n="방문 순">방문 순</option>
+          <option value="name" data-i18n="이름순">이름순</option>
+          <option value="count" data-i18n="등장 횟수순">등장 횟수순</option>
+        </select>
+      </label>
+      <div id="placeGroupsList"></div>
+    </div>
+    <div class="dialog-actions"><button type="button" class="btn ghost" data-close-place-groups data-i18n="닫기">닫기</button></div>
+  </dialog>
   <dialog id="dayOpsDialog" class="dayops-dialog" aria-labelledby="dayOpsTitle">
     <div class="dialog-body">
       <h2 id="dayOpsTitle"></h2>

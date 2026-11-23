@@ -515,12 +515,12 @@ export function placeExpense(trip, itemId) {
  * → { expense, created } | null (장소가 없거나 금액이 없음)
  */
 export function payPlace(trip, itemId, { amount, cur, today = '' } = {}) {
-  const found = findItem(trip, itemId);
-  if (!found) return null;
-  const it = found.item;
-  const price = Number(String(amount ?? it.cost?.price ?? '').replace(/,/g, ''));
+  const stay = trip.stays?.find((s) => s.id === itemId);
+  const it = stay ?? findItem(trip, itemId)?.item;
+  if (!it) return null;
+  const price = Number(String(amount ?? (stay ? stay.price : it.cost?.price) ?? '').replace(/,/g, ''));
   if (!(price > 0)) return null;
-  const c = (cur ?? it.cost?.cur) === 'KRW' ? 'KRW' : 'local';
+  const c = (cur ?? (stay ? stay.cur : it.cost?.cur)) === 'KRW' ? 'KRW' : 'local';
   const budget = ensureBudget(trip);
   const old = placeExpense(trip, itemId);
   if (old) {
@@ -532,7 +532,7 @@ export function payPlace(trip, itemId, { amount, cur, today = '' } = {}) {
   }
   const i = indexOfDate(trip, today);
   const day = i != null && i >= 0 && i < trip.days.length ? i : -1;
-  const e = addExpense(trip, { amount: price, cur: c, cat: PLACE_CAT[it.category] ?? 'etc', pay: 'card', day, memo: it.name });
+  const e = addExpense(trip, { amount: price, cur: c, cat: stay ? 'stay' : PLACE_CAT[it.category] ?? 'etc', pay: 'card', day, memo: it.name });
   e.placeId = it.id;
   return { expense: e, created: true };
 }
@@ -551,19 +551,20 @@ export function unpayPlace(trip, itemId) {
 export function placePlanned(trip) {
   const budget = ensureBudget(trip);
   const out = { total: 0, byCat: {}, priced: 0, noRate: 0 };
-  for (const d of trip.days) {
-    for (const it of d.items) {
-      if (!(it.cost?.price > 0)) continue;
-      out.priced++;
-      const krw = toKrw(it.cost.price, it.cost.cur, budget);
-      if (krw == null) {
-        out.noRate++;
-        continue;
-      }
-      const cat = PLACE_CAT[it.category] ?? 'etc';
-      out.total += krw;
-      out.byCat[cat] = (out.byCat[cat] ?? 0) + krw;
+  const costs = trip.days.flatMap((day) => day.items.map((item) => ({
+    ...item.cost, cat: PLACE_CAT[item.category] ?? 'etc',
+  })));
+  for (const { price, cur } of trip.stays ?? []) costs.push({ price, cur, cat: 'stay' });
+  for (const { price, cur, cat } of costs) {
+    if (!(price > 0)) continue;
+    out.priced++;
+    const krw = toKrw(price, cur, budget);
+    if (krw == null) {
+      out.noRate++;
+      continue;
     }
+    out.total += krw;
+    out.byCat[cat] = (out.byCat[cat] ?? 0) + krw;
   }
   return out;
 }

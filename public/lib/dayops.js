@@ -1,3 +1,4 @@
+import { samePlace } from './place-groups.js';
 // 일차 간 이동·복제와 일자 순서 바꾸기 (Phase 4). 순수 함수만 둔다 — 화면(미리보기·실행 취소)은 app.js.
 // 일차의 날짜·숙소·항공편은 날짜에 붙어 있다. 옮기는 것은 장소(items)뿐이고, 미리보기에서 대상 날의 항공편·숙소와
 // 시간 충돌을 먼저 계산해 보여 준다. 실행한 작업마다 되돌리기 함수를 만들어 실행 취소 스택에 따로 쌓는다.
@@ -206,4 +207,35 @@ export function moveInOrder(order, index, dir) {
   const next = [...order];
   [next[index], next[j]] = [next[j], next[index]];
   return next;
+}
+
+/** Day choices for copying, with existing matches left unchecked by default. */
+export function copyDayChoices(trip, itemId) {
+  const found = findItem(trip, itemId);
+  if (!found) return [];
+  return trip.days.map((day, index) => ({
+    index,
+    disabled: day.id === found.listId,
+    duplicate: day.items.some((item) => samePlace(item, found.item)),
+  }));
+}
+
+export function defaultCopyDays(trip, itemId, preferred) {
+  const available = copyDayChoices(trip, itemId).filter((day) => !day.disabled && !day.duplicate);
+  const day = available.find(({ index }) => index === preferred) ?? available[0];
+  return new Set(day ? [day.index] : []);
+}
+
+export function copyToDays(trip, itemId, days) {
+  const selected = new Set(days);
+  const copies = copyDayChoices(trip, itemId)
+    .filter(({ index, disabled }) => !disabled && selected.has(index))
+    .map(({ index }) => copyToDay(trip, itemId, index));
+  if (!copies.length) return null;
+  return {
+    items: copies.map(({ item }) => item),
+    undo(current) {
+      return copies.map((copy) => copy.undo(current)).some(Boolean);
+    },
+  };
 }

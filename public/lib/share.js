@@ -48,7 +48,11 @@ function shareSnapshot(trip, { includePrivate = false } = {}) {
       ...place(it), time: it.time, category: it.category,
     })) })),
     inbox: (trip.inbox ?? []).map((it) => ({ ...place(it), time: it.time, category: it.category })),
-    stays: (trip.stays ?? []).map((stay) => ({ ...place(stay), startIndex: stay.startIndex, nights: stay.nights })),
+    stays: (trip.stays ?? []).map((stay) => ({
+      ...place(stay), startIndex: stay.startIndex, nights: stay.nights,
+      checkInTime: stay.checkInTime || undefined, checkOutTime: stay.checkOutTime || undefined,
+      ...(includePrivate ? { bookingRef: stay.bookingRef, phone: stay.phone } : {}),
+    })),
     flights: (trip.flights ?? []).map(({ kind, flightNo, from, to, departAt, arriveAt, bookingRef, memo }) => ({
       kind, flightNo, from, to, departAt, arriveAt, ...(includePrivate ? { bookingRef, memo } : {}),
     })),
@@ -192,7 +196,8 @@ function fromSnapshot(raw) {
     inbox: v.inbox.map(item),
     stays: v.stays.map((s) => {
       const { id, time, category, ...rest } = item(s);
-      return { ...rest, id, startIndex: s.startIndex, nights: s.nights };
+      return { ...rest, id, startIndex: s.startIndex, nights: s.nights,
+        checkInTime: s.checkInTime, checkOutTime: s.checkOutTime, bookingRef: s.bookingRef, phone: s.phone };
     }),
     flights: v.flights.map((f) => ({
       id: uid(),

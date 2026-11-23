@@ -8,7 +8,7 @@ import * as B from './lib/budget.js';
 import * as C from './lib/checklist.js';
 import { encodeShare, decodeShare, shareUrl, shareCodeFromHash, shareSummary, shareMessage, sharedCopy } from './lib/share.js';
 import { enhanceDates, refreshDates } from './lib/datepicker.js';
-import { enhanceTimes, destroyTimes } from './lib/timefield.js';
+import { enhanceTimes, destroyTimes, normalizeTime } from './lib/timefield.js';
 import { watchSelects } from './lib/select.js';
 import { enhanceSuggestions } from './lib/suggestions.js';
 import { loadWeather, weatherSignature } from './lib/weather.js';
@@ -16,6 +16,8 @@ import { t, k, missing as i18nMissing, LANGS, LANG_KEY, getLang, setLang, loadLa
 import { privacySections } from './lib/privacy.js';
 import { createUndoStack } from './lib/undo.js';
 import * as D from './lib/dayops.js';
+import { stayRangeWithin, overlappingStays, splitStayAround } from './lib/stays.js';
+import { groupPlaces, removePlaceGroup } from './lib/place-groups.js';
 import { summaryModel, drawSummary, summaryFileName } from './lib/summary.js';
 import { DESTINATIONS, resolveDestination, repairTripCenter } from './lib/destinations.js';
 import { backupReason, backupReasonText, lastBackupLabel } from './lib/backup.js';
@@ -912,8 +914,11 @@ function fitTo(bounds) {
 $('#pickConfirm').addEventListener('click', () => {
   if (!ui.picking || !trip || ui.readonly) return;
   const latlng = map.wrapLatLng(map.getCenter());
+  const draft = stayMapDraft;
+  stayMapDraft = null;
   setPicking(false);
-  showLocationChoices(latlng);
+  if (draft) resumeStayFromMap(draft, latlng);
+  else showLocationChoices(latlng);
 });
 
 map.on('contextmenu', (e) => {
@@ -981,22 +986,17 @@ async function showLocationChoices(latlng) {
       ${trip.days.map((d, i) => `<option value="${esc(d.id)}">${esc(dayName(i))} · ${esc(shortDate(d.date))}</option>`).join('')}
     </select>` : ''}
     <button class="ctx-btn" data-ctx-add="item"></button>
-    <button class="ctx-btn stay" data-ctx-add="stay"></button>
-    <small class="ctx-note"></small>`;
+    <button class="ctx-btn stay" data-ctx-add="stay"></button>`;
   const select = content.querySelector('select');
   const item = content.querySelector('[data-ctx-add="item"]');
   const stay = content.querySelector('[data-ctx-add="stay"]');
-  const range = () => {
-    const start = trip.days.findIndex((day) => day.id === dayId);
-    return { start, nights: start < 0 ? 0 : Math.min(M.DEFAULT_NIGHTS, trip.days.length - 1 - start) };
-  };
+  const dayIndex = () => trip.days.findIndex((day) => day.id === dayId);
   function updateActions() {
-    const { start, nights } = range();
+    const start = dayIndex();
     item.disabled = start < 0;
-    stay.disabled = !nights;
+    stay.disabled = start < 0;
     item.textContent = t('+ 이 위치 추가') + (start < 0 ? '' : ` (${dayName(start)})`);
-    stay.textContent = t('숙소로 추가') + (nights ? ` (${t('{day}부터 {n}박', { day: dayName(start), n: nights })})` : '');
-    content.querySelector('.ctx-note').textContent = start >= 0 && !nights ? t('이 날짜부터 숙박할 수 없어요') : '';
+    stay.textContent = t('숙소로 추가');
   }
   if (select) {
     select.value = dayId ?? '';
@@ -1028,33 +1028,15 @@ async function showLocationChoices(latlng) {
   });
   (select ?? item).focus({ preventScroll: true });
   item.addEventListener('click', () => {
-    if (context !== mapDayContext() || range().start < 0) return;
+    if (context !== mapDayContext() || dayIndex() < 0) return;
     map.closePopup(popup);
     addPlace(place, { edit: true, listId: dayId });
   });
-  stay.addEventListener('click', async () => {
-    if (context !== mapDayContext()) return;
-    const { start, nights } = range();
-    if (!nights) return;
-    const overlaps = () => trip.stays.filter((s) => s.startIndex < start + nights && s.startIndex + s.nights > start);
-    const conflicts = overlaps();
-    if (conflicts.length) {
-      const dates = conflicts.map((s) => {
-        const { checkIn, checkOut } = M.stayDates(trip, s);
-        return `${s.name} (${shortDate(checkIn)} – ${shortDate(checkOut)})`;
-      }).join(', ');
-      const choice = await ask({
-        title: t('겹치는 숙소를 교체할까요?'),
-        body: dates,
-        actions: [{ value: 'replace', label: t('교체'), danger: true }],
-      });
-      if (!choice || locationChoice?.popup !== popup || context !== mapDayContext()) return;
-      if (JSON.stringify(overlaps()) !== JSON.stringify(conflicts)) return;
-      const ids = new Set(conflicts.map((s) => s.id));
-      trip.stays = trip.stays.filter((s) => !ids.has(s.id));
-    }
+  stay.addEventListener('click', () => {
+    const start = dayIndex();
+    if (context !== mapDayContext() || start < 0) return;
     map.closePopup(popup);
-    addStayFromOpts(place, { start, nights });
+    openStays({ place, start });
   });
   try {
     const r = await reversePlace(lat, lng);
@@ -1082,7 +1064,7 @@ pickViewport.addEventListener('change', syncPickNavigation);
 /** 지도에서 찍기의 빠른 이동: 지금 추가할 일차의 마지막 장소(없으면 숙소·여행지) */
 function pickAnchor() {
   if (!trip) return null;
-  const listId = ui.target === STAY_TARGET ? lastListId() : ui.target;
+  const listId = ui.target;
   const items = M.getList(trip, listId) ?? [];
   const di = trip.days.findIndex((d) => d.id === listId);
   const st = di >= 0 ? M.dayStays(trip, di) : {};
@@ -1134,6 +1116,12 @@ function setPicking(on, { cancelled = false } = {}) {
     $('#pickLast').hidden = !last;
   }
   syncPickNavigation();
+  if (!on && stayMapDraft) {
+    const draft = stayMapDraft;
+    stayMapDraft = null;
+    if (cancelled) resumeStayFromMap(draft);
+    return;
+  }
   if (cancelled) {
     // 시작 버튼으로 돌아간다 (좁은 화면은 일정 화면에 있다)
     if (pickViewport.matches) showTab('plan');
@@ -1472,9 +1460,7 @@ function renderPlanEmpty() {
   el.innerHTML = show
     ? `<section class="plan-empty card" aria-labelledby="planEmptyTitle">
         <h2 id="planEmptyTitle">${esc(t('첫 장소를 추가해 보세요'))}</h2>
-        <p>${esc(ui.target === STAY_TARGET
-          ? t('숙소를 검색하거나 구글맵 링크를 붙여넣으면 숙소로 추가돼요 ({range}). 지도에서 찍을 때는 지도 일차를 사용해요.', { range: stayOptsLabel() })
-          : t('장소를 검색하거나 구글맵 링크를 붙여넣으면 {target}에 담겨요. 지도에서 찍을 때는 지도 일차를 사용해요.', { target: targetLabel() }))}</p>
+        <p>${esc(t('장소를 검색하거나 구글맵 링크를 붙여넣으면 {target}에 담겨요. 지도에서 찍을 때는 지도 일차를 사용해요.', { target: targetLabel() }))}</p>
         <div class="plan-empty-actions">
           <button type="button" class="btn primary" data-empty="search">${esc(t('장소 검색하기'))}</button>
           <button type="button" class="btn" data-empty="pick">${esc(t('지도에서 찍기'))}</button>
@@ -1492,53 +1478,21 @@ $('#planEmpty').addEventListener('click', (e) => {
   else if (act === 'bulk') openBulk();
 });
 
-const STAY_TARGET = '__stay';
-
 function renderTarget() {
   const lists = allLists();
-  if (ui.target !== STAY_TARGET && !lists.some((l) => l.id === ui.target)) ui.target = trip.days[0]?.id ?? M.INBOX;
+  if (!lists.some((l) => l.id === ui.target)) ui.target = trip.days[0]?.id ?? M.INBOX;
   $('#target').innerHTML =
     lists
       .map((l, i) => {
         const label = l.isDay ? M.dayTitle(trip.days[i], i) : t('장소 보관함 (날짜 미정)');
         return `<option value="${l.id}"${l.id === ui.target ? ' selected' : ''}${l.isDay ? dayOptionAttrs(i) : ''}>${esc(label)}</option>`;
       })
-      .join('') + `<option value="${STAY_TARGET}"${ui.target === STAY_TARGET ? ' selected' : ''}>${esc(t('숙소로 추가'))}</option>`;
-  renderStayOpts();
+      .join('');
   renderPlanEmpty(); // 첫 장소 안내도 지금 고른 추가 대상을 따른다
 }
 
-/** 숙소 추가 옵션: 체크인 일차 + 박 수 (기본 2박) */
-function renderStayOpts() {
-  const box = $('#stayOpts');
-  box.hidden = ui.target !== STAY_TARGET;
-  if (box.hidden) return;
-  const n = trip.days.length;
-  ui.stayStart = Math.min(ui.stayStart ?? firstUncoveredNight(), n - 1);
-  const maxNights = Math.max(1, n - ui.stayStart);
-  ui.stayNights = Math.min(ui.stayNights ?? M.DEFAULT_NIGHTS, maxNights);
-  setStayCalendar($('#stayIn'), $('#stayOut'), ui.stayStart, ui.stayNights);
-  $('#stayNightsLabel').textContent = t('{n}박', { n: ui.stayNights });
-}
-
-/** 체크인·체크아웃 달력 값과 고를 수 있는 범위(여행 기간)를 맞춘다. */
-function setStayCalendar(inEl, outEl, startIndex, nights) {
-  // P0-9: 여행 기간 밖도 고를 수 있다 (달력에서 흐리게만). 고르면 여행을 늘릴지 묻는다.
-  const n = trip.days.length;
-  inEl.dataset.dpSoftMin = M.dateAtIndex(trip, 0);
-  outEl.dataset.dpSoftMax = M.dateAtIndex(trip, n);
-  inEl.value = M.dateAtIndex(trip, startIndex);
-  outEl.value = M.dateAtIndex(trip, startIndex + nights);
-}
-
 function firstUncoveredNight() {
-  const i = trip.days.findIndex((_, d) => !M.nightStay(trip, d));
-  return i === -1 ? 0 : i;
-}
-
-/** 숙소 모드일 때 일반 장소를 넣을 목록: 마지막으로 고른 일차 */
-function lastListId() {
-  return M.getList(trip, ui.lastList) ? ui.lastList : trip.days[0].id;
+  return M.uncoveredStayNights(trip)[0] ?? 0;
 }
 
 const listName = (id) => {
@@ -1547,64 +1501,17 @@ const listName = (id) => {
 };
 
 function targetLabel() {
-  return listName(ui.target === STAY_TARGET ? lastListId() : ui.target);
-}
-
-function stayOptsLabel() {
-  const start = ui.target === STAY_TARGET ? ui.stayStart ?? firstUncoveredNight() : firstUncoveredNight();
-  const nights = ui.target === STAY_TARGET ? ui.stayNights ?? M.DEFAULT_NIGHTS : M.DEFAULT_NIGHTS;
-  return t('{day}부터 {n}박', { day: dayName(start), n: nights });
-}
-
-function addStayFromOpts(place, range) {
-  const useOpts = ui.target === STAY_TARGET;
-  const start = range?.start ?? (useOpts ? ui.stayStart ?? firstUncoveredNight() : firstUncoveredNight());
-  const nights = range?.nights ?? (useOpts ? ui.stayNights ?? M.DEFAULT_NIGHTS : M.DEFAULT_NIGHTS);
-  const stay = M.addStay(trip, place, start, nights);
-  ui.lastAddedId = stay.id;
-  const { checkIn, checkOut } = M.stayDates(trip, stay);
-  ui.stayStart = Math.min(stay.startIndex + stay.nights, trip.days.length - 1); // 다음 숙소는 이어지는 날부터
-  ui.stayNights = null;
-  searchEl.value = '';
-  hideResults();
-  const r = commit();
-  map.setView([stay.lat, stay.lng], Math.max(map.getZoom(), 14));
-  saved(r, t('숙소 "{name}" {n}박{range}을 추가했어요', {
-    name: stay.name,
-    n: stay.nights,
-    range: checkIn ? ` (${M.formatDate(checkIn)} ~ ${M.formatDate(checkOut)})` : '',
-  }), 3000);
+  return listName(ui.target);
 }
 
 function stayRowHtml(stay, dayIndex, pos, flags, leg = null) {
   const key = `${stay.id}|${dayIndex}|${pos}`;
   const open = ui.openStay === key;
   const tag = pos === 'start' && flags.checkOut ? t('체크아웃') : pos === 'end' && flags.checkIn ? t('체크인') : '';
-  const n = trip.days.length;
-  const editor = open && ui.readonly
-    ? detailHtml(stay, { stay: true })
-    : open
-    ? `<div class="editor stay-editor" data-stay="${stay.id}">
-        <label>${esc(t('숙소 이름'))}<input data-sfield="name" value="${esc(stay.name)}"></label>
-        <div class="stay-range" data-dp-pair="숙소 날짜" data-dp-min-nights="1">
-          <label>${esc(t('체크인'))}<input type="date" data-srange="in" data-dp="start" aria-label="체크인" value="${M.dateAtIndex(trip, stay.startIndex)}"
-            data-dp-soft-min="${M.dateAtIndex(trip, 0)}"></label>
-          <label>${esc(t('체크아웃'))}<input type="date" data-srange="out" data-dp="end" aria-label="체크아웃" value="${M.dateAtIndex(trip, stay.startIndex + stay.nights)}"
-            data-dp-soft-max="${M.dateAtIndex(trip, n)}"></label>
-          <span class="nights-chip">${esc(t('{n}박', { n: stay.nights }))}</span>
-        </div>
-        <label>${esc(t('메모'))}<textarea data-sfield="memo" placeholder="${esc(t('예약번호, 체크인 시간…'))}">${esc(stay.memo)}</textarea></label>
-        <label>${esc(t('링크'))}<input type="url" data-sfield="url" value="${esc(stay.url)}" placeholder="${esc(t('예약 페이지'))}"></label>
-        ${stay.address ? `<p class="addr">${esc(stay.address)}</p>` : ''}
-        <div class="editor-actions">
-          <a href="${href(M.googleMapsUrl(stay))}" target="_blank" rel="noopener">${esc(t('구글맵에서 열기 ↗'))}</a>
-          <button data-action="stay-delete" data-stay="${stay.id}" class="danger">${esc(t('숙소 삭제'))}</button>
-        </div>
-      </div>`
-    : '';
+  const editor = open ? detailHtml(stay, { stay: true }) : '';
   return `<div class="tl-row stay">${legHtml(leg)}<div class="tl-time"></div><div class="tl-box">
     <div class="stay-row ${pos}${open ? ' open' : ''}" data-stay="${stay.id}" data-key="${key}">
-      <button class="stay-main" data-action="stay-toggle" aria-expanded="${open}">
+      <button class="stay-main" data-action="stay-toggle"${ui.readonly ? ` aria-expanded="${open}"` : ' aria-haspopup="dialog"'}>
         <span class="stay-pos">${esc(pos === 'start' ? t('출발') : t('귀가'))}</span>
         <span class="stay-name">${esc(stay.name)}</span>${tag ? `<span class="stay-tag">${esc(tag)}</span>` : ''}
       </button>
@@ -1628,8 +1535,11 @@ function legHtml(leg) {
 function detailHtml(x, { stay = false } = {}) {
   const url = M.safeUrl(x.url);
   const range = stay ? M.stayDates(trip, x) : null;
+  const dateTimeLabel = (date, time) => [M.formatDate(date), time].filter(Boolean).join(' ');
   return `<div class="editor detail">
-      ${stay ? `<p><b>${esc(t('{n}박', { n: x.nights }))}</b>${range.checkIn ? ` · ${esc(M.formatDate(range.checkIn))} ~ ${esc(M.formatDate(range.checkOut))}` : ''}</p>` : ''}
+      ${stay ? `<p><b>${esc(t('{n}박', { n: x.nights }))}</b>${range.checkIn ? ` · ${esc(dateTimeLabel(range.checkIn, x.checkInTime))} ~ ${esc(dateTimeLabel(range.checkOut, x.checkOutTime))}` : ''}</p>` : ''}
+      ${stay && x.bookingRef ? `<p>${esc(t('예약번호 {ref}', { ref: x.bookingRef }))}</p>` : ''}
+      ${stay && x.phone ? `<p>${esc(t('전화번호'))} · ${esc(x.phone)}</p>` : ''}
       ${x.memo ? `<p class="memo-text">${esc(x.memo)}</p>` : ''}
       ${url ? `<p><a href="${href(url)}" target="_blank" rel="noopener">${esc(url)}</a></p>` : ''}
       ${x.address ? `<p class="addr">${esc(x.address)}</p>` : ''}
@@ -1781,6 +1691,265 @@ function flightRowsHtml(dayIndex, where) {
     })
     .join('');
 }
+
+
+const stayDialog = $('#stayDialog');
+const stayForm = $('#stayForm');
+const stayFields = stayForm.elements;
+let stayEditId = null;
+let stayLocation = null;
+let stayMapDraft = null;
+let staySearch = null;
+
+function setStayLocation(place) {
+  stayLocation = place;
+  $('#stayLocation').textContent = place
+    ? place.address || `${place.lat.toFixed(5)}, ${place.lng.toFixed(5)}`
+    : t('숙소 위치를 골라 주세요');
+  if (place?.name && !stayFields.name.value.trim()) stayFields.name.value = place.name;
+}
+
+function renderStayList() {
+  $('#stayList').hidden = !trip.stays.length;
+  $('#stayList').innerHTML = [...trip.stays].sort((a, b) => a.startIndex - b.startIndex).map((stay) => {
+    const { checkIn, checkOut } = M.stayDates(trip, stay);
+    const meta = [
+      checkIn ? [shortDate(checkIn), stay.checkInTime, '–', shortDate(checkOut), stay.checkOutTime].filter(Boolean).join(' ') : dayName(stay.startIndex),
+      t('{n}박', { n: stay.nights }),
+    ].join(' · ');
+    return `<li>
+      <button type="button" class="t-open" data-stay-edit="${esc(stay.id)}" aria-pressed="${stay.id === stayEditId}">
+        <strong>${esc(stay.name)}</strong><span class="t-meta">${esc(meta)}</span>
+      </button>
+      <button type="button" class="icon danger" data-stay-remove="${esc(stay.id)}" aria-label="${esc(t('{name} 삭제', { name: stay.name }))}">✕</button>
+    </li>`;
+  }).join('');
+}
+
+function stayFormError(message = '') {
+  $('#stayError').textContent = message;
+  $('#stayError').hidden = !message;
+}
+
+function clearStaySearch() {
+  staySearch?.abort();
+  staySearch = null;
+  $('#staySearchResults').replaceChildren();
+}
+
+function openStays({ id = null, place = null, start = firstUncoveredNight(), draft = null } = {}) {
+  if (!trip || ui.readonly) return;
+  const stay = id ? M.findStay(trip, id) : null;
+  if (id && !stay) return;
+  const checkIn = M.dateAtIndex(trip, start);
+  const nights = Math.min(M.DEFAULT_NIGHTS, trip.days.length - start);
+  const dates = stay ? M.stayDates(trip, stay) : { checkIn, checkOut: checkIn ? M.addDays(checkIn, nights) : '' };
+  const values = draft ?? { ...(stay ?? place ?? {}), ...dates };
+  stayEditId = stay?.id ?? null;
+  stayForm.reset();
+  clearStaySearch();
+  $('#stayLocationQuery').value = '';
+  $('#stayFormTitle').textContent = stay ? t('숙소 수정') : t('숙소 추가');
+  const paid = draft?.paid ?? Boolean(stay && B.placeExpense(trip, stay.id));
+  for (const field of ['name', 'checkIn', 'checkOut', 'bookingRef', 'phone', 'price', 'memo', 'cur', 'url']) {
+    stayFields[field].value = values[field] ?? (field === 'cur' ? 'local' : '');
+  }
+  stayFields.paid.checked = paid;
+  for (const field of ['checkInTime', 'checkOutTime']) {
+    const input = stayFields[field];
+    const time = values[field] ?? '';
+    input.value = time;
+    if (time) input._flatpickr?.setDate(time, false);
+    else input._flatpickr?.clear(false);
+  }
+  stayFields.checkIn.dataset.dpSoftMin = M.dateAtIndex(trip, 0);
+  stayFields.checkOut.dataset.dpSoftMax = M.dateAtIndex(trip, trip.days.length);
+  enhanceTimes(stayForm);
+  refreshDates();
+  setStayLocation(place ?? stay);
+  stayFormError();
+  renderStayList();
+  if (!stayDialog.open) showDialog(stayDialog);
+  stayFields.name.focus();
+}
+
+async function searchStayLocation() {
+  const query = $('#stayLocationQuery').value.trim() || stayFields.name.value.trim();
+  if (!query) return $('#stayLocationQuery').focus();
+  clearStaySearch();
+  const request = new AbortController();
+  staySearch = request;
+  const results = $('#staySearchResults');
+  results.textContent = t('검색 중…');
+  const near = { ...(trip.center ?? map.getCenter()), zoom: map.getZoom() };
+  try {
+    const search = HANGUL.test(query) ? searchPlacesKo : searchPlaces;
+    const places = await search(query, near, request.signal);
+    if (staySearch !== request || !stayDialog.open) return;
+    results.replaceChildren(...places.map((place) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn';
+      button.textContent = [place.name, place.address].filter(Boolean).join(' · ');
+      button.addEventListener('click', () => {
+        setStayLocation(place);
+        clearStaySearch();
+        $('#stayLocationQuery').focus();
+      });
+      return button;
+    }));
+    if (!places.length) results.textContent = t('검색 결과가 없어요. 영어나 현지어로도 검색해 보세요.');
+  } catch {
+    if (staySearch === request && stayDialog.open) results.textContent = t('위치를 검색하지 못했어요');
+  }
+}
+
+function resumeStayFromMap(draft, latlng) {
+  if (trip?.id !== draft.tripId || ui.readonly) return;
+  showTab('plan');
+  const place = latlng ? { lat: latlng.lat, lng: latlng.lng, name: t('선택한 위치') } : draft.place;
+  openStays({ id: draft.id, place, draft: draft.values });
+  if (latlng) reversePlace(place.lat, place.lng).then((result) => {
+    if (result && stayDialog.open && stayLocation === place) setStayLocation({ ...place, name: result.name, address: result.address });
+  }).catch(() => {});
+}
+
+$('#staysBtn').addEventListener('click', () => openStays());
+$('#stayShortcut').addEventListener('click', () => openStays({ start: Math.max(0, trip.days.findIndex((day) => day.id === ui.target)) }));
+$('#stayNew').addEventListener('click', () => openStays());
+$('#stayClose').addEventListener('click', () => stayDialog.close());
+stayDialog.addEventListener('close', () => {
+  if (!stayDialog.open) clearStaySearch();
+});
+closeOnBackdrop(stayDialog);
+$('#staySearchBtn').addEventListener('click', searchStayLocation);
+$('#stayLocationQuery').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    searchStayLocation();
+  }
+});
+$('#stayPickBtn').addEventListener('click', () => {
+  stayMapDraft = {
+    tripId: trip.id, id: stayEditId, place: stayLocation,
+    values: { ...Object.fromEntries(new FormData(stayForm)), paid: stayFields.paid.checked },
+  };
+  stayDialog.close();
+  if (prefs.mapHidden && !narrowMq.matches) {
+    prefs.mapHidden = false;
+    savePrefs();
+    applyView();
+  }
+  if (stayLocation) {
+    ui.keepView = true;
+    map.setView([stayLocation.lat, stayLocation.lng], Math.max(map.getZoom(), 14));
+  }
+  setPicking(true);
+});
+
+$('#stayList').addEventListener('click', async (e) => {
+  const { stayEdit, stayRemove } = e.target.closest('button')?.dataset ?? {};
+  if (stayEdit) return openStays({ id: stayEdit });
+  const stay = stayRemove && M.findStay(trip, stayRemove);
+  if (!stay || ui.readonly) return;
+  const tripId = trip.id;
+  const choice = await ask({
+    title: t('숙소 "{name}"({n}박)을 삭제할까요?', { name: stay.name, n: stay.nights }),
+    body: B.placeExpense(trip, stay.id) ? t('연결된 지출은 가계부에 남아요') : '',
+    actions: [{ value: 'delete', label: t('삭제'), danger: true }],
+  });
+  if (choice !== 'delete' || trip?.id !== tripId || ui.readonly || !stayDialog.open) return;
+  const index = trip.stays.findIndex((entry) => entry.id === stay.id);
+  if (index < 0) return;
+  const [removed] = trip.stays.splice(index, 1);
+  const dates = M.stayDates(trip, removed);
+  const result = commit();
+  if (stayEditId === stay.id) openStays();
+  else renderStayList();
+  stayDialog.close();
+  if (result.ok) pushUndo(t('"{name}"을(를) 삭제했어요', { name: stay.name }), () => {
+    if (trip?.id !== tripId || ui.readonly || M.findStay(trip, removed.id)) return;
+    const range = stayRangeWithin(trip, dates.checkIn, dates.checkOut);
+    trip.stays.splice(index, 0, { ...removed, ...range });
+    saved(commit(), t('되돌렸어요'));
+  });
+});
+
+stayForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (ui.readonly || askDialog.open) return;
+  const form = new FormData(stayForm);
+  const name = form.get('name').trim();
+  const checkIn = form.get('checkIn');
+  const checkOut = form.get('checkOut');
+  const checkInTime = normalizeTime(form.get('checkInTime'));
+  const checkOutTime = normalizeTime(form.get('checkOutTime'));
+  const price = form.get('price') === '' ? null : Number(form.get('price'));
+  const paid = stayFields.paid.checked;
+  if (!name) {
+    stayFields.name.focus();
+    return stayFormError(t('숙소 이름을 입력해 주세요'));
+  }
+  if (!stayLocation) return stayFormError(t('숙소 위치를 골라 주세요'));
+  if (!M.parseDate(checkIn) || !M.parseDate(checkOut) || checkIn >= checkOut) return stayFormError(t('체크아웃은 체크인 다음 날부터 가능해요'));
+  if (checkInTime == null || checkOutTime == null) return stayFormError(t('시간은 20:45처럼 적어 주세요'));
+  if (price != null && (!Number.isFinite(price) || price > B.MAX_AMOUNT)) return stayFormError(t('금액이 너무 커요. {max} 이하로 입력해 주세요', { max: num(B.MAX_AMOUNT) }));
+  if (paid && !(price > 0)) return stayFormError(t('결제 금액을 입력해 주세요'));
+  stayFormError();
+
+  const id = stayEditId;
+  const current = trip;
+  const signature = () => JSON.stringify([trip.startDate, trip.endDate, trip.stays]);
+  const before = signature();
+  const unchanged = () => trip === current && !ui.readonly && stayDialog.open && stayEditId === id && before === signature();
+  const period = await extendTripFor(checkIn, checkOut, { checkout: true });
+  if (period === false || !unchanged()) return;
+  let requested = stayRangeWithin(trip, checkIn, checkOut);
+  if (period) {
+    const basis = trip.startDate ? trip : { days: [{ date: period.start }] };
+    const startIndex = M.indexOfDate(basis, checkIn);
+    requested = { startIndex, nights: M.indexOfDate(basis, checkOut) - startIndex };
+  }
+  if (!requested) return stayFormError(t('여행 기간 안에 겹치는 숙박일이 없어요'));
+  const conflicts = overlappingStays(trip.stays, requested, id);
+  let choice = null;
+  if (conflicts.length) {
+    choice = await ask({
+      title: t('숙소 날짜가 겹쳐요'),
+      body: [conflicts.map((stay) => {
+        const dates = M.stayDates(trip, stay);
+        return [stay.name, [shortDate(dates.checkIn), shortDate(dates.checkOut)].filter(Boolean).join(' – ')].filter(Boolean).join(' · ');
+      }).join(', '), t('새 숙소를 겹치는 밤에 배정하고 기존 숙소의 나머지 밤을 남겨요')].join('\n'),
+      actions: [
+        { value: 'replace', label: t('교체'), danger: true },
+        { value: 'split', label: t('나눠서 저장'), primary: true },
+      ],
+    });
+    if (!choice || !unchanged()) return;
+  }
+  if (period) M.setTripDates(trip, period.start, period.end, { keepDates: true });
+  const range = stayRangeWithin(trip, checkIn, checkOut);
+  const conflictIds = new Set(conflicts.map((stay) => stay.id));
+  if (choice) trip.stays = trip.stays.flatMap((stay) =>
+    conflictIds.has(stay.id) ? (choice === 'split' ? splitStayAround(stay, range) : []) : [stay]);
+  const dates = M.stayDates(trip, range);
+  const place = {
+    lat: stayLocation.lat, lng: stayLocation.lng, address: stayLocation.address ?? '',
+    name, url: form.get('url').trim(), memo: form.get('memo').trim(),
+    bookingRef: form.get('bookingRef').trim(), phone: form.get('phone').trim(), price, cur: form.get('cur'),
+    checkInTime: dates.checkIn === checkIn ? checkInTime : '',
+    checkOutTime: dates.checkOut === checkOut ? checkOutTime : '',
+  };
+  const existing = M.findStay(trip, id);
+  const wasPaid = existing && B.placeExpense(trip, id);
+  if (existing && name !== existing.name) delete existing.nameI18n;
+  const stay = existing ? Object.assign(existing, place, range) : M.addStay(trip, place, range.startIndex, range.nights);
+  if (paid && (!wasPaid || wasPaid.amount !== price || wasPaid.cur !== stay.cur)) B.payPlace(trip, stay.id, { today: TODAY });
+  else if (!paid && wasPaid) B.unpayPlace(trip, stay.id);
+  ui.routePlan = ui.routeUndo = null;
+  stayDialog.close();
+  saved(commit(), t('{name} 저장했어요', { name: stay.name }));
+});
 
 const flightDialog = $('#flightDialog');
 const flightForm = $('#flightForm');
@@ -2033,14 +2202,13 @@ function dayBodyHtml(l) {
 }
 
 function dayToolsHtml(l) {
-  const st = M.dayStays(trip, l.dayIndex);
   const url = M.routeDirectionsUrl(M.dayRoute(trip, l.dayIndex));
   const link = url ? `<a class="route-link" href="${href(url)}" target="_blank" rel="noopener" title="${esc(t('이 날 동선 전체를 구글맵 길찾기로 열기'))}">${esc(t('길찾기'))}</a>` : '';
   const copy = `<button data-action="day-copy" data-day="${l.dayIndex}" title="${esc(t('이 날 일정을 카톡에 붙일 글로 복사해요'))}">${esc(t('카톡용 복사'))}</button>`;
   const route = link + copy;
   if (ui.readonly) return route;
   const movable = l.items.filter((it) => !it.time && !it.pinned).length;
-  return `${route}${st.end ? '' : `<button data-action="stay-here" data-day="${l.dayIndex}" title="${esc(t('이 날부터 묵을 숙소 추가'))}">${esc(t('+ 숙소'))}</button>`}${
+  return `${route}${M.nightStay(trip, l.dayIndex) ? '' : `<button data-action="stay-here" data-day="${l.dayIndex}" title="${esc(t('이 날부터 묵을 숙소 추가'))}">${esc(t('+ 숙소'))}</button>`}${
     movable > 1 ? `<button data-action="route-opt" data-list="${l.id}" title="${esc(t('숙소 기준으로 덜 돌아가는 순서를 찾아요. 시간을 정한 장소는 그대로 둬요'))}">${esc(t('동선 정리'))}</button>` : ''
   }${l.items.length > 1 ? `<button data-action="sort-time" data-list="${l.id}">${esc(t('시간순'))}</button>` : ''}${
     trip.days.length > 1 ? `<button data-action="day-order" aria-haspopup="dialog" title="${esc(t('여러 날의 장소 묶음 순서를 한 번에 바꿔요 (날짜·숙소·항공편은 그대로)'))}">${esc(t('일자 순서'))}</button>` : ''
@@ -2258,7 +2426,7 @@ function routePlanHtml(l) {
 /** 하루 카드: 머리(날짜·장소 이름·요약) + 타임라인. 목록형은 위아래로, 보드형은 칸으로 늘어놓는다. */
 function dayCardHtml(l) {
   const sum = M.daySummary(trip, l.dayIndex);
-  const st = M.dayStays(trip, l.dayIndex);
+  const night = M.nightStay(trip, l.dayIndex);
   const date = M.formatDate(trip.days[l.dayIndex].date);
   const dayId = trip.days[l.dayIndex].id;
   const chips = [
@@ -2266,7 +2434,7 @@ function dayCardHtml(l) {
     sum.places ? `<span class="chip">${esc(t('{n}곳', { n: sum.places }))}</span>` : '',
     sum.km >= 0.05 ? `<span class="chip">${esc(t('이동 {km}', { km: M.formatKm(sum.km) }))}</span>` : '',
     sum.from ? `<span class="chip">${esc(sum.from)}${sum.to !== sum.from ? ` – ${esc(sum.to)}` : ''}</span>` : '',
-    st.end ? `<span class="chip stay">${esc(t('숙소 {name}', { name: st.end.name }))}</span>` : '',
+    night ? `<span class="chip stay">${esc(t('오늘 밤 숙소'))} · ${esc(night.name)}</span>` : '',
   ].join('');
   return `<section id="day-${l.dayIndex}" class="day daycard card${ui.focusList === l.id ? ' is-focus' : ''}" style="--c:${l.color}" aria-label="${esc(M.dayTitle(trip.days[l.dayIndex], l.dayIndex))}">
       <div class="dc-head">
@@ -2484,7 +2652,6 @@ $('#days').addEventListener('click', (e) => {
     const di = trip.days.findIndex((d) => d.id === listId);
     if (di !== -1) ui.day = di;
     ui.target = listId;
-    ui.lastList = listId;
     renderTarget();
     renderDays();
     renderMap({ fit: true });
@@ -2567,7 +2734,9 @@ $('#days').addEventListener('click', (e) => {
   } else if (action === 'flight-edit') {
     if (!ui.readonly) openFlights(btn.dataset.flight);
   } else if (action === 'stay-toggle') {
-    const key = btn.closest('.stay-row').dataset.key;
+    const row = btn.closest('.stay-row');
+    if (!ui.readonly) return openStays({ id: row.dataset.stay });
+    const key = row.dataset.key;
     ui.openStay = ui.openStay === key ? null : key;
     ui.openItem = null;
     renderDays();
@@ -2575,49 +2744,9 @@ $('#days').addEventListener('click', (e) => {
     const s = M.findStay(trip, btn.closest('.stay-row').dataset.stay);
     if (!s) return;
     locateMapPlace(s);
-  } else if (action === 'stay-delete') {
-    const s = M.findStay(trip, btn.dataset.stay);
-    if (s && confirm(t('숙소 "{name}"({n}박)을 삭제할까요?', { name: s.name, n: s.nights }))) {
-      M.removeStay(trip, s.id);
-      ui.openStay = null;
-      commit();
-    }
   } else if (action === 'stay-here') {
-    ui.target = STAY_TARGET;
-    ui.stayStart = Number(btn.dataset.day);
-    ui.stayNights = null;
-    renderTarget();
-    searchEl.focus();
-    toast(t('숙소 이름을 검색하거나 ‘지도에서 찍기’로 위치를 골라요.'));
+    openStays({ start: Number(btn.dataset.day) });
   }
-});
-
-// 숙소 편집: 이름·메모·링크는 입력하는 대로, 체크인·박 수는 바꾸면 바로 날짜별 배치를 다시 그린다.
-$('#days').addEventListener('input', (e) => {
-  const field = e.target.dataset.sfield;
-  const stay = field && M.findStay(trip, e.target.closest('.stay-editor')?.dataset.stay);
-  if (!stay) return;
-  stay[field] = field === 'name' ? e.target.value || t('이름 없는 숙소') : e.target.value;
-  markEdited();
-  M.touch(trip);
-  persistSoon();
-  if (field === 'name') $$(`.stay-row[data-stay="${CSS.escape(stay.id)}"] .stay-name`).forEach((el) => (el.textContent = stay.name));
-  refreshMapSoon();
-});
-$('#days').addEventListener('change', async (e) => {
-  const field = e.target.dataset.srange;
-  const editorEl = field && e.target.closest('.stay-editor');
-  const stay = editorEl && M.findStay(trip, editorEl.dataset.stay);
-  if (!stay || !e.target.value) return;
-  // 체크인을 옮기면 박 수는 유지(기간 통째로 이동), 체크아웃을 바꾸면 박 수가 바뀐다.
-  const checkIn = $('[data-srange="in"]', editorEl).value;
-  const checkOut = field === 'in' ? M.addDays(checkIn, stay.nights) : $('[data-srange="out"]', editorEl).value;
-  // P0-9: 여행 기간 밖이면 여행을 늘릴지 묻고(기존 일정은 날짜 그대로), 취소하면 원래대로
-  if (!(await extendTripFor(checkIn, checkOut, { checkout: true }))) return render();
-  const range = M.rangeFromDates(trip, checkIn, checkOut);
-  if (!range) return;
-  M.updateStayRange(trip, stay.id, range);
-  commit();
 });
 
 const refreshMapSoon = debounce(() => renderMap(), 300);
@@ -2878,9 +3007,10 @@ async function runSearch({ explicit = false } = {}) {
 
   const ctrl = new AbortController();
   ui.searchAbort = ctrl;
+  const sourceUrl = parsed && q.length <= 2000 ? M.safeUrl(q) : '';
   try {
     if (parsed && 'lat' in parsed) {
-      let place = { name: parsed.name ?? '', address: '', lat: parsed.lat, lng: parsed.lng };
+      let place = { name: parsed.name ?? '', address: '', lat: parsed.lat, lng: parsed.lng, url: sourceUrl };
       // 주소를 찾는 동안 추가해도 '위치 확인 중…'이 이름으로 남지 않게: 찾으면 나중에 채운다
       const lookup = reversePlace(parsed.lat, parsed.lng, ctrl.signal).catch(() => null);
       showResults([{ ...place, name: place.name || t('위치 확인 중…'), lookup, unnamed: !place.name }], q);
@@ -2901,11 +3031,11 @@ async function runSearch({ explicit = false } = {}) {
       if (!places.length) {
         return showMessage(t('한국어 이름으로는 못 찾았어요. 영어·현지어로 검색하거나(예: Kuromon Market), 구글맵 링크를 붙여넣어 주세요.'));
       }
-      return showResults(places, q);
+      return showResults(sourceUrl ? places.map((place) => ({ ...place, url: sourceUrl })) : places, q);
     }
     showMessage(t('검색 중…'));
     const places = await searchPlaces(query, near, ctrl.signal);
-    if (!ctrl.signal.aborted) showResults(places, q);
+    if (!ctrl.signal.aborted) showResults(sourceUrl ? places.map((place) => ({ ...place, url: sourceUrl })) : places, q);
   } catch (err) {
     if (err.name !== 'AbortError') showMessage(searchErrorText(err), { retry: true });
   }
@@ -2985,8 +3115,8 @@ function addPlace(place, { edit = false, listId = null } = {}) {
     const forTrip = trip;
     lookup.then((r) => {
       if (!r || trip !== forTrip) return;
-      const found = M.findItem(trip, ui.lastAddedId) ?? M.findStay?.(trip, ui.lastAddedId);
-      const it = found?.item ?? found;
+      const found = M.findItem(trip, ui.lastAddedId);
+      const it = found?.item;
       if (!it || it.lat !== rest.lat) return;
       if (unnamed && it.name === tmpName) it.name = r.name || tmpName;
       if (!it.address) it.address = r.address ?? '';
@@ -2994,7 +3124,6 @@ function addPlace(place, { edit = false, listId = null } = {}) {
     });
     place = { ...rest, name: tmpName };
   }
-  if (listId == null && ui.target === STAY_TARGET) return addStayFromOpts(place);
   const target = listId ?? ui.target;
   const item = M.addItem(trip, target, place);
   ui.lastAddedId = item.id;
@@ -3013,21 +3142,8 @@ function addPlace(place, { edit = false, listId = null } = {}) {
 
 $('#target').addEventListener('change', (e) => {
   ui.target = e.target.value;
-  if (ui.target !== STAY_TARGET) ui.lastList = ui.target;
-  renderStayOpts();
   renderPlanEmpty();
 });
-/** 숙소 추가 옵션의 체크인·체크아웃을 고르면: 기간 밖이면 여행을 늘릴지 묻고(P0-9), 일차·박 수로 바꿔 둔다 */
-async function pickStayOpts(checkIn, checkOut) {
-  const before = trip.days.length;
-  if (!(await extendTripFor(checkIn, checkOut, { checkout: true }))) return renderStayOpts();
-  const range = M.rangeFromDates(trip, checkIn, checkOut);
-  if (range) [ui.stayStart, ui.stayNights] = [range.startIndex, range.nights];
-  if (trip.days.length !== before) commit(); // 여행을 늘렸으면 저장하고 전체를 다시 그린다
-  else renderStayOpts();
-}
-$('#stayIn').addEventListener('change', (e) => pickStayOpts(e.target.value, M.addDays(e.target.value, ui.stayNights ?? M.DEFAULT_NIGHTS)));
-$('#stayOut').addEventListener('change', (e) => pickStayOpts($('#stayIn').value, e.target.value));
 $('#pickBtn').addEventListener('click', () => setPicking(!ui.picking, { cancelled: ui.picking }));
 $('#pickCancel').addEventListener('click', () => setPicking(false, { cancelled: true }));
 
@@ -3096,24 +3212,23 @@ async function onDatesChange() {
 }
 
 /**
- * P0-9: 여행 기간 밖 날짜(숙소·항공편)를 골랐을 때 여행을 늘릴지 묻는다. 늘리면 기존 일정은 날짜 그대로 둔다.
- * 반환: true(늘렸거나 늘릴 필요 없음) | false(취소)
+ * Ask how to handle dates outside the trip. Return a proposed extension, null
+ * for dates inside the trip or clipping, and false for cancellation.
  */
 async function extendTripFor(from, to, opts) {
   const r = M.extendedRange(trip, from, to, opts);
-  if (!r) return true;
-  if (r.tooLong) {
-    toast(t('여행은 최대 {n}일까지예요. 기간을 늘리지 않았어요', { n: M.MAX_DAYS }), 4500);
-    return false;
-  }
-  const ok = await ask({
-    title: t('여행 기간을 늘릴까요?'),
-    body: t('여행을 {range}로 늘릴까요? 기존 일정은 날짜 그대로 유지돼요', { range: `${M.formatDate(r.start)} – ${M.formatDate(r.end)}` }),
-    actions: [{ value: 'ok', label: t('늘리고 저장'), primary: true }],
+  if (!r) return null;
+  const actions = [];
+  if (!r.tooLong) actions.push({ value: 'extend', label: t('여행 기간 늘리기'), primary: true });
+  if (stayRangeWithin(trip, from, to)) actions.push({ value: 'clip', label: t('기간 안만 저장(잘라서)') });
+  const choice = await ask({
+    title: trip.startDate ? t('여행 기간을 늘릴까요?') : t('여행 날짜를 정할까요?'),
+    body: r.tooLong
+      ? t('여행은 최대 {n}일까지예요. 기간을 늘리지 않았어요', { n: M.MAX_DAYS })
+      : t('여행을 {range}로 늘릴까요? 기존 일정은 날짜 그대로 유지돼요', { range: `${M.formatDate(r.start)} – ${M.formatDate(r.end)}` }),
+    actions,
   });
-  if (ok !== 'ok') return false;
-  M.setTripDates(trip, r.start, r.end, { keepDates: true });
-  return true;
+  return choice === 'extend' ? r : choice === 'clip' ? null : false;
 }
 /**
  * P0-1: 여행지 위치 확인·다시 고르기. 작은 지도에 지금 여행지 좌표를 보여 주고, 지도를 누르거나 핀을 끌어 옮긴다.
@@ -3173,6 +3288,7 @@ $('.menu .menu-pop').addEventListener('click', (e) => {
   else if (action === 'import') $('#importFile').click();
   else if (action === 'delete') deleteTrip(trip.id);
   else if (action === 'flights') openFlights();
+  else if (action === 'stays') openStays();
   else if (action === 'share') {
     $('.menu summary').focus();
     $('#shareBtn').click();
@@ -3935,8 +4051,7 @@ function selectDay(i, { scroll = true } = {}) {
   ui.day = ((i % n) + n) % n;
   const id = trip.days[ui.day].id;
   ui.focusList = id;
-  if (ui.target !== STAY_TARGET) ui.target = id;
-  ui.lastList = id;
+  ui.target = id;
   renderTarget();
   renderDays();
   renderMap({ fit: true });
@@ -3967,7 +4082,7 @@ function renderHero() {
   $('#heroStats').innerHTML = `
     <div class="tile dday"><span>${esc(s.dday.sub)}</span><b>${esc(s.dday.label)}</b></div>
     <div class="tile"><span>${esc(t('여행 기간'))}</span><b>${s.days}<small>${esc(t('일'))}</small></b></div>
-    <div class="tile"><span>${esc(t('들를 곳'))}</span><b>${s.places}<small>${esc(t('곳'))}</small></b></div>
+    <button type="button" class="tile" data-open-place-groups><span>${esc(t('들를 곳'))}</span><b>${s.places}<small>${esc(t('곳'))}</small></b></button>
     <div class="tile wide"><span>${esc(t('이동 (직선)'))}</span><b>${num(Number(km), { maximumFractionDigits: 1 })}<small>km</small></b></div>`;
   const out = trip.flights.find((f) => f.kind === 'out');
   const back = trip.flights.find((f) => f.kind === 'in');
@@ -4074,23 +4189,14 @@ function renderNotice() {
   if (!ui.readonly && total && plan > total) list.push(t('예상 비용({plan})이 예산({total})보다 {diff} 많아요', { plan: bm(plan), total: bm(total), diff: bm(plan - total) }));
   const el = $('#notice');
   el.hidden = !list.length;
-  const noStay = !ui.readonly && !(trip.stays ?? []).length && trip.days.length > 1;
+  const noStay = !ui.readonly && M.uncoveredStayNights(trip).length > 0;
   el.innerHTML = list.length
     ? `<b>${esc(t('확인할 것'))}</b><ul>${list.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>${noStay ? `<button type="button" class="btn notice-act" data-notice="stay">${esc(t('+ 숙소 추가'))}</button>` : ''}`
     : '';
 }
 
 $('#notice').addEventListener('click', (e) => {
-  if (e.target.closest('[data-notice="stay"]')) {
-    ui.target = STAY_TARGET;
-    ui.stayStart = firstUncoveredNight();
-    ui.stayNights = null;
-    renderTarget();
-    showTab('plan');
-    searchEl.focus();
-    searchEl.scrollIntoView({ block: 'center' });
-    toast(t('숙소 이름을 검색하거나 ‘지도에서 찍기’로 위치를 골라요.'));
-  }
+  if (e.target.closest('[data-notice="stay"]')) openStays();
 });
 $('#dayTabs').addEventListener('click', (e) => {
   const b = e.target.closest('[data-day]');
@@ -4637,6 +4743,91 @@ closeOnBackdrop(copyDialog);
  * 확정 전에 대상 일차의 항공편·숙소와 시간 충돌을 미리 보여 준다(D.placementPreview / D.dayOrderPreview).
  * 실행하면 작업마다 되돌리기를 실행 취소 스택에 쌓는다 — 5초 안에 연달아 한 작업을 하나씩 거꾸로 되돌린다.
  */
+
+const placeGroupsDialog = $('#placeGroupsDialog');
+
+function renderPlaceGroups() {
+  const rows = groupPlaces(trip, $('#placeGroupsSort').value, locale());
+  $('#placeGroupsList').innerHTML = rows.length ? rows.map(({ place, entries }) => {
+    const visits = new Map();
+    for (const entry of entries) {
+      if (!visits.has(entry.listId)) visits.set(entry.listId, entry);
+    }
+    return `<article class="p3-row">
+      <h3>${esc(place.name)}</h3><small>${esc(t('{n}회 등장', { n: entries.length }))}</small>
+      <div class="p3-actions">${[...visits.values()].map(({ item, listId }) =>
+        `<button type="button" class="btn place-visit" data-group-open="${esc(item.id)}">${esc(listId === M.INBOX ? t('보관함') : listName(listId))}</button>`).join('')}</div>
+      <div class="p3-actions">
+        <button type="button" class="btn" data-group-map="${esc(place.id)}">${esc(t('지도에서 보기'))}</button>
+        ${ui.readonly ? '' : `<button type="button" class="btn danger" data-group-delete="${esc(place.id)}">${esc(t('모든 일정에서 삭제'))}</button>`}
+      </div>
+    </article>`;
+  }).join('') : `<p>${esc(t('등록된 장소가 없어요'))}</p>`;
+}
+
+for (const el of [$('#placeGroupsBtn'), $('#heroStats')]) el.addEventListener('click', (e) => {
+  if (!trip || !e.target.closest('[data-open-place-groups]')) return;
+  renderPlaceGroups();
+  showDialog(placeGroupsDialog);
+});
+$('#placeGroupsSort').addEventListener('change', renderPlaceGroups);
+placeGroupsDialog.addEventListener('click', async (e) => {
+  const button = e.target.closest('button');
+  if (!button) return;
+  if (button.hasAttribute('data-close-place-groups')) return placeGroupsDialog.close();
+  const { groupOpen, groupMap, groupDelete } = button.dataset;
+  const found = (groupOpen || groupMap) && M.findItem(trip, groupOpen || groupMap);
+  if (found) {
+    placeGroupsDialog.close();
+    const index = trip.days.findIndex((day) => day.id === found.listId);
+    if (index >= 0) selectDay(index, { scroll: false });
+    if (groupOpen) {
+      if (index >= 0) {
+        openItem(found.item.id, { scroll: true });
+      } else {
+        showTab('plan');
+        prefs.dockOpen = true;
+        savePrefs();
+        renderDays();
+        const chip = $(`#inboxDock [data-id="${CSS.escape(found.item.id)}"] button`);
+        chip?.scrollIntoView({ block: 'nearest' });
+        chip?.focus({ preventScroll: true });
+        openChipMenu(found.item.id);
+      }
+    } else {
+      if (index < 0) {
+        ui.focusList = null;
+        renderMap();
+      }
+      locateMapPlace(found.item);
+    }
+    return;
+  }
+  if (!groupDelete || ui.readonly) return;
+  const group = groupPlaces(trip).find(({ place }) => place.id === groupDelete);
+  if (!group) return;
+  const ids = new Set(group.entries.map(({ item }) => item.id));
+  const tripId = trip.id;
+  const keepExpenses = trip.expenses?.some((expense) => ids.has(expense.placeId));
+  const choice = await ask({
+    title: t('{n}개 일정에서 삭제할까요?', { n: group.entries.length }),
+    body: [group.place.name, keepExpenses ? t('연결된 지출은 가계부에 남아요') : ''].filter(Boolean).join(' · '),
+    actions: [{ value: 'delete', label: t('삭제'), danger: true }],
+  });
+  if (choice !== 'delete' || trip?.id !== tripId || ui.readonly) return;
+  const restore = removePlaceGroup(trip, ids);
+  if (ids.has(ui.openItem)) ui.openItem = null;
+  ui.routePlan = ui.routeUndo = null;
+  const result = commit();
+  placeGroupsDialog.close();
+  if (result.ok) pushUndo(t('"{name}"을(를) 삭제했어요', { name: group.place.name }), () => {
+    if (trip?.id !== tripId || ui.readonly) return;
+    restore(trip);
+    saved(commit(), t('되돌렸어요'));
+  });
+});
+closeOnBackdrop(placeGroupsDialog);
+
 const dayOpsDialog = $('#dayOpsDialog');
 ui.ops = null; // { kind: 'place', itemId, mode, to } | { kind: 'order', order }
 const dayLabelOf = (i) => `${dayName(i)}${trip.days[i]?.date ? ` · ${M.formatDate(trip.days[i].date)}` : ''}`;
@@ -4646,9 +4837,9 @@ function openPlaceOps(itemId, mode = 'move') {
   const found = M.findItem(trip, itemId);
   if (!found || ui.readonly) return;
   const from = trip.days.findIndex((d) => d.id === found.listId);
-  // 기본 대상: 이동이면 다음 날(없으면 전날), 복제면 같은 날 다음 날
+  // 이동은 인접 일차, 복제는 같은 장소가 없는 일차에서 시작한다.
   const to = from < 0 ? 0 : from + 1 < trip.days.length ? from + 1 : Math.max(0, from - 1);
-  ui.ops = { kind: 'place', itemId, mode, to, sig: daySig() };
+  ui.ops = { kind: 'place', itemId, mode, to, copy: D.defaultCopyDays(trip, itemId, to), sig: daySig() };
   renderDayOps();
   showDialog(dayOpsDialog);
   $('#dayOpsBody input[name="opsDay"]:checked')?.focus();
@@ -4681,21 +4872,39 @@ function placeOpsHtml(op) {
   const found = M.findItem(trip, op.itemId);
   if (!found) return '';
   const from = trip.days.findIndex((d) => d.id === found.listId);
-  const p = D.placementPreview(trip, op.itemId, op.to, op.mode);
+  const copying = op.mode === 'copy';
+  const choices = copying ? D.copyDayChoices(trip, op.itemId) : [];
   const days = trip.days
     .map((d, i) => {
       const same = i === from;
-      const disabled = same && op.mode === 'move';
+      const disabled = same;
+      const duplicate = choices[i]?.duplicate && !same;
       const hasFlight = D.dayBounds(trip, i).flights.length;
-      return `<label class="do-day${disabled ? ' off' : ''}"><input type="radio" name="opsDay" value="${i}"${i === op.to ? ' checked' : ''}${disabled ? ' disabled' : ''}>
+      return `<label class="do-day${disabled ? ' off' : ''}"><input type="${copying ? 'checkbox' : 'radio'}" name="opsDay" value="${i}"${(copying ? op.copy.has(i) : i === op.to) ? ' checked' : ''}${disabled ? ' disabled' : ''}>
         <span class="do-day-name">${esc(dayName(i))}${d.date ? ` · ${esc(shortDate(d.date))}` : ''}</span>
-        <small>${esc(t('{n}곳', { n: d.items.length }))}${hasFlight ? ` · ${esc(t('항공편'))}` : ''}${same ? ` · ${esc(t('지금 날'))}` : ''}</small></label>`;
+        <small>${esc(t('{n}곳', { n: d.items.length }))}${hasFlight ? ` · ${esc(t('항공편'))}` : ''}${same ? ` · ${esc(t('지금 날'))}` : ''}${duplicate ? ` · ${esc(t('이미 있음'))}` : ''}</small></label>`;
     })
     .join('');
+  const preview = (copying ? [...op.copy].sort((a, b) => a - b) : [op.to])
+    .map((day) => placeOpsPreview(op, found, day)).join('');
+  return `<div class="pin-seg do-mode" role="group" aria-label="${esc(t('이동 또는 복제'))}">
+      <button type="button" data-ops-mode="move" aria-pressed="${op.mode === 'move'}" class="${op.mode === 'move' ? 'active' : ''}">${esc(t('이동'))}</button>
+      <button type="button" data-ops-mode="copy" aria-pressed="${op.mode === 'copy'}" class="${op.mode === 'copy' ? 'active' : ''}">${esc(t('복제'))}</button>
+    </div>
+    <p class="fine do-what"><b>${esc(found.item.name)}</b>${from >= 0 ? ` · ${esc(t('지금 {day}', { day: dayName(from) }))}` : ` · ${esc(t('장소 보관함'))}`}</p>
+    ${copying ? `<div class="p3-actions"><button type="button" class="btn" data-ops="all">${esc(t('전체 선택'))}</button>
+      <button type="button" class="btn" data-ops="none">${esc(t('전체 해제'))}</button>
+      <span role="status">${esc(t('{n}개 선택', { n: op.copy.size }))}</span></div>` : ''}
+    <fieldset class="do-days"><legend>${esc(op.mode === 'move' ? t('옮길 날') : t('복제할 날'))}</legend>${days}</fieldset>
+    ${preview}`;
+}
+
+function placeOpsPreview(op, found, day) {
+  const p = D.placementPreview(trip, op.itemId, day, op.mode);
   const conflicts = p.ok ? p.conflicts : [];
-  const preview = p.ok
+  return p.ok
     ? `<section class="do-preview" aria-live="polite">
-        <h3>${esc(t('{day} 미리보기', { day: dayLabelOf(op.to) }))}</h3>
+        <h3>${esc(t('{day} 미리보기', { day: dayLabelOf(day) }))}</h3>
         <p class="do-pos">${esc(found.item.time ? t('{time} 기준 시간순으로 {n}번째에 들어가요', { time: found.item.time, n: p.index + 1 }) : t('시간이 없어 맨 끝({n}번째)에 들어가요', { n: p.index + 1 }))}</p>
         <ul class="do-facts">${flightsLine(p)}${staysLine(p.stays)}</ul>
         ${
@@ -4708,13 +4917,6 @@ function placeOpsHtml(op) {
         }
       </section>`
     : '';
-  return `<div class="pin-seg do-mode" role="group" aria-label="${esc(t('이동 또는 복제'))}">
-      <button type="button" data-ops-mode="move" aria-pressed="${op.mode === 'move'}" class="${op.mode === 'move' ? 'active' : ''}">${esc(t('이동'))}</button>
-      <button type="button" data-ops-mode="copy" aria-pressed="${op.mode === 'copy'}" class="${op.mode === 'copy' ? 'active' : ''}">${esc(t('복제'))}</button>
-    </div>
-    <p class="fine do-what"><b>${esc(found.item.name)}</b>${from >= 0 ? ` · ${esc(t('지금 {day}', { day: dayName(from) }))}` : ` · ${esc(t('장소 보관함'))}`}</p>
-    <fieldset class="do-days"><legend>${esc(op.mode === 'move' ? t('옮길 날') : t('복제할 날'))}</legend>${days}</fieldset>
-    ${preview}`;
 }
 
 function orderOpsHtml(op) {
@@ -4753,8 +4955,8 @@ function renderDayOps({ focus } = {}) {
     if (!found) return void dayOpsDialog.close();
     $('#dayOpsTitle').textContent = op.mode === 'move' ? t('다른 일차로 이동') : t('다른 일차로 복제');
     $('#dayOpsBody').innerHTML = placeOpsHtml(op);
-    const ok = op.mode === 'move' ? trip.days[op.to]?.id !== found.listId : Boolean(trip.days[op.to]);
-    $('#dayOpsActions').innerHTML = `<button type="button" class="btn ghost" data-ops="cancel">${esc(t('취소'))}</button><button type="button" class="btn primary" data-ops="apply"${ok ? '' : ' disabled'}>${esc(op.mode === 'move' ? t('{day}(으)로 이동', { day: dayName(op.to) }) : t('{day}에 복제', { day: dayName(op.to) }))}</button>`;
+    const ok = op.mode === 'move' ? Boolean(trip.days[op.to] && trip.days[op.to].id !== found.listId) : op.copy.size > 0;
+    $('#dayOpsActions').innerHTML = `<button type="button" class="btn ghost" data-ops="cancel">${esc(t('취소'))}</button><button type="button" class="btn primary" data-ops="apply"${ok ? '' : ' disabled'}>${esc(op.mode === 'move' ? t('{day}(으)로 이동', { day: dayName(op.to) }) : t('{n}개 날에 복제', { n: op.copy.size }))}</button>`;
   } else {
     $('#dayOpsTitle').textContent = t('일자 순서 바꾸기');
     $('#dayOpsBody').innerHTML = orderOpsHtml(op);
@@ -4782,7 +4984,8 @@ function renderDayOps({ focus } = {}) {
 
 /** 대화상자를 연 뒤 일정(날짜·장소 배치)이 바뀌었는지 보는 표식 — 다른 탭 저장 등 */
 const daySig = () => JSON.stringify([
-  trip.days.map((d) => [d.id, d.date, d.items.map((x) => [x.id, x.time, x.name])]), // 미리보기에 보이는 장소 이름도 (GPT 5차 #3)
+  trip.days.map((d) => [d.id, d.date, d.items.map((x) => [x.id, x.time, x.name, x.lat, x.lng, x.url])]),
+  trip.inbox.map((x) => [x.id, x.time, x.name, x.lat, x.lng, x.url]),
   // 항공편·숙소도 미리보기 계산과 화면(편명·공항·숙소 이름)에 쓴다 (GPT 3차 #7, 4차 #4)
   (trip.flights ?? []).map((f) => [f.id, f.kind, f.departAt, f.arriveAt, f.flightNo, f.from, f.to]),
   (trip.stays ?? []).map((s) => [s.id, s.startIndex, s.nights, s.name]),
@@ -4794,7 +4997,10 @@ function applyDayOps() {
   if (op.sig !== daySig()) {
     op.sig = daySig();
     if (op.kind === 'order' && !D.isPermutation(op.order, trip.days.length)) op.order = trip.days.map((_, i) => i);
-    if (op.kind === 'place' && !trip.days[op.to]) op.to = 0;
+    if (op.kind === 'place') {
+      if (!trip.days[op.to]) op.to = 0;
+      op.copy = D.defaultCopyDays(trip, op.itemId, op.to);
+    }
     renderDayOps({ focus: '[data-ops="apply"]' });
     toast(t('그사이 일정이 바뀌어 미리보기를 새로 고쳤어요. 확인하고 다시 눌러 주세요'), 4000);
     return;
@@ -4804,14 +5010,14 @@ function applyDayOps() {
     const found = M.findItem(trip, op.itemId);
     if (!found) return;
     const name = found.item.name;
-    const res = op.mode === 'move' ? D.moveToDay(trip, op.itemId, op.to) : D.copyToDay(trip, op.itemId, op.to);
+    const res = op.mode === 'move' ? D.moveToDay(trip, op.itemId, op.to) : D.copyToDays(trip, op.itemId, op.copy);
     if (!res) return;
     ui.openItem = null;
     ui.routePlan = ui.routeUndo = null;
     dayOpsDialog.close();
     if (!commit().ok) return;
-    $(`.item[data-id="${CSS.escape(res.item.id)}"]`)?.classList.add('flash');
-    const msg = op.mode === 'move' ? t('"{name}" → {day}(으)로 옮겼어요', { name, day: dayName(op.to) }) : t('"{name}"을(를) {day}에 복제했어요', { name, day: dayName(op.to) });
+    for (const item of res.items ?? [res.item]) $(`.item[data-id="${CSS.escape(item.id)}"]`)?.classList.add('flash');
+    const msg = op.mode === 'move' ? t('"{name}" → {day}(으)로 옮겼어요', { name, day: dayName(op.to) }) : t('"{name}"을(를) {n}개 날에 복제했어요', { name, n: res.items.length });
     pushUndo(msg, () => {
       if (trip?.id !== tripId || ui.readonly) return;
       if (res.undo(trip)) saved(commit(), t('되돌렸어요'));
@@ -4851,7 +5057,10 @@ dayOpsDialog.addEventListener('click', (e) => {
     return;
   }
   const act = e.target.closest('[data-ops]')?.dataset.ops;
-  if (act === 'cancel') dayOpsDialog.close();
+  if (act === 'all' || act === 'none') {
+    op.copy = new Set(act === 'all' ? D.copyDayChoices(trip, op.itemId).filter((day) => !day.disabled).map((day) => day.index) : []);
+    renderDayOps({ focus: `[data-ops="${act}"]` });
+  } else if (act === 'cancel') dayOpsDialog.close();
   else if (act === 'reset' && op.kind === 'order') {
     op.order = trip.days.map((_, i) => i);
     renderDayOps({ focus: '.do-move' });
@@ -4859,8 +5068,12 @@ dayOpsDialog.addEventListener('click', (e) => {
 });
 dayOpsDialog.addEventListener('change', (e) => {
   if (e.target.name !== 'opsDay' || ui.ops?.kind !== 'place') return;
-  ui.ops.to = Number(e.target.value);
-  renderDayOps({ focus: `input[name="opsDay"][value="${ui.ops.to}"]` });
+  const day = Number(e.target.value);
+  if (ui.ops.mode === 'copy') {
+    if (e.target.checked) ui.ops.copy.add(day);
+    else ui.ops.copy.delete(day);
+  } else ui.ops.to = day;
+  renderDayOps({ focus: `input[name="opsDay"][value="${day}"]` });
 });
 dayOpsDialog.addEventListener('close', () => {
   orderSortable?.destroy();

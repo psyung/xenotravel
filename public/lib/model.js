@@ -46,10 +46,10 @@ export function dateShift(trip, start) {
  * checkout: true면 to는 체크아웃 날이라 그 전날 밤까지만 여행에 들어오면 된다.
  */
 export function extendedRange(trip, from, to = from, { checkout = false } = {}) {
-  if (!trip.startDate || !trip.endDate || !parseDate(from)) return null;
+  if (!parseDate(from)) return null;
   const last = checkout && parseDate(to) ? addDays(to, -1) : to || from;
-  const start = from < trip.startDate ? from : trip.startDate;
-  const end = last > trip.endDate ? last : trip.endDate;
+  const start = !trip.startDate || from < trip.startDate ? from : trip.startDate;
+  const end = !trip.endDate || last > trip.endDate ? last : trip.endDate;
   if (start === trip.startDate && end === trip.endDate) return null;
   // 최대 일수를 넘으면 늘리지 않는다 (늘리면 끝쪽 날이 잘려 일정이 보관함으로 밀린다)
   const days = Math.round((parseDate(end) - parseDate(start)) / 86400000) + 1;
@@ -576,6 +576,17 @@ function clampNights(trip, startIndex, nights) {
   return Math.max(1, Math.min(Math.round(Number(nights) || DEFAULT_NIGHTS), max));
 }
 
+function stayFields(stay) {
+  return {
+    checkInTime: stay.checkInTime ?? '',
+    checkOutTime: stay.checkOutTime ?? '',
+    bookingRef: stay.bookingRef ?? '',
+    phone: stay.phone ?? '',
+    price: stay.price ?? null,
+    cur: stay.cur ?? 'local',
+  };
+}
+
 export function addStay(trip, place, startIndex = 0, nights = DEFAULT_NIGHTS) {
   // 샘플 숙소 같은 내장 프리셋만 4개 국어 이름을 가진다 (localizePresets)
   const i18n = isI18nMap(place.nameI18n) ? { nameI18n: { ...place.nameI18n } } : {};
@@ -592,6 +603,7 @@ export function addStay(trip, place, startIndex = 0, nights = DEFAULT_NIGHTS) {
     memo: base.memo,
     startIndex: start,
     nights: clampNights(trip, start, nights),
+    ...stayFields(place),
     ...i18n,
   };
   trip.stays.push(stay);
@@ -969,6 +981,14 @@ export function validateTrip(obj) {
   checkItems(obj.stays ?? []);
   for (const st of obj.stays ?? []) {
     if (!Number.isInteger(st.startIndex) || !Number.isInteger(st.nights) || st.nights < 1) fail('숙소 기간');
+    for (const value of [st.checkInTime, st.checkOutTime]) {
+      if (value != null && (typeof value !== 'string' || (value && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value)))) fail('숙소');
+    }
+    for (const value of [st.bookingRef, st.phone]) {
+      if (value != null && (typeof value !== 'string' || value.length > 200)) fail('숙소');
+    }
+    if (st.price != null && (!Number.isFinite(st.price) || st.price < 0)) fail('숙소');
+    if (st.cur != null && st.cur !== 'local' && st.cur !== 'KRW') fail('숙소');
   }
   // 항공편: 시각 칸은 'YYYY-MM-DDTHH:MM' 글자여야 화면이 깨지지 않는다 (예전 백업에서 빠진 칸만 기본값)
   const isTime = (v) => typeof v === 'string' && (v === '' || /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?/.test(v));
@@ -986,7 +1006,7 @@ export function validateTrip(obj) {
     ...obj,
     days: obj.days.map((d) => ({ ...d, date: str(d.date), items: d.items.map(fillItem) })),
     inbox: (obj.inbox ?? []).map(fillItem),
-    stays: (obj.stays ?? []).map((st) => ({ ...st, address: str(st.address), memo: str(st.memo), url: str(st.url) })),
+    stays: (obj.stays ?? []).map((st) => ({ ...st, ...stayFields(st), address: str(st.address), memo: str(st.memo), url: str(st.url) })),
     flights: (obj.flights ?? []).map((f) => ({ kind: 'out', flightNo: '', from: '', to: '', arriveAt: '', bookingRef: '', memo: '', ...f })),
   };
   const dropped = { expenses: 0, checks: 0 };
@@ -1079,18 +1099,25 @@ export function dayRanges(indices) {
   return parts.join(', ');
 }
 
+/** 숙소가 필요한데 아직 비어 있는 밤의 일차 번호 (0부터). */
+export function uncoveredStayNights(trip) {
+  const n = trip.days.length;
+  const returnFlights = (trip.flights ?? []).filter((f) => f.kind === 'in');
+  const lastFlightIn = returnFlights.some((f) => f.departAt.slice(0, 10) === trip.endDate);
+  const empty = [];
+  for (let i = 0; i < n - 1; i++) if (!nightStay(trip, i)) empty.push(i);
+  // 귀국편이 다른 날이면 여행 기간 마지막 밤도 확인한다.
+  if (n > 1 && !lastFlightIn && !nightStay(trip, n - 1) && returnFlights.length) empty.push(n - 1);
+  return empty;
+}
+
 /** 확인할 것 (상단 알림): 숙소가 빈 밤, 여행 기간 밖 항공편 */
 export function tripNotices(trip) {
   const out = [];
-  const n = trip.days.length;
-  const lastFlightIn = (trip.flights ?? []).some((f) => f.kind === 'in' && f.departAt.slice(0, 10) === trip.endDate);
-  const empty = [];
-  for (let i = 0; i < n - 1; i++) if (!nightStay(trip, i)) empty.push(i + 1);
-  // 마지막 밤은 귀국편이 없을 때만 (당일 귀국이면 숙소가 필요 없다)
-  if (n > 1 && !lastFlightIn && !nightStay(trip, n - 1) && (trip.flights ?? []).some((f) => f.kind === 'in')) empty.push(n);
+  const empty = uncoveredStayNights(trip);
   // P1-6: 하나씩 나열하지 않고 범위로 묶는다 — "Day 3–Day 19 밤 숙소 미정 (17박)"
-  if (empty.length && (trip.stays ?? []).length) out.push(t('{days} 밤 숙소 미정 ({n}박)', { days: dayRanges(empty.map((d) => d - 1)), n: empty.length }));
-  else if (!(trip.stays ?? []).length && n > 1) out.push(t('숙소를 아직 정하지 않았어요. 검색할 때 "추가할 곳"을 숙소로 고르세요'));
+  if (empty.length && (trip.stays ?? []).length) out.push(t('{days} 밤 숙소 미정 ({n}박)', { days: dayRanges(empty), n: empty.length }));
+  else if (empty.length) out.push(t('숙소를 아직 정하지 않았어요'));
   // 출국·귀국편은 기간 밖이어도 Day 1·마지막 날에 붙는다 (P0-2). 일정에 안 보이는 것은 기간 밖 이동편뿐
   const outside = (trip.flights ?? []).filter((f) => f.kind === 'move' && trip.startDate && (f.departAt.slice(0, 10) < trip.startDate || f.departAt.slice(0, 10) > trip.endDate));
   if (outside.length) out.push(t('여행 기간 밖 항공편 {n}개는 일정에 안 보여요', { n: outside.length }));
