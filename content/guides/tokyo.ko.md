@@ -4,7 +4,7 @@ slug: tokyo
 city: 도쿄
 country: 일본
 lang: ko
-draft: true
+draft: false
 updated: 2026-11-23
 description: "처음 도쿄에 가는 여행자를 위한 지역별 동선, 공항 이동, 교통권, 2026년에 바뀐 출국세·면세 제도, XenoDay로 일정 짜는 방법까지 한 번에 정리했습니다."
 sources:

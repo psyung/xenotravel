@@ -7,6 +7,22 @@ node_modules/
 # 빌드 때 만드는 배포 식별자 (scripts/build-version.mjs)
 /public/version.json
 
+# Static site output (scripts/build-site.mjs)
+/public/ko/
+/public/en/
+/public/zh/
+/public/ja/
+/public/about/
+/public/contact/
+/public/privacy/
+/public/terms/
+/public/guides/
+/public/guide-images/
+/public/guide-catalog.json
+/public/robots.txt
+/public/sitemap.xml
+/public/ads.txt
+
 # 밤샘 작업 진행 기록 (로컬 전용)
 /.overnight/
 

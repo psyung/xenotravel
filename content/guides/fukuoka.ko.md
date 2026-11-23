@@ -4,7 +4,7 @@ slug: fukuoka
 city: 후쿠오카
 country: 일본
 lang: ko
-draft: true
+draft: false
 updated: 2026-11-23
 description: "후쿠오카를 처음 가는 여행자를 위한 하카타·텐진 동선, 공항 지하철 이용법, 지하철 1일권, 다자이후·유후인 근교, 2026년에 바뀐 출국세·면세 제도, XenoDay로 일정 짜는 방법을 정리했습니다."
 sources:

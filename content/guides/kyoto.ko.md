@@ -4,7 +4,7 @@ slug: kyoto
 city: 교토
 country: 일본
 lang: ko
-draft: true
+draft: false
 updated: 2026-11-23
 description: "교토를 처음 가는 여행자를 위한 지역별 동선, 붐빔을 피하는 시간대, 버스·지하철 1일권, 2026년 3월에 오른 숙박세, XenoDay로 일정 짜는 방법을 정리했습니다."
 sources:

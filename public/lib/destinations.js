@@ -23,6 +23,10 @@ export const DESTINATIONS = [
 
 const norm = (s) => String(s ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
 
+export function destinationById(id) {
+  return DESTINATIONS.find((city) => city.keywords[0].replace(/\s+/g, '-').toLowerCase() === id);
+}
+
 /**
  * 여행지 글자 → 목록의 도시 { lat, lng, country, en, value } (없으면 null).
  * 화면 이름(4개 국어 번역 포함)·영어 이름·별칭이 정확히 같을 때만. extra: 트렌드 도시 [{ id, name, center, country }]

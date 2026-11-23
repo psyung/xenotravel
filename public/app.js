@@ -13,13 +13,14 @@ import { watchSelects, enhanceSelect, focusSelect, closeFor as closeSelectFor } 
 import { enhanceSuggestions } from './lib/suggestions.js';
 import { loadWeather, weatherSignature } from './lib/weather.js';
 import { t, k, missing as i18nMissing, LANGS, LANG_KEY, getLang, setLang, loadLang, saveLang, locale, num, dayName, shortDate, weekday, dateTime, normalizeLang, tripLength, allVersions } from './lib/i18n.js';
-import { privacySections } from './lib/privacy.js';
+import { privacySections, renderPrivacySections } from './lib/privacy.js';
+import { adSlot, loadAds } from './lib/ads.js';
 import { createUndoStack } from './lib/undo.js';
 import * as D from './lib/dayops.js';
 import { stayRangeWithin, overlappingStays, splitStayAround } from './lib/stays.js';
 import { groupPlaces, removePlaceGroup } from './lib/place-groups.js';
 import { summaryModel, drawSummary, summaryFileName } from './lib/summary.js';
-import { DESTINATIONS, destinationLabel, resolveDestination, repairTripCenter } from './lib/destinations.js';
+import { DESTINATIONS, destinationById, destinationLabel, resolveDestination, repairTripCenter } from './lib/destinations.js';
 import { backupReason, backupReasonText, lastBackupLabel } from './lib/backup.js';
 import * as Covers from './lib/covers.js';
 import { init as initBudget, renderBudget, fetchRate } from './pages/budget.js';
@@ -3606,6 +3607,15 @@ function route() {
       history.replaceState(null, '', '#/');
     }
     showPage('home');
+    if (location.hash.startsWith('#/?')) {
+      const params = new URLSearchParams(location.hash.slice(3));
+      const id = params.get('dest');
+      const destination = destinationById(id);
+      if (destination) {
+        $('#homeNewDestination').value = t(destination.value);
+        if (id === 'shanghai' && params.get('course') === 'shanghai') void importShanghaiCourse(location.hash);
+      }
+    }
     return;
   }
   if (ui.homeAlert?.kind === 'missing') ui.homeAlert = null;
@@ -3660,7 +3670,7 @@ function deleteTrip(id) {
 }
 
 /** 새 여행: 여행지 좌표(와 나라)를 찾고 만든 뒤 일정 화면으로. 나라를 알면 가계부 통화도 그 나라 돈으로 시작한다. */
-async function createTripFrom({ destination, title = '', startDate, endDate }, submit) {
+async function createTripFrom({ destination, title = '', startDate, endDate, places = [] }, submit) {
   const label = submit?.textContent;
   if (submit) {
     submit.disabled = true;
@@ -3681,6 +3691,7 @@ async function createTripFrom({ destination, title = '', startDate, endDate }, s
   }
   const center = found ? { lat: found.lat, lng: found.lng } : null;
   const tr = M.createTrip({ title, destination: destination.trim(), startDate, endDate, center });
+  tr.inbox.push(...places.map(M.createItem));
   if (found?.country) tr.country = found.country;
   B.ensureBudget(tr); // 통화를 정해 둔다 (근거가 없으면 첫 기록 전에 확인받는다)
   switchTrip(tr, { save: true });
@@ -3823,12 +3834,12 @@ function homeAlertHtml() {
 }
 
 /** 공통 푸터 (모든 화면 아래): 저작권 · 문의 · 개인정보처리방침 */
-const CONTACT = 'xenobase.official@gmail.com';
 function renderFooter() {
   $('#siteFoot').innerHTML = `
       <nav class="foot-links" aria-label="${esc(t('사이트 정보'))}">
         <button type="button" class="linkbtn" id="privacyLink" data-foot="privacy" aria-haspopup="dialog">${esc(t('개인정보처리방침'))}</button>
-        <span class="foot-contact">${esc(t('문의'))} <a href="mailto:${CONTACT}">${CONTACT}</a></span>
+        <a href="/${getLang()}/privacy/">${esc(t('개인정보처리방침 웹페이지'))}</a>
+        <a href="/${getLang()}/contact/">${esc(t('문의'))}</a>
       </nav>
       <p class="foot-note">${esc(t('일정·가계부는 이 브라우저에만 저장돼요. 다른 기기로 옮길 땐 백업 파일을 쓰세요'))}<span class="edit-only"> · <button type="button" class="linkbtn" data-foot="import">${esc(t('백업 파일 불러오기'))}</button></span></p>
       <p class="foot-copy">© 2026 XenoTravel ${esc(t('모든 권리 보유.'))}${debugBuild ? ` <span class="foot-build" title="${esc(t('배포 버전 (커밋)'))}">${esc(t('빌드'))} <code id="buildCommit">${esc(buildCommit)}</code></span>` : ''}</p>`;
@@ -3855,8 +3866,48 @@ $('#siteFoot').addEventListener('click', (e) => {
   else if (act === 'import' && !ui.readonly) $('#importFile').click();
 });
 
+let guideCatalog;
+let catalogRequest;
+function readGuideCatalog() {
+  catalogRequest ??= fetch('/guide-catalog.json')
+    .then((r) => r.ok ? r.json() : null)
+    .catch(() => null)
+    .then((data) => {
+      guideCatalog = data;
+      if (data && prefs.page === 'home' && !ui.readonly) renderHome();
+      return data;
+    });
+  return catalogRequest;
+}
+
+async function importShanghaiCourse(hash) {
+  const data = await readGuideCatalog();
+  if (location.hash !== hash || ui.readonly) return;
+  const places = data?.courses?.shanghai;
+  if (!places?.length) {
+    toast(t('가이드 코스를 불러오지 못했어요.'));
+    return;
+  }
+  history.replaceState(null, '', '#/');
+  const [startDate] = defaultDates();
+  await createTripFrom({ destination: t(destinationById('shanghai').value), startDate, endDate: startDate, places });
+}
+
+function homeGuides() {
+  const localized = guideCatalog?.guides?.[getLang()];
+  const guides = localized?.length ? localized : guideCatalog?.guides?.ko;
+  if (!guides?.length) return '';
+  const lang = localized?.length ? getLang() : 'ko';
+  return `<section class="home-sec">
+    <div class="sec-head"><h2>${esc(t('여행 가이드'))}</h2><a href="/${lang}/guides/">${esc(t('가이드 전체 보기'))}</a></div>
+    <ul class="insp" lang="${LANGS[lang].html}">${guides.map((guide) =>
+      `<li><b><a href="${esc(guide.href)}">${esc(guide.title)}</a></b><p>${esc(guide.description)}</p></li>`).join('')}</ul>
+  </section>`;
+}
+
 function renderHome() {
   const el = $('#page-home');
+  void readGuideCatalog();
   const form = $('#homeNew', el);
   const restoreSearch = form && document.activeElement === $('#homeNewDestination', form);
   const caret = restoreSearch ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
@@ -3909,6 +3960,7 @@ function renderHome() {
         : ''
     }
 
+    ${homeGuides()}
     <section class="home-sec">
       <div class="sec-head"><h2>${esc(t('XenoTravel로 할 수 있는 것'))}</h2></div>
       <ul class="feats">
@@ -3922,7 +3974,9 @@ function renderHome() {
         ${featureCard('backup', t('백업 저장'), t('백업 파일로 여행을 다른 기기에 옮길 수 있어요.'))}
       </ul>
     </section>
+    ${ui.readonly ? '' : adSlot('home')}
   </div>`;
+  void loadAds(el, () => prefs.page === 'home' && !ui.readonly);
   for (const cover of $$('[data-cover-image]', el)) {
     Covers.get(cover.dataset.coverImage).then((blob) => {
       if (blob && cover.isConnected && !$('img', cover)) paintCover(cover, blob);
@@ -5411,12 +5465,10 @@ initPresets({
 const privacyDialog = $('#privacyDialog');
 closeOnBackdrop(privacyDialog);
 function renderPrivacy() {
-  const doc = privacySections(getLang(), { contact: CONTACT });
+  const doc = privacySections(getLang());
   // 위쪽 차례: 저장·공유·외부 전송·삭제·문의로 바로 이동
   const toc = `<nav class="privacy-toc" aria-label="${esc(t('차례'))}"><ul>${doc.map((s, i) => `<li><a href="#pv-${i}" data-pv="${i}">${esc(s.title)}</a></li>`).join('')}</ul></nav>`;
-  $('#privacyBody').innerHTML = toc + doc
-    .map((s, i) => `<section id="pv-${i}" tabindex="-1"><h3>${esc(s.title)}</h3>${s.body.map((p) => (Array.isArray(p) ? `<ul>${p.map((li) => `<li>${esc(li)}</li>`).join('')}</ul>` : `<p>${esc(p)}</p>`)).join('')}</section>`)
-    .join('');
+  $('#privacyBody').innerHTML = toc + renderPrivacySections(doc, { modal: true });
 }
 $('#privacyBody').addEventListener('click', (e) => {
   const i = e.target.closest('[data-pv]')?.dataset.pv;

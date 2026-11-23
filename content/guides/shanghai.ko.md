@@ -4,7 +4,7 @@ slug: shanghai
 city: 상하이
 country: 중국
 lang: ko
-draft: true
+draft: false
 experience: true
 visited: 2026-11-07
 updated: 2026-11-23

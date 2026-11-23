@@ -4,7 +4,7 @@ slug: osaka
 city: 오사카
 country: 일본
 lang: ko
-draft: true
+draft: false
 updated: 2026-11-23
 description: "오사카를 처음 가는 여행자를 위한 미나미·기타 동선, 2박 3일·4박 5일 예시, 오사카 주유패스 가격, 2026년에 바뀐 출국세·면세 제도, XenoDay로 일정 짜는 방법을 정리했습니다."
 sources:

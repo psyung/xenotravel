@@ -160,7 +160,7 @@ test('P4-6: 배포 식별자 — 커밋 7자리를 메타에 넣고, 푸터에 �
   assert.match(read('index.html'), /<meta name="build-commit" content="[^"]+">/);
   assert.match(appSource(), /id="buildCommit"/);
   const vercel = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
-  assert.equal(vercel.buildCommand, 'node scripts/build-version.mjs');
+  assert.equal(vercel.buildCommand, 'node scripts/build-version.mjs && node scripts/build-site.mjs');
 });
 
 test('P4-6: 파비콘은 밝은 배지 + 흰 탭에서도 보이는 테두리, 다크 탭(#202124) 대비 충분', () => {

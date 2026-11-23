@@ -1,0 +1,27 @@
+.static-site { margin: 0; background: var(--bg); color: var(--ink); overflow-wrap: anywhere; }
+.static-site > header, .static-site > footer { background: var(--paper); }
+.static-site > header { border-bottom: 1px solid var(--line); }
+.static-site > footer { border-top: 1px solid var(--line); }
+.static-site .site-shell, .static-site > main { max-width: 800px; margin: 0 auto; padding: 16px 20px; }
+.static-site > main { padding-block: clamp(24px, 5vw, 48px); line-height: 1.7; }
+.static-site nav, .guide-actions { display: flex; flex-wrap: wrap; gap: 10px 18px; }
+.static-site a { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; }
+.static-site .site-brand { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 12px; font-weight: 700; color: var(--ink); text-decoration: none; }
+.static-site h1, .static-site h2, .static-site h3 { line-height: 1.25; }
+.static-site h1 { font-size: clamp(1.65rem, 5vw, 2.5rem); margin: 0 0 14px; }
+.static-site time, .static-site figcaption { color: var(--sub); font-size: .9rem; }
+.static-site figure { margin: 20px 0; }
+.static-site figure img { display: block; max-width: 100%; height: auto; border-radius: 12px; }
+.static-site figcaption { margin-top: 6px; }
+.static-site blockquote { border-inline-start: 3px solid var(--accent); padding-inline: 14px; margin-inline: 0; }
+.table-scroll { max-width: 100%; overflow-x: auto; }
+.static-site table { width: 100%; border-collapse: collapse; }
+.static-site th, .static-site td { padding: 8px; border: 1px solid var(--line); text-align: start; }
+.static-site th, .static-site .badge, .static-site .draft { background: var(--accent-soft); }
+.static-site .badge, .static-site .draft { display: inline-block; margin: 0 0 12px; padding: 4px 10px; border-radius: 8px; }
+.static-site article > time { display: block; }
+.static-site .guide-list { list-style: none; padding: 0; display: grid; gap: 12px; }
+.static-site .guide-list li { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.static-site .guide-list h2 { margin: 0; font-size: 1.125rem; }
+.guide-actions { margin-top: 24px; }
+.static-site .cta { display: inline-block; padding: 8px 14px; border-radius: 8px; background: var(--cta); color: var(--cta-text); font-weight: 600; text-decoration: none; }

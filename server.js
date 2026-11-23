@@ -12,6 +12,8 @@ import { fileURLToPath } from 'node:url';
 import { decodeShare, shareSummary, SHORT_ID, CODE_RE } from './public/lib/share.js';
 import { LIMITS } from './public/lib/limits.js';
 import { buildCommit, withBuildMeta, withSwBuild } from './scripts/build-version.mjs';
+import { withSiteMeta } from './scripts/build-site.mjs';
+import { SITE_ORIGIN } from './public/lib/site-config.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, 'public');
@@ -21,9 +23,14 @@ const TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
+  '.xml': 'application/xml; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
   '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
 
@@ -158,28 +165,27 @@ void cleanShares();
 setInterval(cleanShares, 24 * 60 * 60_000).unref();
 
 /** /s/<id>: 앱 화면 그대로에 미리보기 태그만 바꿔 넣는다. */
-async function sharePage(req, res, id) {
+async function sharePage(res, id) {
   const share = await loadShare(id);
   let html = await readFile(path.join(root, 'index.html'), 'utf8');
   const title = share ? share.title : '공유 링크를 찾을 수 없어요';
   const desc = share ? `${share.line} · 앱 설치 없이 바로 보기` : 'XenoTravel 여행 일정';
-  const host = req.headers['x-forwarded-host'] ?? req.headers.host;
-  const proto = req.headers['x-forwarded-proto'] ?? 'http';
   const meta = [
     `<base href="/">`, // /s/<id> 아래에서도 styles.css·app.js를 루트에서 찾게
     `<meta property="og:type" content="website">`,
     `<meta property="og:site_name" content="XenoTravel">`,
     `<meta property="og:title" content="${esc(title)}">`,
     `<meta property="og:description" content="${esc(desc)}">`,
-    `<meta property="og:url" content="${esc(`${proto}://${host}/s/${id}`)}">`,
-    `<meta property="og:image" content="${esc(`${proto}://${host}/og.png`)}">`,
+    `<meta property="og:url" content="${esc(new URL('/s/' + id, SITE_ORIGIN).href)}">`,
+    `<meta property="og:image" content="${esc(new URL('/og.png', SITE_ORIGIN).href)}">`,
     `<meta name="twitter:card" content="summary">`,
   ].join('\n  ');
   html = withBuildMeta(html, COMMIT)
-    .replace(/<title>.*?<\/title>/, `<title>${esc(title)} · XenoTravel</title>`)
-    .replace(/<meta name="description"[^>]*>/, `<meta name="description" content="${esc(desc)}">`)
+    .replace(/<!-- site-origin-meta:start -->[\s\S]*?<!-- site-origin-meta:end -->/, '')
+    .replace(/<title>.*?<\/title>/, () => `<title>${esc(title)} · XenoTravel</title>`)
+    .replace(/<meta name="description"[^>]*>/, () => `<meta name="description" content="${esc(desc)}">`)
     .replace(/^[ \t]*<meta property="og:[^"]+"[^>]*>\r?\n/gm, '')
-    .replace('<meta charset="utf-8">', `<meta charset="utf-8">\n  ${meta}`);
+    .replace('<meta charset="utf-8">', () => `<meta charset="utf-8">\n  ${meta}`);
   res.writeHead(share ? 200 : 404, { 'content-type': TYPES['.html'], 'cache-control': 'no-cache' });
   res.end(html);
 }
@@ -209,6 +215,7 @@ async function notFound(res) {
 }
 
 async function staticFile(res, pathname) {
+  if (/^\/(?:about|contact|privacy|terms|guides|ko|en|zh|ja)(?:\/[a-z0-9-]+)*$/.test(pathname)) pathname += '/';
   if (pathname.endsWith('/')) pathname += 'index.html';
   const file = path.normalize(path.join(root, pathname));
   if (!file.startsWith(root + path.sep)) {
@@ -224,7 +231,7 @@ async function staticFile(res, pathname) {
   }
   try {
     let body = await readFile(file);
-    if (pathname === '/index.html') body = withBuildMeta(body.toString('utf8'), COMMIT);
+    if (pathname === '/index.html') body = withSiteMeta(withBuildMeta(body.toString('utf8'), COMMIT));
     // 로컬: 공개 파일 내용이 바뀔 때마다 서비스 워커 빌드 값도 바뀌게 (커밋 + 내용 해시) → 오프라인 저장본을 새로 받는다
     if (pathname === '/sw.js') body = withSwBuild(body.toString('utf8'), `${COMMIT}-${await publicHash(root)}`);
     res.writeHead(200, {
@@ -258,7 +265,7 @@ http
         return share ? json(res, 200, { code: share.code }) : json(res, 404, { error: '공유 링크를 찾을 수 없어요' });
       }
       m = /^\/s\/([^/]+)\/?$/.exec(pathname);
-      if (m) return SHORT_ID.test(m[1]) ? await sharePage(req, res, m[1]) : await notFound(res); // 형식부터 틀린 공유 주소는 바로 404 페이지
+      if (m) return SHORT_ID.test(m[1]) ? await sharePage(res, m[1]) : await notFound(res); // 형식부터 틀린 공유 주소는 바로 404 페이지
       await staticFile(res, pathname);
     } catch (err) {
       console.error(err);

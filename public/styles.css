@@ -65,6 +65,8 @@
 }
 
 * { box-sizing: border-box; }
+.display-ad { width: 100%; min-width: 0; height: 250px; margin-block: 16px; overflow: hidden; }
+.display-ad .adsbygoogle { display: block; width: 100%; height: 100%; }
 [hidden] { display: none !important; }
 /* 밝기를 바꾸는 순간에는 색 전환 애니메이션을 끈다 (화면 전체 요소가 0.15초씩 따로 바뀌며 느려 보이던 것) */
 .theme-switching *, .theme-switching *::before, .theme-switching *::after { transition: none !important; }

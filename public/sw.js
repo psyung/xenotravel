@@ -61,6 +61,8 @@ const APP_FILES = [
   'lib/messages.js',
   'lib/model.js',
   'lib/privacy.js',
+  'lib/ads.js',
+  'lib/site-config.js',
   'lib/select.js',
   'lib/settle.js',
   'lib/share.js',

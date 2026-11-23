@@ -4,6 +4,7 @@ import * as C from '../lib/checklist.js';
 import * as S from '../lib/settle.js';
 import { focusSelect } from '../lib/select.js';
 import { t, k, num, dayName, shortDate } from '../lib/i18n.js';
+import { adSlot, loadAds } from '../lib/ads.js';
 
 let drawPage, requestRate;
 export { drawPage as renderBudget, requestRate as fetchRate };
@@ -214,7 +215,9 @@ export function init(ctx) {
         }
     </div>
     <p class="fine">${esc(t('가계부는 이 브라우저에만 저장되고 공유 링크에는 들어가지 않아요. 백업 파일에는 포함돼요. 자동 환율: ExchangeRate-API (하루 1번 갱신).'))}</p>
+    ${ctx.ui.readonly ? '' : adSlot('budget')}
   </div>`;
+    void loadAds(el, () => prefs.page === 'budget' && !ctx.ui.readonly);
   }
 
   /** 기록 시점 환율 표시: "100엔 = 912원" (그 기록에 남긴 환율이라 지금 환율을 바꿔도 그대로) */
