@@ -205,7 +205,7 @@ test('P4-7: 잘못된 공유 주소는 404 (서버: 형식 오류·없는 링크
 
 test('P4-7: 오프라인 → 온라인 복귀는 지도를 다시 맞추지 않고 확대·일차를 그대로 둔다', () => {
   const app = appSource();
-  const fn = /function restoreTiles\(\) \{([\s\S]*?)\n\}/.exec(app)?.[1];
+  const fn = /^  function restoreTiles\(\) \{([\s\S]*?)\n  \}/m.exec(read('map/map.js'))?.[1];
   assert.ok(fn);
   assert.match(fn, /map\.setView\(view\.center, view\.zoom/);
   assert.doesNotMatch(fn, /fit|focusList/);
@@ -597,9 +597,9 @@ test('R3-8: 일자 순서 되돌리기는 그 뒤 다른 날로 옮긴 장소의
 test('R3-4·7·9·10: 항공편만 있는 날 PDF · 미리보기 표식에 항공편·숙소 · 결과 본문 클릭 · 늦은 환율 응답', () => {
   const app = appSource();
   assert.match(app, /if \(!route\.length\) \{\n      div\.remove\(\);/);
-  assert.match(app, /\(trip\.flights \?\? \[\]\)\.map\(\(f\) => \[f\.id, f\.kind, f\.departAt, f\.arriveAt, f\.flightNo, f\.from, f\.to\]\)/, '편명·공항도 (4차 #4)');
+  assert.match(app, /\(ctx\.trip\.flights \?\? \[\]\)\.map\(\(f\) => \[f\.id, f\.kind, f\.departAt, f\.arriveAt, f\.flightNo, f\.from, f\.to\]\)/, '편명·공항도 (4차 #4)');
   assert.match(app, /d\.items\.map\(\(x\) => \[x\.id, x\.time, x\.name, x\.lat, x\.lng, x\.url\]\)/, '장소 이름과 중복 판정 정보도');
-  assert.match(app, /\(trip\.stays \?\? \[\]\)\.map\(\(s\) => \[s\.id, s\.startIndex, s\.nights, s\.name\]\)/);
+  assert.match(app, /\(ctx\.trip\.stays \?\? \[\]\)\.map\(\(s\) => \[s\.id, s\.startIndex, s\.nights, s\.name\]\)/);
   assert.match(app, /if \(!li\) return;\n  if \(ui\.resultsFor !== searchEl\.value\.trim\(\)\) return void runSearch/);
   assert.match(app, /if \(ctx\.trip !== forTrip \|\| seq !== rateRequest\) return;\n/, '최신 요청만 성공을 알린다 (5차 #7)');
   assert.match(app, /if \(ctx\.trip !== forTrip \|\| seq !== rateRequest\) return; \/\/ 그사이 새 요청이 있었으면 옛 요청의 실패는 알리지 않는다/, '실패도 같은 검사');
@@ -684,7 +684,7 @@ test('모바일 지도 하단 시트: 지도 탭에서만, 장소 카드·지도
   const app = appSource();
   assert.match(app, /paddingBottomRight: \[48, 48 \+ pad\]/);
   assert.match(app, /\$\('#msList'\)\.inert = sheetState === 'peek'/, '살짝 상태에선 가려진 목록에 포커스 없음');
-  assert.match(app, /renderMapSheet\(\);\n  if \(fit\) fitTo\(bounds\);/, '지도를 그릴 때마다 목록도');
+  assert.match(app, /renderMapSheet\(\);\s+if \(fit\) fitTo\(bounds\);/, '지도를 그릴 때마다 목록도');
 });
 
 /* ───────── GPT 교차 검수 6차 반영 ───────── */

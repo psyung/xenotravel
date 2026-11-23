@@ -10,7 +10,7 @@ function filesUnder(dir) {
 }
 
 export function screenFiles() {
-  return ['pages', 'ui'].flatMap(filesUnder).sort();
+  return ['pages', 'ui', 'map'].flatMap(filesUnder).sort();
 }
 
 export function appSource() {

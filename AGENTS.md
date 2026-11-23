@@ -17,7 +17,12 @@
 작업을 시작하기 전에 아래 문서를 순서대로 확인하세요.
 
 0. **`docs/qa-2026-11-23.md` *(현재 최우선 활성 지시서 — 2026-11-23 QA, Phase 0~6)***
-   * 진행: Phase 0(보안 S-1~S-5) · Phase 1(P0-1~P0-9, F-1) · Phase 2(P1-1~P1-8) 완료. 회귀 테스트: `test/security.test.js`, `test/qa1123.test.js`, `test/qa1123-p2.test.js`.
+   * 진행(2026-11-24): Phase 0~6과 PART F(F-1~F-10, F-5는 측정 메모만) 완료. **남은 것: A-1 도메인 xenoday.com 연결 + A-1b 앱 이름 XenoDay 변경(같은 배포로).**
+   * 회귀 테스트: `test/security.test.js`, `test/qa1123*.test.js`(p2·p3·p3b·p3c·p4·p4-server·p5·p6). 앱 소스 정규식 검사는 `test/helpers/app-source.js`(app.js + pages/ + ui/ + map/)를 쓴다.
+   * 구조(F-4): `app.js`는 진입점·화면 전환. `pages/`(plan·budget·check), `map/`(지도·찍기), `ui/`(고정 검색 바·맨 위로)는 `init(ctx)` + getter로 살아 있는 상태를 읽는다.
+   * 사이트: `scripts/build-site.mjs`가 `content/guides/*.md` → 정적 가이드·개인정보·소개·문의·약관·robots·sitemap·ads.txt를 만든다(생성물은 .gitignore). 사이트 주소·게시자 ID·광고 스위치(ADS_ENABLED=false)·문의 메일은 `public/lib/site-config.js` 한 곳.
+   * 도메인 작업 체크리스트(A-1/A-1b): ① site-config의 SITE_ORIGIN을 https://xenoday.com 으로 ② vercel.json에 xenotravel.vercel.app·www → xenoday.com 301(해시·/s/<id> 보존) ③ 화면·메타·manifest·OG·공유 문구의 앱 이름을 XenoDay로(4개 국어, 로마자 그대로) ④ **localStorage 키 `xenotravel:*`와 SW 캐시 접두어는 바꾸지 않는다** ⑤ 첫 방문 1회 "XenoTravel이 XenoDay로 이름을 바꿨어요" 토스트 ⑥ og.png·로고 글자 확인 ⑦ Search Console 주소 변경은 사용자가 직접.
+   * 애드센스: ads.txt는 `pub-` + 숫자 16자리 게시자 ID가 필요하다(지금 값 'xenoday'는 주석 처리 + 빌드 경고). CSP는 아직 Report-Only — 위반이 없으면 강제 모드로.
    * 공용 UI: `lib/select.js`(`<select data-ui-select>` → 팝오버/바텀시트), `lib/timefield.js`(flatpickr 시간 입력). 새 select·시간 칸은 이것을 쓴다.
    * 패치 주의: Node 스크립트로 소스를 고칠 때 `String.replace(a, b)`의 b에 `$$`가 있으면 `$`로 바뀐다 → `replace(a, () => b)`를 쓴다.
    * 결정: P0-5 막대 폭 축소+라벨 간격(Codex 협의), P0-7 그 밖의 언어는 영어, P0-8 데이터 없으면 접힌 한 줄 안내.

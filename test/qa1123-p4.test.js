@@ -18,6 +18,9 @@ const app = read('app.js');
 const html = read('index.html');
 const check = read('pages/check.js');
 const budget = read('pages/budget.js');
+const plan = read('pages/plan.js');
+const map = read('map/map.js');
+const picking = read('map/picking.js');
 const point = { name: 'Museum', lat: 35, lng: 139 };
 const trip = () => M.createTrip({ title: 'Old trip', startDate: '2020-01-10', endDate: '2020-01-12', center: point });
 const flight = {
@@ -68,11 +71,12 @@ test('P3-1: plan card and editing routes are wired without date lockouts', () =>
   assert.match(card, /B\.spentUnits\(trip\)/);
   assert.match(card, /places\.filter\(\(place\) => place\.visited\)/);
   assert.match(card, /esc\(entry\.memo\)/);
-  assert.match(app, /found\.item\.visited = e\.target\.checked;\s+commit\(\)/);
+  assert.match(plan, /found\.item\.visited = e\.target\.checked;\s+commit\(\)/);
   assert.doesNotMatch(app, /\.min\s*=\s*TODAY|setAttribute\(['"]min['"], TODAY\)/);
   assert.doesNotMatch(app, /ui\.readonly\s*=\s*.*(?:tripEnded|endDate)/);
   for (const [source, calls] of [
-    [app, ['M.addItem(trip, target', 'M.addStay(trip, place, range.startIndex', 'M.updateFlight(trip, ui.editFlight']],
+    [app, ['M.addItem(trip, target', 'M.updateFlight(trip, ui.editFlight']],
+    [plan, ['M.addStay(ctx.trip, place, range.startIndex']],
     [budget, ['B.addExpense(ctx.trip, data)', 'B.updateExpense(ctx.trip, id, data)']],
     [check, ['C.addCheck(ctx.trip,', 'C.toggleCheck(ctx.trip,']],
   ]) for (const call of calls) assert.ok(source.includes(call), call);
@@ -96,23 +100,23 @@ test('P3-2: list tabs, all routes, and bottom sheet share the map day and invali
   const tab = /function showTab\(tab\) \{[\s\S]+?\n\}/.exec(app)[0];
   assert.match(tab, /tab === 'map'[\s\S]*?renderMap\(/);
   assert.doesNotMatch(tab, /ui\.(?:day|focusList)\s*=/);
-  assert.match(app, /function showAllRoutes\(\) \{\s*ui\.focusList = null;[\s\S]*?renderMap\(/);
-  assert.match(app, /if \(ui\.focusList == null\) return selectDay\(ui\.day, \{ scroll: false \}\)/);
+  assert.match(map, /function showAllRoutes\(\) \{\s*ui\.focusList = null;[\s\S]*?renderMap\(/);
+  assert.match(map, /if \(ui\.focusList == null\) return selectDay\(ui\.day, \{ scroll: false \}\)/);
   assert.match(html, /id="msDay" data-ui-select/);
-  assert.match(app, /\$\('#msDay'\)\.addEventListener\('change'[\s\S]*?selectDay\(index, \{ scroll: false \}\)/);
-  assert.match(app, /mapDayContext = .*ui\.day, ui\.focusList/);
-  assert.match(app, /if \(locationChoice && locationChoice\.context !== mapDayContext\(\)\) map\.closePopup/);
+  assert.match(map, /\$\('#msDay'\)\.addEventListener\('change'[\s\S]*?selectDay\(index, \{ scroll: false \}\)/);
+  assert.match(map, /mapDayContext = .*ui\.day, ui\.focusList/);
+  assert.match(map, /if \(locationChoice && locationChoice\.context !== mapDayContext\(\)\) map\.closePopup/);
 });
 
 test('P3-2: all-route popup waits for an explicit day and both actions use that day', () => {
-  const popup = /async function showLocationChoices\([\s\S]+?\n\}/.exec(app)[0];
+  const popup = /^  async function showLocationChoices\([\s\S]+?\n  \}/m.exec(picking)[0];
   assert.match(popup, /let dayId = all \? '' : ui\.focusList/);
   assert.match(popup, /<select data-ui-select[^>]*>\s*<option value="">/);
   assert.match(popup, /select\.addEventListener\('change'[\s\S]*?dayId = select\.value;\s*updateActions/);
   assert.match(popup, /item\.disabled = start < 0;\s*stay\.disabled = start < 0/);
   assert.match(popup, /addPlace\(place, \{ edit: true, listId: dayId \}\)/);
-  assert.match(popup, /openStays\(\{ place, start \}\)/);
-  assert.match(app, /const nights = Math.min\(place \? 1 : M.DEFAULT_NIGHTS/);
+  assert.match(popup, /ctx\.openStays\(\{ place, start \}\)/);
+  assert.match(plan, /const nights = Math.min\(place \? 1 : M.DEFAULT_NIGHTS/);
   for (const key of ['+ 이 위치 추가 ({day})', '숙소로 추가 ({day}부터 1박)']) {
     assert.ok(popup.includes(key));
     assert.equal(MESSAGES[key].length, 3);

@@ -16,7 +16,8 @@ function list(name) {
 test('sw.js: 오프라인에 필요한 앱 파일이 빠짐없이 들어 있다', () => {
   const files = list('APP_FILES');
   const libs = readdirSync(new URL('lib/', pub)).filter((f) => f.endsWith('.js')).map((f) => `lib/${f}`);
-  for (const f of ['index.html', 'styles.css', 'app.js', 'manifest.webmanifest', 'data/trends.json', ...libs, ...screenFiles()]) {
+  const modules = screenFiles(); // pages/, ui/, and map/
+  for (const f of ['index.html', 'styles.css', 'app.js', 'manifest.webmanifest', 'data/trends.json', ...libs, ...modules]) {
     assert.ok(files.includes(f), `${f}이(가) APP_FILES에 없어요`);
   }
   for (const f of files.filter((x) => x !== './')) readFileSync(new URL(f, pub)); // 없는 파일을 적으면 설치가 실패한다

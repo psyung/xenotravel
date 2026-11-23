@@ -123,8 +123,8 @@ test('P2-1–P2-3: app entry points use shared controls and batch operations', (
   assert.match(app, /splitStayAround\(stay, range\)/);
   assert.doesNotMatch(app + html, /STAY_TARGET|stayOpts/);
   assert.match(app, /copying \? 'checkbox' : 'radio'/);
-  assert.match(app, /D\.copyToDays\(trip, op\.itemId, op\.copy\)/);
+  assert.match(app, /D\.copyToDays\(ctx\.trip, op\.itemId, op\.copy\)/);
   assert.match(html, /id="placeGroupsSort" data-ui-select/);
   assert.match(app, /class="tile" data-open-place-groups/);
-  assert.match(app, /removePlaceGroup\(trip, ids\)/);
+  assert.match(app, /removePlaceGroup\(ctx\.trip, ids\)/);
 });

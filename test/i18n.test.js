@@ -14,7 +14,7 @@ import { privacySections } from '../public/lib/privacy.js';
 
 const pub = new URL('../public/', import.meta.url);
 const read = (f) => readFileSync(new URL(f, pub), 'utf8');
-const sources = [appSource(), ...readdirSync(new URL('lib/', pub)).filter((f) => f.endsWith('.js') && f !== 'messages.js').map((f) => read(`lib/${f}`))];
+const sources = [appSource() /* app.js plus pages/, ui/, and map/ */, ...readdirSync(new URL('lib/', pub)).filter((f) => f.endsWith('.js') && f !== 'messages.js').map((f) => read(`lib/${f}`))];
 const unquote = (s) => s.replace(/\\'/g, "'").replace(/\\n/g, '\n');
 
 export function usedKeys() {
