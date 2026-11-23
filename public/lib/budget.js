@@ -40,7 +40,9 @@ export const EXPENSE_CATS = {
 
 export const PAYMENTS = {
   cash: { label: '현금', icon: '💴' },
-  card: { label: '카드', icon: '💳' },
+  card: { label: '신용카드', icon: '💳' },
+  debit: { label: '체크카드', icon: '💳' },
+  easypay: { label: '간편결제', icon: '📱' },
   transit: { label: '교통카드', icon: '🚃' },
   travel: { label: '트래블카드', icon: '🌐' },
 };
@@ -109,7 +111,7 @@ export function normalizeExpenses(trip) {
   const b = trip.budget ?? {};
   for (const e of trip.expenses ?? []) {
     if (!e || typeof e !== 'object') continue;
-    if (!PAYMENTS[e.pay]) e.pay = 'card';
+    if (!Object.hasOwn(PAYMENTS, e.pay)) e.pay = 'card';
     if (!EXPENSE_CATS[e.cat]) e.cat = 'etc';
     if (e.cur !== 'KRW') e.cur = 'local';
     const d = e.day === '' || e.day == null ? NaN : Number(e.day);
@@ -178,7 +180,7 @@ export function addExpense(trip, { amount, cur = 'local', cat = 'etc', pay = 'ca
     cur: cur === 'KRW' ? 'KRW' : 'local',
     krw: toKrw(a, cur, budget), // 환율을 모르면 null (나중에 채움)
     cat: EXPENSE_CATS[cat] ? cat : 'etc',
-    pay: PAYMENTS[pay] ? pay : 'card',
+    pay: Object.hasOwn(PAYMENTS, pay) ? pay : 'card',
     day: Number.isInteger(day) ? day : -1,
     memo: String(memo ?? '').trim(),
     at: new Date().toISOString(),
@@ -313,6 +315,13 @@ export function budgetState(total, spent) {
 
 export const won = (n) => `₩${Math.round(Number(n) || 0).toLocaleString(locale())}`;
 
+/** 통화 선택 버튼처럼 기호만 표시할 때도 엔과 위안을 구분한다. */
+export function currencySymbol(code) {
+  if (code === 'JPY') return 'JP¥';
+  if (code === 'CNY') return 'CN¥';
+  return CURRENCIES[code]?.symbol.trim() ?? '';
+}
+
 export function money(amount, code) {
   const c = CURRENCIES[code] ?? CURRENCIES.USD;
   const n = Number(amount) || 0;
@@ -325,7 +334,6 @@ export function money(amount, code) {
  * 기준 통화가 현지 통화면 현지 환율(krwPerUnit)을, 그 밖이면 baseKrwPerUnit(기준 통화 1단위가 몇 원)을 쓴다.
  * 환율을 아직 모르면 원화로 보여 준다.
  */
-export const BASE_CHOICES = ['KRW', 'USD', 'EUR', 'JPY', 'CNY', 'TWD'];
 export const baseCode = (budget) => (CURRENCIES[budget?.base] ? budget.base : 'KRW');
 const INT_CODES = new Set(['KRW', 'JPY', 'VND']);
 /** 통화별 소수 자리: KRW·JPY·VND는 정수, 그 밖(USD·EUR 등)은 소수점 둘째 자리 */
@@ -443,22 +451,27 @@ export function rateLabel(budget) {
   return t('{unit}{name} = {krw}원', { unit: c.unit === 1 ? '1' : c.unit, name: t(c.name), krw: v.toLocaleString(locale(), { maximumFractionDigits: 2 }) });
 }
 
-/** 엑셀에서 바로 열리는 CSV (BOM 포함). 통화 코드 열이 있어서 엔·위안을 구분한다. */
-export function expensesCsv(trip) {
-  const budget = ensureBudget(trip);
-  const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+/** CSV와 XLSX에서 공유하는 가계부 열과 기록. */
+export function expenseRows(trip) {
+  ensureBudget(trip);
   const head = ['날짜', '분류', '결제', '금액', '통화', '원화', '메모', '기록 시각'].map((h) => t(h));
   const rows = trip.expenses.map((e) => [
     expenseDayLabel(trip, e),
     EXPENSE_CATS[e.cat] ? t(EXPENSE_CATS[e.cat].label) : '',
     PAYMENTS[e.pay] ? t(PAYMENTS[e.pay].label) : '',
     e.amount,
-    e.cur === 'KRW' ? 'KRW' : budget.currency,
+    e.ccy,
     e.krw ?? '',
     e.memo,
     e.at,
   ]);
-  return '﻿' + [head, ...rows].map((r) => r.map(q).join(',')).join('\r\n');
+  return [head, ...rows];
+}
+
+/** 엑셀에서 바로 열리는 CSV (BOM 포함). */
+export function expensesCsv(trip) {
+  const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  return '﻿' + expenseRows(trip).map((r) => r.map(q).join(',')).join('\r\n');
 }
 
 /**
@@ -607,7 +620,7 @@ export function updateExpense(trip, id, patch) {
   }
   if (patch.memo != null) e.memo = String(patch.memo).trim();
   if (EXPENSE_CATS[patch.cat]) e.cat = patch.cat;
-  if (PAYMENTS[patch.pay]) e.pay = patch.pay;
+  if (Object.hasOwn(PAYMENTS, patch.pay)) e.pay = patch.pay;
   if (patch.day != null && patch.day !== 'out') {
     const d = Number(patch.day);
     if (Number.isInteger(d) && d >= -1 && d < trip.days.length) {

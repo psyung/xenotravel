@@ -64,6 +64,7 @@
             <button data-menu="flights" class="page-trip menu-narrow edit-only" data-i18n="항공편">항공편</button>
             <button data-menu="share" class="page-trip menu-narrow" data-i18n="공유">공유</button>
             <button data-menu="theme" id="themeMenu" class="menu-narrow"></button>
+            <button data-menu="about" data-i18n="앱 정보">앱 정보</button>
             <hr class="page-trip">
             <button data-menu="backup" class="page-trip" data-i18n="전체 백업 저장 (.json)">전체 백업 저장 (.json)</button>
             <p id="backupAge" class="menu-note page-trip edit-only"></p>
@@ -371,7 +372,10 @@
     <div class="dialog-body">
       <h2 id="presetTitle" data-i18n="스마트 준비물 추천">스마트 준비물 추천</h2>
       <div id="presetBody"></div>
-      <div id="presetActions" class="dialog-actions"></div>
+      <div id="presetActions" class="dialog-actions">
+        <button type="button" class="btn ghost" data-p="cancel"></button>
+        <button type="button" class="btn primary" data-p="add" aria-live="polite" disabled></button>
+      </div>
     </div>
   </dialog>
 

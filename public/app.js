@@ -74,23 +74,28 @@ const tp = (p) => T.localizePlace(p, getLang(), trendsI18n);
 const origAttr = (loc) => (loc.original ? ' lang="ko"' : '');
 const origTag = (loc) => (loc.original ? ` <small class="orig-tag">${esc(t('한국어 원문'))}</small>` : '');
 
-// 지도 타일: Esri Light Gray Canvas (바탕 + 글자 두 겹). 차분한 회색이라 일정 핀이 잘 보인다. 키 없이 쓰고 출처 표기 필수.
+// 지도 타일: 라이트 모드는 Esri World Street Map 또는 Light Gray Canvas. 출처 표기 필수.
 // 어두운 화면에서는 Dark Gray Canvas. (CARTO는 2025년부터 키가 필요하고, Stadia는 localhost 밖에서 키가 필요하다)
 // Canvas 타일은 16단계까지라 더 확대하면 16단계 그림을 키워서 보여준다.
 // 사용자가 늘면 ArcGIS 계정 키나 MapTiler·Stadia 키 기반으로 바꿔야 한다.
-const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas';
+const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services';
+const STREET_ATTRIBUTION = 'Tiles &copy; Esri — Source: Esri, HERE, Garmin, USGS, Intermap, INCREMENT P, NRCan, Esri Japan, METI, Esri China (Hong Kong), Esri Korea, Esri (Thailand), NGCC, (c) OpenStreetMap contributors, and the GIS User Community';
 const TILES = {
-  light: [`${ESRI}/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}`, `${ESRI}/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}`],
-  dark: [`${ESRI}/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`, `${ESRI}/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`],
+  street: [`${ESRI}/World_Street_Map/MapServer/tile/{z}/{y}/{x}`],
+  gray: [`${ESRI}/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}`, `${ESRI}/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}`],
+  dark: [`${ESRI}/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`, `${ESRI}/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`],
 };
 const TILE_OPTS = {
   maxZoom: 19,
   maxNativeZoom: 16,
   attribution: 'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors',
 };
-/** 바탕 + 글자 타일 묶음 */
-const tileGroup = (kind) => L.layerGroup([L.tileLayer(TILES[kind][0], TILE_OPTS), L.tileLayer(TILES[kind][1], { ...TILE_OPTS, attribution: '' })]);
+const tileGroup = (kind) => L.layerGroup(TILES[kind].map((url, index) => L.tileLayer(url, {
+  ...TILE_OPTS,
+  ...(kind === 'street' ? { maxNativeZoom: 19, attribution: STREET_ATTRIBUTION } : index ? { attribution: '' } : {}),
+})));
 const isDark = () => prefs.theme === 'dark';
+const mapTileKind = () => isDark() ? 'dark' : prefs.mapStyle === 'gray' ? 'gray' : 'street';
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -149,6 +154,35 @@ const map = L.map('map', { worldCopyJump: true, tapHold: false }).setView([30, 2
 let locationChoice;
 const mapDayContext = () => JSON.stringify([trip?.id, ui.focusList, getLang(), trip?.days.map(({ id, date }) => [id, date])]);
 map.zoomControl.setPosition('topright');
+const mapStyleControl = L.control({ position: 'topright' });
+mapStyleControl.onAdd = () => {
+  const el = L.DomUtil.create('div', 'map-style-control');
+  el.setAttribute('role', 'group');
+  L.DomEvent.disableClickPropagation(el);
+  L.DomEvent.disableScrollPropagation(el);
+  for (const style of ['street', 'gray']) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.dataset.style = style;
+    btn.addEventListener('click', () => {
+      prefs.mapStyle = style;
+      savePrefs();
+      syncTiles();
+    });
+    el.append(btn);
+  }
+  return el;
+};
+mapStyleControl.addTo(map);
+function syncMapStyleControl() {
+  const el = mapStyleControl.getContainer();
+  el.hidden = isDark();
+  el.setAttribute('aria-label', t('지도 스타일'));
+  for (const btn of el.children) {
+    btn.textContent = btn.dataset.style === 'gray' ? t('회색') : t('기본');
+    btn.setAttribute('aria-pressed', String(btn.dataset.style === mapTileKind()));
+  }
+}
 $('#mapLocate').addEventListener('click', () => {
   if (!navigator.geolocation) return toast(t('이 브라우저에서는 현재 위치를 확인할 수 없어요'));
   map.locate({ setView: true, maxZoom: 16, timeout: 8000 });
@@ -162,6 +196,7 @@ map.on('locationerror', () => toast(t('현재 위치를 확인하지 못했어�
 
 /** 지도 자체 조작(확대·축소·출처)의 글자도 지금 언어로 */
 function mapControlsText() {
+  syncMapStyleControl();
   const zc = map.zoomControl;
   for (const [btn, key] of [[zc._zoomInButton, k('확대')], [zc._zoomOutButton, k('축소')]]) {
     if (!btn) continue;
@@ -173,7 +208,7 @@ function mapControlsText() {
 mapControlsText();
 
 /* 지도 바탕 타일. 못 받아오면(차단·오프라인) 지도 위에 알리고 다시 시도할 수 있게 한다. 일정·핀은 그대로 쓴다. */
-let baseKind = isDark() ? 'dark' : 'light';
+let baseKind = mapTileKind();
 let baseTiles = watchTiles(tileGroup(baseKind)).addTo(map);
 function watchTiles(group) {
   let fails = 0;
@@ -326,7 +361,8 @@ $('#miniMap').addEventListener('keydown', (e) => {
  * 새 타일을 위에 먼저 깔고, 다 그려지면 이전 타일을 치운다 (그사이 빈 바탕이 깜빡이지 않게).
  */
 function syncTiles() {
-  const kind = isDark() ? 'dark' : 'light';
+  syncMapStyleControl();
+  const kind = mapTileKind();
   if (kind === baseKind) return;
   const old = baseTiles;
   baseKind = kind;
@@ -466,8 +502,8 @@ function renderMap({ fit = false } = {}) {
     if (l.isDay && pts.length > 1) {
       // 종류별 필터가 켜져 있으면 동선은 0.25로 낮춰 강조 핀이 맨 위로 보이게 한다
       const faded = byCategory() && ui.catFilter;
-      L.polyline(pts, { color: 'var(--paper)', weight: 7, opacity: dim ? 0.12 : faded ? 0.25 : 0.9, interactive: false }).addTo(layer);
-      L.polyline(pts, { color, weight: preview ? 4 : 3, opacity: dim ? 0.18 : faded ? 0.25 : 0.95, dashArray: preview ? null : '7 6', interactive: false }).addTo(layer);
+      L.polyline(pts, { color: color === 'var(--accent)' ? 'var(--paper)' : 'var(--day-route-outline)', weight: 7, opacity: dim ? 0.12 : faded ? 0.25 : 1, interactive: false }).addTo(layer);
+      L.polyline(pts, { color, weight: preview ? 4 : 3, opacity: dim ? 0.18 : faded ? 0.25 : 1, dashArray: preview ? null : '7 6', interactive: false }).addTo(layer);
     }
     l.items.forEach((it, i) => {
       const n = preview ? preview.indexOf(it) + 1 : i + 1;
@@ -3096,7 +3132,7 @@ async function openDestLocation() {
   });
   const el = $('#destMiniMap');
   const mini = L.map(el, { zoomControl: true, attributionControl: true }).setView([pick.lat, pick.lng], trip.center ? 10 : 4);
-  tileGroup(isDark() ? 'dark' : 'light').addTo(mini);
+  tileGroup(mapTileKind()).addTo(mini);
   const pin = L.marker([pick.lat, pick.lng], { draggable: true, keyboard: true, title: t('여행지 위치') }).addTo(mini);
   const show = () => ($('#destMiniCoord').textContent = `${pick.lat.toFixed(4)}, ${pick.lng.toFixed(4)}`);
   const move = (ll) => {
@@ -3142,6 +3178,10 @@ $('.menu .menu-pop').addEventListener('click', (e) => {
     $('#shareBtn').click();
   }
   else if (action === 'theme') $('#themeBtn').click();
+  else if (action === 'about') {
+    $('.menu summary').focus();
+    ask({ title: t('앱 정보'), body: `XenoTravel · ${t('빌드')} ${buildCommit}`, actions: [], cancel: t('닫기') });
+  }
 });
 
 const BACKUP_INTERVAL = 3 * 24 * 60 * 60 * 1000;
@@ -3432,9 +3472,10 @@ function renderFooter() {
         <span class="foot-contact">${esc(t('문의'))} <a href="mailto:${CONTACT}">${CONTACT}</a></span>
       </nav>
       <p class="foot-note">${esc(t('일정·가계부는 이 브라우저에만 저장돼요. 다른 기기로 옮길 땐 백업 파일을 쓰세요'))}<span class="edit-only"> · <button type="button" class="linkbtn" data-foot="import">${esc(t('백업 파일 불러오기'))}</button></span></p>
-      <p class="foot-copy">© 2026 XenoTravel. ${esc(t('모든 권리 보유.'))} <span class="foot-build" title="${esc(t('배포 버전 (커밋)'))}">${esc(t('빌드'))} <code id="buildCommit">${esc(buildCommit)}</code></span></p>`;
+      <p class="foot-copy">© 2026 XenoTravel ${esc(t('모든 권리 보유.'))}${debugBuild ? ` <span class="foot-build" title="${esc(t('배포 버전 (커밋)'))}">${esc(t('빌드'))} <code id="buildCommit">${esc(buildCommit)}</code></span>` : ''}</p>`;
 }
 /* 배포 식별자: <meta name="build-commit">(서버·빌드가 넣음) → 없으면 version.json. QA 때 어느 커밋이 떠 있는지 바로 확인한다 */
+const debugBuild = new URLSearchParams(location.search).get('debug') === '1';
 let buildCommit = document.querySelector('meta[name="build-commit"]')?.content || 'dev';
 if (!/^[0-9a-f]{7}$/.test(buildCommit)) {
   fetch(new URL('version.json', document.baseURI), { cache: 'no-store' })
@@ -3731,16 +3772,18 @@ function openPrint() {
     }
     const m = L.map(div, { zoomControl: false, attributionControl: true, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, touchZoom: false, keyboard: false });
     printMaps.push(m);
-    const tiles = L.tileLayer(TILES.light[0], TILE_OPTS);
+    const tiles = tileGroup(mapTileKind());
     const loaded = new Promise((resolve) => {
-      tiles.once('load', resolve);
+      Promise.all(tiles.getLayers().map((tile) => new Promise((ready) => tile.once('load', ready)))).then(resolve);
       setTimeout(resolve, 8000);
     });
     tiles.addTo(m);
-    L.tileLayer(TILES.light[1], { ...TILE_OPTS, attribution: '' }).addTo(m); // 글자는 바탕 위에
     const st = l.isDay ? M.dayStays(trip, Number(div.dataset.day)) : {};
     const pts = (l.isDay ? M.dayRoute(trip, Number(div.dataset.day)) : l.items).map((it) => [it.lat, it.lng]);
-    if (l.isDay && pts.length > 1) L.polyline(pts, { color: l.color, weight: 3, opacity: 0.8, dashArray: '6 6' }).addTo(m);
+    if (l.isDay && pts.length > 1) {
+      L.polyline(pts, { color: 'var(--day-route-outline)', weight: 7, interactive: false }).addTo(m);
+      L.polyline(pts, { color: l.color, weight: 3, dashArray: '6 6', interactive: false }).addTo(m);
+    }
     l.items.forEach((it, j) => L.marker([it.lat, it.lng], { icon: pinIcon(l.isDay ? j + 1 : '•', l.color, false) }).addTo(m));
     new Set([st.start, st.end].filter(Boolean)).forEach((s) =>
       L.marker([s.lat, s.lng], { icon: L.divIcon({ className: '', html: `<div class="stay-pin">${esc(t('숙소'))}</div>`, iconSize: [28, 28], iconAnchor: [14, 14] }) }).addTo(m),

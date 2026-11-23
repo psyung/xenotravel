@@ -26,7 +26,7 @@ export function init(ctx) {
   function budgetForm() {
     if (!ctx.ui.bf || ctx.ui.bf.trip !== ctx.trip.id) {
       const i = M.indexOfDate(ctx.trip, TODAY);
-      ctx.ui.bf = { trip: ctx.trip.id, cur: 'local', cat: 'food', pay: 'card', day: i != null && i >= 0 && i < ctx.trip.days.length ? i : -1 };
+      ctx.ui.bf = { trip: ctx.trip.id, cur: 'local', cat: 'food', pay: ctx.trip.country === 'cn' ? 'easypay' : 'card', day: i != null && i >= 0 && i < ctx.trip.days.length ? i : -1 };
     }
     if (ctx.ui.bf.day >= ctx.trip.days.length) ctx.ui.bf.day = -1;
     return ctx.ui.bf;
@@ -133,7 +133,7 @@ export function init(ctx) {
 
     <div class="box" style="margin-top:14px">
       <div class="amount-row">
-        ${local ? `<button class="cur-btn" data-b="cur" aria-label="${esc(t('통화 바꾸기: 지금 {cur}', { cur: useLocal ? b.currency : 'KRW' }))}" title="${esc(t('원화/{name} 바꾸기', { name: t(cur.name) }))}">${useLocal ? esc(cur.symbol.trim()) : '₩'}</button>` : '<span class="cur-btn" style="display:grid;place-items:center" aria-hidden="true">₩</span>'}
+        ${local ? `<button class="cur-btn" data-b="cur" aria-label="${esc(t('통화 바꾸기: 지금 {cur}', { cur: useLocal ? b.currency : 'KRW' }))}" title="${esc(t('원화/{name} 바꾸기', { name: t(cur.name) }))}">${useLocal ? esc(B.currencySymbol(b.currency)) : '₩'}</button>` : '<span class="cur-btn" style="display:grid;place-items:center" aria-hidden="true">₩</span>'}
         <input id="bAmount" data-draft="amount" inputmode="decimal" placeholder="0" autocomplete="off" aria-label="${esc(t('금액'))}" aria-describedby="bError bKrw">
         <span id="bKrw" class="krw" aria-live="polite"></span>
         <button class="btn primary" data-b="add">${esc(t('기록'))}</button>
@@ -241,20 +241,17 @@ export function init(ctx) {
   const shownBase = (b) => (B.krwPerBase(b) ? B.baseCode(b) : 'KRW');
   function budgetInputValue(b) {
     const v = B.toBase(b.total, b);
-    return v == null ? num(b.total) : num(v, { maximumFractionDigits: shownBase(b) === 'KRW' || shownBase(b) === 'JPY' ? 0 : 2 });
+    return v == null ? num(b.total) : num(v, { maximumFractionDigits: B.fractionDigits(shownBase(b)) });
   }
   function baseRowHtml(b) {
     const code = B.baseCode(b);
-    const choices = [...new Set([...B.BASE_CHOICES, b.currency])];
     const rate = B.krwPerBase(b);
     const note = code === 'KRW'
       ? ''
       : rate
         ? `<span class="fine">${B.CURRENCIES[code].unit} ${esc(code)} = ${B.won(rate * B.CURRENCIES[code].unit)}</span>`
         : `<span class="pend">${esc(t('기준 통화 환율 미정 · 원화로 표시 중'))}</span> ${ctx.ui.readonly ? '' : `<button class="pill" data-b="rate">${esc(t('환율 받기'))}</button>`}`;
-    return `<div class="base-row"><label><span>${esc(t('기준 통화'))}</span><select id="bBase" class="inp" data-ui-select aria-label="${esc(t('기준 통화'))}">${choices
-      .map((c) => `<option value="${c}"${c === code ? ' selected' : ''}>${c} ${esc(t(B.CURRENCIES[c].name))}</option>`)
-      .join('')}</select></label>${note}<small class="fine">${esc(t('합계·예산·정산을 이 통화로 보여 줘요'))}</small></div>`;
+    return `<div class="base-row"><label><span>${esc(t('기준 통화'))}</span><select id="bBase" class="inp" data-ui-select aria-label="${esc(t('기준 통화'))}">${currencyOptions(code)}</select></label>${note}<small class="fine">${esc(t('합계·예산·정산을 이 통화로 보여 줘요'))}</small></div>`;
   }
 
   /* ───────── 통화별 합계 · 동행자 정산 ───────── */
@@ -311,6 +308,9 @@ export function init(ctx) {
       ? `<table class="settle-table"><thead><tr><th>${esc(t('이름'))}</th><th>${esc(t('낸 돈'))}</th><th>${esc(t('부담'))}</th><th>${esc(t('차액'))}</th></tr></thead><tbody>${st.people
           .map((p) => `<tr><td>${esc(p.name)}</td><td>${bu(p.paid)}</td><td>${bu(p.share)}</td><td class="${p.net > 0 ? 'plus' : p.net < 0 ? 'minus' : ''}">${p.net > 0 ? '+' : p.net < 0 ? '−' : ''}${bu(Math.abs(p.net))}</td></tr>`)
           .join('')}</tbody><tfoot><tr><th>${esc(t('합계'))}</th><td>${bu(st.total)}</td><td>${bu(st.people.reduce((n, p) => n + p.share, 0))}</td><td></td></tr></tfoot></table>
+      ${st.counted ? `<p class="fine">${esc(t('결제 수단'))} · ${Object.entries(B.PAYMENTS)
+        .filter(([key]) => Object.hasOwn(st.byPay, key))
+        .map(([key, pay]) => `${esc(t(pay.label))} ${bu(st.byPay[key])}`).join(' · ')}</p>` : ''}
       <h4>${esc(t('보낼 돈'))} <small>${esc(t('최소 {n}번 송금', { n: st.transfers.length }))}</small></h4>
       ${st.transfers.length ? `<ul class="transfers">${st.transfers.map((x) => `<li><b>${esc(x.from)}</b> → <b>${esc(x.to)}</b><span>${bu(x.amount)}</span></li>`).join('')}</ul>` : `<p class="empty-note">${esc(t('주고받을 돈이 없어요'))}</p>`}
       ${st.noPayer || st.noRate ? `<p class="fine">${[st.noPayer ? t('결제자를 정하지 않은 지출 {n}건은 빠졌어요', { n: st.noPayer }) : '', st.noRate ? t('환율 미정 지출 {n}건은 빠졌어요', { n: st.noRate }) : ''].filter(Boolean).map(esc).join(' · ')}</p>` : ''}
@@ -350,7 +350,7 @@ export function init(ctx) {
     return `<li class="rec-edit"><form class="exp-form" data-exp="${e.id}" aria-label="${esc(t('지출 수정'))}">
       <div class="exp-row">
         <label class="exp-amt"><span>${esc(t('금액'))}</span><input name="amount" data-draft="exp-amount-${e.id}" inputmode="decimal" value="${e.amount}" autocomplete="off"></label>
-        ${local ? `<label><span>${esc(t('통화'))}</span><select name="cur" data-ui-select>${opt('local', `${B.CURRENCIES[recCode].symbol.trim()} ${recCode}`, e.cur !== 'KRW')}${opt('KRW', '₩ KRW', e.cur === 'KRW')}</select></label>` : ''}
+        ${local ? `<label><span>${esc(t('통화'))}</span><select name="cur" data-ui-select>${opt('local', `${B.currencySymbol(recCode)} ${recCode}`, e.cur !== 'KRW')}${opt('KRW', '₩ KRW', e.cur === 'KRW')}</select></label>` : ''}
       </div>
       <label><span>${esc(t('메모'))}</span><input name="memo" data-draft="exp-memo-${e.id}" value="${esc(e.memo)}" maxlength="80"></label>
       <div class="exp-row">

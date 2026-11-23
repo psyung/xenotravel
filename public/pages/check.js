@@ -456,7 +456,6 @@ export function initPresets(ctx) {
     if (!st || !presetData) return;
     const { items, skipped } = C.presetCandidates(ctx.trip, presetData, { type: st.type, days: st.days });
     const dur = C.durationKey(st.days);
-    const chosen = items.filter((it) => !st.off.has(it.id));
     const groups = Object.keys(C.CHECK_GROUPS).filter((g) => items.some((it) => it.group === g));
     $('#presetBody').innerHTML = `
     <fieldset class="chipset preset-types"><legend>${esc(t('여행 성격'))}</legend>${Object.entries(presetData.types)
@@ -469,8 +468,8 @@ export function initPresets(ctx) {
       <h3>${esc(t('미리보기 · {n}개 추천', { n: items.length }))}</h3>
       ${
           items.length
-            ? groups
-                .map((g) => `<div class="pp-group"><h4>${esc(t(C.CHECK_GROUPS[g].label))}</h4><ul>${items
+            ? `<label class="pp-all"><input type="checkbox" name="pAll"> ${esc(t('전체 선택'))}</label>` + groups
+                .map((g) => `<div class="pp-group"><h4><label><input type="checkbox" name="pGroup"> ${esc(t(C.CHECK_GROUPS[g].label))}</label></h4><ul>${items
                   .filter((it) => it.group === g)
                   .map((it) => `<li><label><input type="checkbox" name="pItem" value="${esc(it.id)}"${st.off.has(it.id) ? '' : ' checked'}> <span>${esc(it.text)}</span></label></li>`)
                   .join('')}</ul></div>`)
@@ -480,8 +479,26 @@ export function initPresets(ctx) {
       ${skipped.length ? `<p class="fine pp-skipped">${esc(t('이미 있는 {n}개는 뺐어요: {list}', { n: skipped.length, list: skipped.map((x) => x.text).join(', ') }))}</p>` : ''}
       <p class="fine">${esc(t('기존 항목의 이름·체크·가격·가계부 연결은 바뀌지 않아요.'))}</p>
     </section>`;
-    $('#presetActions').innerHTML = `<button type="button" class="btn ghost" data-p="cancel">${esc(t('취소'))}</button><button type="button" class="btn primary" data-p="add"${chosen.length ? '' : ' disabled'}>${esc(t('선택한 {n}개 추가', { n: chosen.length }))}</button>`;
+    $('#presetActions [data-p="cancel"]').textContent = t('취소');
+    syncPresetSelection();
     if (focus) $(focus, presetDialog)?.focus();
+  }
+  function syncPresetSelection() {
+    const sync = (box, items) => {
+      const n = items.filter((item) => item.checked).length;
+      if (box) {
+        box.checked = n > 0 && n === items.length;
+        box.indeterminate = n > 0 && n < items.length;
+      }
+      return n;
+    };
+    for (const box of $$('[name="pGroup"]', presetDialog)) {
+      sync(box, $$('[name="pItem"]', box.closest('.pp-group')));
+    }
+    const n = sync($('[name="pAll"]', presetDialog), $$('[name="pItem"]', presetDialog));
+    const btn = $('[data-p="add"]', presetDialog);
+    btn.disabled = n === 0;
+    btn.textContent = t('선택한 {n}개 추가', { n });
   }
   presetDialog.addEventListener('change', (e) => {
     const st = ctx.ui.preset;
@@ -497,12 +514,15 @@ export function initPresets(ctx) {
       st.days = d && n >= d.min && n <= d.max ? n : Number(e.target.value);
       st.off.clear();
       renderPresets({ focus: `[name="pDays"][value="${st.days}"]` });
-    } else if (e.target.name === 'pItem') {
-      e.target.checked ? st.off.delete(e.target.value) : st.off.add(e.target.value);
-      const n = $$('[name="pItem"]:checked', presetDialog).length;
-      const btn = $('[data-p="add"]', presetDialog);
-      btn.disabled = !n;
-      btn.textContent = t('선택한 {n}개 추가', { n });
+    } else if (['pAll', 'pGroup', 'pItem'].includes(e.target.name)) {
+      const items = e.target.name === 'pItem' ? [e.target] :
+        $$('[name="pItem"]', e.target.closest('.pp-group') ?? presetDialog);
+      for (const item of items) {
+        item.checked = e.target.checked;
+        if (item.checked) st.off.delete(item.value);
+        else st.off.add(item.value);
+      }
+      syncPresetSelection();
     }
   });
   presetDialog.addEventListener('click', (e) => {

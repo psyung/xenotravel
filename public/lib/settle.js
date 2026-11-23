@@ -4,6 +4,7 @@
 // 금액은 지출에 저장된 원화(krw)로 계산한다. 환율 미정(krw == null) 지출은 정산에서 빼고 개수만 알려 준다.
 import { uid } from './model.js';
 import { t } from './i18n.js';
+import { PAYMENTS } from './budget.js';
 
 export const MAX_MEMBERS = 12;
 
@@ -80,6 +81,7 @@ export function settlement(trip, { unitsOf = (e) => (e.krw == null ? null : Math
   const list = members(trip);
   if (list.length < 2) return null;
   const byId = new Map(list.map((m) => [m.id, { id: m.id, name: m.name, paid: 0, share: 0, net: 0 }]));
+  const byPay = {};
   let total = 0;
   let counted = 0;
   let noPayer = 0;
@@ -100,11 +102,13 @@ export function settlement(trip, { unitsOf = (e) => (e.krw == null ? null : Math
     const parts = splitUnits(amount, order.length);
     byId.get(e.payer).paid += amount;
     order.forEach((id, i) => (byId.get(id).share += parts[i]));
+    const pay = Object.hasOwn(PAYMENTS, e.pay) ? e.pay : 'card';
+    byPay[pay] = (byPay[pay] ?? 0) + amount;
     total += amount;
     counted++;
   }
   const people = [...byId.values()].map((p) => ({ ...p, net: p.paid - p.share }));
-  return { people, transfers: minTransfers(people), total, counted, noPayer, noRate };
+  return { people, transfers: minTransfers(people), total, counted, noPayer, noRate, byPay };
 }
 
 /** 받을 사람·보낼 사람을 큰 금액끼리 맞춘다 (1원 미만 오차는 버린다) */
