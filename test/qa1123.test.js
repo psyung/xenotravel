@@ -1,5 +1,6 @@
 // docs/qa-2026-11-23.md Phase 1 (P0) 회귀 테스트
 import test from 'node:test';
+import { appSource } from './helpers/app-source.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as M from '../public/lib/model.js';
@@ -70,7 +71,7 @@ test('P0-9: 숙소 기간 밖 날짜 → 늘릴 기간 (체크아웃 날은 밤�
 });
 
 test('P0-9: 숙소 달력은 여행 기간 밖을 막지 않고 흐리게만 (data-dp-soft-*)', () => {
-  const app = read('app.js');
+  const app = appSource();
   assert.doesNotMatch(app, /inEl\.min = M\.dateAtIndex\(trip, 0\)/);
   assert.match(app, /data-dp-soft-min=/);
   assert.match(app, /data-dp-soft-max=/);
@@ -150,7 +151,7 @@ test('P0-4: 전체 해제 + 지출 삭제는 고친 지출만 남긴다', () => 
 });
 
 test('P0-3·P0-4: 확인 창 선택지와 실행 취소, 가계부의 출처 아이콘', () => {
-  const app = read('app.js');
+  const app = appSource();
   assert.match(app, /value: 'drop', label: t\('지출도 삭제'\)/);
   assert.match(app, /value: 'drop', label: t\('체크 해제 \+ 지출 \{n\}건 삭제'/);
   assert.match(app, /t\('직접 고친 지출 \{n\}건은 남겨요'/);
@@ -226,13 +227,13 @@ test('P0-7: 저장값이 없으면 브라우저 언어 — 앱(detectLang)과 �
 });
 
 test('P0-7: 언어는 언어 버튼을 누를 때만 저장한다', () => {
-  const app = read('app.js');
+  const app = appSource();
   assert.equal([...app.matchAll(/\bsaveLang\(\)/g)].length, 1);
   assert.match(app, /setLang\(button\.dataset\.lang\);\n  saveLang\(\);/);
 });
 
 test('P0-8: 여행 페이지 "요즘 뜨는 곳"은 여행지 도시만 — 도시 선택 칸 없음, 데이터가 없으면 접힌 한 줄 안내', () => {
-  const app = read('app.js');
+  const app = appSource();
   assert.doesNotMatch(app, /class="trend-city"/);
   assert.doesNotMatch(app, /trip\.trendCity = /);
   const fn = app.slice(app.indexOf('function currentCity()'), app.indexOf('function findTrend('));
@@ -256,7 +257,7 @@ test('P0-1: 자동완성 목록의 도시는 고정 좌표·국가 코드 — 4�
   assert.equal(Dest.resolveDestination('자싱 맛집 투어'), null, '정확히 같은 이름만');
   const trendCity = { id: 'osaka-x', name: '나라', center: { lat: 34.68, lng: 135.8 }, country: 'JP' };
   assert.equal(Dest.resolveDestination('나라', [trendCity]).country, 'jp');
-  const app = read('app.js');
+  const app = appSource();
   assert.match(app, /let found = resolveDestination\(destination, trends\.cities\);\n  if \(!found\) \{/, '목록 도시는 지오코딩하지 않는다');
 });
 
@@ -309,7 +310,7 @@ test('F-1: 백업 권유 — 출발 7일 전, 여행 끝난 다음 날, 큰 변�
 });
 
 test('F-1: 첫 저장 때 영구 저장 요청, 메뉴에 마지막 백업 표시, 백업하면 변경 횟수 초기화', () => {
-  const app = read('app.js');
+  const app = appSource();
   assert.match(app, /navigator\.storage\.persist\(\)/);
   assert.match(app, /if \(r\.ok && !auto\) afterUserSave\(\);/);
   assert.match(app, /\$\('#backupAge'\)\.textContent = /);
@@ -323,7 +324,7 @@ test('교차 리뷰 #1: 최대 일수를 넘는 늘리기는 하지 않는다 (�
   assert.equal(M.extendedRange(t, '2026-11-22', '2026-11-24', { checkout: true }).tooLong, true);
   const short = M.createTrip({ title: 'J', startDate: '2026-11-23', endDate: '2026-11-30' });
   assert.equal(M.extendedRange(short, '2026-11-22', '2026-11-24', { checkout: true }).tooLong, false);
-  assert.match(read('app.js'), /if \(r\.tooLong\) \{/);
+  assert.match(appSource(), /if \(r\.tooLong\) \{/);
 });
 
 test('교차 리뷰 #2: 통화만 바꾼 지출도 "고친 지출", 예전 기록(auto 없음)은 물어본다', () => {
@@ -339,8 +340,8 @@ test('교차 리뷰 #2: 통화만 바꾼 지출도 "고친 지출", 예전 기�
 });
 
 test('교차 리뷰 #3·#4·#6·#7·#8: 실행 취소는 날짜로 복원, 직접 고른 위치 유지, 일차 기준 결과 미리보기, 열 때 백업 권유, 트렌드는 이름 일치만', () => {
-  const app = read('app.js');
-  assert.match(app, /const i = trip\.days\.findIndex\(\(d\) => d\.date === date\);/);
+  const app = appSource();
+  assert.match(app, /const i = ctx\.trip\.days\.findIndex\(\(d\) => d\.date === date\);/);
   assert.match(app, /trip\.centerManual = true;/);
   assert.match(app, /if \(trip\.centerManual\) return;/);
   const manual = { destination: '자싱', center: { lat: 35, lng: 139 }, centerManual: true, days: [{ items: [] }] };
@@ -358,5 +359,5 @@ test('교차 리뷰 #5: 전날 밤 출발해 Day 1에 도착하는 출국편은 
   assert.equal(x.role, 'arrive');
   assert.equal(M.pinnedFlightNote(x), '전날 출발');
   assert.equal(M.flightTimeBounds([x]).after, '01:00');
-  assert.match(read('app.js'), /if \(trip\.startDate && \(dep < trip\.startDate \|\| dep > trip\.endDate\)\) \{/);
+  assert.match(appSource(), /if \(trip\.startDate && \(dep < trip\.startDate \|\| dep > trip\.endDate\)\) \{/);
 });

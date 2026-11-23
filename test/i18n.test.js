@@ -1,6 +1,7 @@
 // F04: 화면에 나오는 앱 문구가 네 언어(한국어 키 · 영어 · 중국어 간체 · 일본어)로 모두 번역되어 있는지 검사한다.
 // 키 찾는 곳: t('…') · k('…') 호출, index.html의 data-i18n / data-i18n-attr, 데이터 표(종류·통화·체크리스트 기본값 등).
 import test from 'node:test';
+import { appSource } from './helpers/app-source.js';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { MESSAGES } from '../public/lib/messages.js';
@@ -13,13 +14,13 @@ import { privacySections } from '../public/lib/privacy.js';
 
 const pub = new URL('../public/', import.meta.url);
 const read = (f) => readFileSync(new URL(f, pub), 'utf8');
-const sources = ['app.js', ...readdirSync(new URL('lib/', pub)).filter((f) => f.endsWith('.js') && f !== 'messages.js').map((f) => `lib/${f}`)];
+const sources = [appSource(), ...readdirSync(new URL('lib/', pub)).filter((f) => f.endsWith('.js') && f !== 'messages.js').map((f) => read(`lib/${f}`))];
 const unquote = (s) => s.replace(/\\'/g, "'").replace(/\\n/g, '\n');
 
 export function usedKeys() {
   const keys = new Set();
-  for (const f of sources) {
-    for (const m of read(f).matchAll(/\b[tk]\(\s*'((?:[^'\\]|\\.)*)'/g)) keys.add(unquote(m[1]));
+  for (const source of sources) {
+    for (const m of source.matchAll(/\b[tk]\(\s*'((?:[^'\\]|\\.)*)'/g)) keys.add(unquote(m[1]));
   }
   const html = read('index.html');
   for (const m of html.matchAll(/data-i18n="([^"]*)"/g)) keys.add(m[1]);

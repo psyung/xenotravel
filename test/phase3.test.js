@@ -1,6 +1,7 @@
 // 3차 마감: 시간 겹침 원인(B7), 공유 파일 이름(B6), /api/share 미호출(B9), 타일 미저장(B10), 파비콘 배지(B8),
 // 토스트 버튼 대비(B4), 기준 통화(C1), 숙소 프리셋 이름
 import test from 'node:test';
+import { appSource } from './helpers/app-source.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as M from '../public/lib/model.js';
@@ -28,7 +29,7 @@ test('B6: 공유용 파일과 전체 백업 파일 이름을 구분한다', () =
 });
 
 test('B9·B10: /api/share를 부르지 않고, Esri 타일을 서비스 워커에 저장하지 않는다', () => {
-  const app = read('app.js');
+  const app = appSource();
   assert.doesNotMatch(app, /fetch\(new URL\('api\/share', appBase\(\)\)/, '공유 링크를 만들 때 /api/share를 부르지 않는다');
   const sw = read('sw.js');
   assert.doesNotMatch(sw, /arcgisonline|TILE_HOSTS|tileFirst/, '타일 요청을 가로채 저장하지 않는다');

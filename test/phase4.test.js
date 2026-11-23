@@ -1,5 +1,6 @@
 // Phase 4: QA 잔여 결함 수정 + 핵심 기능 4종 (일차 간 이동·복제·일자 순서, 요약 이미지, 스마트 체크리스트, 환율 스냅샷·결제수단)
 import test from 'node:test';
+import { appSource } from './helpers/app-source.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
@@ -60,7 +61,7 @@ test('P4-2: 일괄 삭제 확인 창 — 전체 수는 실제 항목 수, 완료
   assert.deepEqual(C.bulkDeleteOptions(tr, 'shop'), { done: 0, total: 0, options: [] });
   tr.checks.forEach((c) => (c.done = false));
   assert.deepEqual(C.bulkDeleteOptions(tr, 'pack').options, ['all']);
-  const app = read('app.js');
+  const app = appSource();
   assert.match(app, /all: t\('전체 \{n\}개 삭제', \{ n: opt\.total \}\)/, '전체 버튼은 실제 전체 수에 묶는다');
 });
 
@@ -157,7 +158,7 @@ test('P4-6: 배포 식별자 — 커밋 7자리를 메타에 넣고, 푸터에 �
   assert.match(buildCommit({}), /^([0-9a-f]{7}|dev)$/);
   assert.match(withBuildMeta('<meta name="build-commit" content="dev">', '1234abc'), /content="1234abc"/);
   assert.match(read('index.html'), /<meta name="build-commit" content="[^"]+">/);
-  assert.match(read('app.js'), /id="buildCommit"/);
+  assert.match(appSource(), /id="buildCommit"/);
   const vercel = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
   assert.equal(vercel.buildCommand, 'node scripts/build-version.mjs');
 });
@@ -203,7 +204,7 @@ test('P4-7: 잘못된 공유 주소는 404 (서버: 형식 오류·없는 링크
 });
 
 test('P4-7: 오프라인 → 온라인 복귀는 지도를 다시 맞추지 않고 확대·일차를 그대로 둔다', () => {
-  const app = read('app.js');
+  const app = appSource();
   const fn = /function restoreTiles\(\) \{([\s\S]*?)\n\}/.exec(app)?.[1];
   assert.ok(fn);
   assert.match(fn, /map\.setView\(view\.center, view\.zoom/);
@@ -402,7 +403,7 @@ test('P4-11: 예전 JSON 백업(결제수단·통화·환율 칸 없음)도 기�
   const again = JSON.stringify(tr.expenses);
   B.normalizeExpenses(tr);
   assert.equal(JSON.stringify(tr.expenses), again, '여러 번 불러도 같다');
-  assert.match(read('app.js'), /B\.normalizeExpenses\(imported\)/, '백업 불러오기에서 기본값을 채운다');
+  assert.match(appSource(), /B\.normalizeExpenses\(imported\)/, '백업 불러오기에서 기본값을 채운다');
 });
 
 test('P4-12: 새 모듈과 추천 데이터는 오프라인(서비스 워커)에 들어 있다', () => {
@@ -430,12 +431,12 @@ test('R1-4: 읽지 못해 뺀 지출·체크 수를 알려 주고(저장 데이�
   });
   assert.deepEqual(tr.dropped, { expenses: 1, checks: 1 });
   assert.ok(!('dropped' in JSON.parse(JSON.stringify(tr))), '저장할 JSON에는 없다');
-  const app = read('app.js');
+  const app = appSource();
   assert.match(app, /actions: same \|\| dropped \? \[\{ value: 'copy'/);
 });
 
 test('R1-1·7·14·16: 저장 실패 시 성공 알림 금지 · 일반 알림이 실행 취소를 지우지 않음 · 날짜 칩 포커스 · 잘못된 주소', () => {
-  const app = read('app.js');
+  const app = appSource();
   assert.match(app, /const r = switchTrip\(imported, \{ save: true \}\);\n  if \(r\?\.ok\)/, '백업 불러오기는 실제 저장 성공 후에만 알린다');
   assert.match(app, /const r = switchTrip\(copy, \{ save: true \}\);\n  if \(r\?\.ok\)/, '공유 사본 저장도 마찬가지');
   assert.match(app, /if \(!action && undoStack\.size\(\)\) \{/, '실행 취소가 남아 있으면 일반 알림에도 버튼을 둔다');
@@ -445,7 +446,7 @@ test('R1-1·7·14·16: 저장 실패 시 성공 알림 금지 · 일반 알림�
 });
 
 test('R1-8·12 / R2-11·18: 옛 검색 결과는 Enter·추가 버튼으로 넣지 않고, 결과는 버튼이 있는 일반 목록 + 상태 안내', () => {
-  const app = read('app.js');
+  const app = appSource();
   assert.match(app, /const p = ui\.resultsFor === searchEl\.value\.trim\(\) \? ui\.results\[ui\.activeResult\] : null;/);
   assert.match(app, /searchEl\.addEventListener\('input', \(\) => \{\n  ui\.resultsFor = null;/, '입력이 바뀌는 순간 무효');
   assert.match(app, /if \(ui\.resultsFor !== searchEl\.value\.trim\(\)\) return void runSearch/, '추가 버튼도 같은 검사');
@@ -562,7 +563,7 @@ test('R2-12·13·14·16·17: 폼 비우기 시 시간 초안 삭제 · 모바일
   // P0-6 (QA 2026-11-23): 시트 폭은 모든 대화상자 공통 규칙(600px 미만)으로 합쳤다
   assert.match(css, /dialog\.dayops-dialog:modal, dialog\.preset-dialog:modal[^{]*\{\s*width: 100%; max-width: 100%;/);
   assert.match(css, /\.dialog-actions \.btn \{ flex: 1 1 auto; min-width: 0;[^}]*white-space: normal;/);
-  const app = read('app.js');
+  const app = appSource();
   assert.match(app, /new ResizeObserver\(syncBarHeights\)/);
   assert.match(app, /st\.days = d && n >= d\.min && n <= d\.max \? n : Number\(e\.target\.value\);/);
   const pts = projectRoutes([{ color: '#000', pts: [{ lat: 0, lng: 179.9 }, { lat: 0.1, lng: -179.9 }] }], { x: 0, y: 0, w: 400, h: 300, pad: 20 })[0].pts;
@@ -594,14 +595,14 @@ test('R3-8: 일자 순서 되돌리기는 그 뒤 다른 날로 옮긴 장소의
 });
 
 test('R3-4·7·9·10: 항공편만 있는 날 PDF · 미리보기 표식에 항공편·숙소 · 결과 본문 클릭 · 늦은 환율 응답', () => {
-  const app = read('app.js');
+  const app = appSource();
   assert.match(app, /if \(!route\.length\) \{\n      div\.remove\(\);/);
   assert.match(app, /\(trip\.flights \?\? \[\]\)\.map\(\(f\) => \[f\.id, f\.kind, f\.departAt, f\.arriveAt, f\.flightNo, f\.from, f\.to\]\)/, '편명·공항도 (4차 #4)');
   assert.match(app, /d\.items\.map\(\(x\) => \[x\.id, x\.time, x\.name\]\)/, '장소 이름도 (5차 #3)');
   assert.match(app, /\(trip\.stays \?\? \[\]\)\.map\(\(s\) => \[s\.id, s\.startIndex, s\.nights, s\.name\]\)/);
   assert.match(app, /if \(!li\) return;\n  if \(ui\.resultsFor !== searchEl\.value\.trim\(\)\) return void runSearch/);
-  assert.match(app, /if \(trip !== forTrip \|\| seq !== rateRequest\) return;\n/, '최신 요청만 성공을 알린다 (5차 #7)');
-  assert.match(app, /if \(trip !== forTrip \|\| seq !== rateRequest\) return; \/\/ 그사이 새 요청이 있었으면 옛 요청의 실패는 알리지 않는다/, '실패도 같은 검사');
+  assert.match(app, /if \(ctx\.trip !== forTrip \|\| seq !== rateRequest\) return;\n/, '최신 요청만 성공을 알린다 (5차 #7)');
+  assert.match(app, /if \(ctx\.trip !== forTrip \|\| seq !== rateRequest\) return; \/\/ 그사이 새 요청이 있었으면 옛 요청의 실패는 알리지 않는다/, '실패도 같은 검사');
   assert.match(app, /if \(needBase && baseStill\) \{/, '기준 환율과 현지 환율은 따로');
 });
 
@@ -655,7 +656,7 @@ test('팔레트 A: 옛 테라코타 값이 남지 않고, 강조색·일차 색�
   };
   const ratio = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
   for (const f of ['styles.css', 'app.js', 'index.html', '404.html', 'lib/summary.js', 'icons/logo-xeno-route.svg', 'manifest.webmanifest']) {
-    assert.doesNotMatch(read(f), /#(D94E34|BF3E26|F2745B|A3432E)\b/i, f);
+    assert.doesNotMatch(f === 'app.js' ? appSource() : read(f), /#(D94E34|BF3E26|F2745B|A3432E)\b/i, f);
   }
   const css = read('styles.css');
   const root = /:root \{([\s\S]*?)\n\}/.exec(css)[1];
@@ -666,7 +667,7 @@ test('팔레트 A: 옛 테라코타 값이 남지 않고, 강조색·일차 색�
   const dark = /:root\[data-theme="dark"\] \{([\s\S]*?)\n\}/.exec(css)[1];
   assert.ok(ratio(tok('accent', dark), tok('paper', dark)) >= 4.5, '다크 강조');
   assert.ok(ratio(tok('btn-primary-bg', dark), tok('btn-primary-text', dark)) >= 4.5, '다크 버튼 글자');
-  const colors = /const COLORS = \[([^\]]+)\]/.exec(read('app.js'))[1].match(/#[0-9A-F]{6}/gi);
+  const colors = /const COLORS = \[([^\]]+)\]/.exec(appSource())[1].match(/#[0-9A-F]{6}/gi);
   assert.equal(new Set(colors).size, 8);
   for (const c of colors) assert.ok(ratio(c, '#FFFFFF') >= 4.5, `일차 색 ${c} 위 흰 번호`);
 });
@@ -680,7 +681,7 @@ test('모바일 지도 하단 시트: 지도 탭에서만, 장소 카드·지도
   assert.match(css, /\.layout\[data-tab="map"\] \.map-sheet \{/);
   assert.match(css, /body\.picking \.map-sheet, \.mapwrap:has\(#mapPlace:not\(\[hidden\]\)\) \.map-sheet \{ display: none !important; \}/);
   assert.match(css, /\.leaflet-bottom \{ bottom: var\(--sheet-h, 112px\); \}/, '지도 출처 표기는 시트 위로');
-  const app = read('app.js');
+  const app = appSource();
   assert.match(app, /paddingBottomRight: \[48, 48 \+ pad\]/);
   assert.match(app, /\$\('#msList'\)\.inert = sheetState === 'peek'/, '살짝 상태에선 가려진 목록에 포커스 없음');
   assert.match(app, /renderMapSheet\(\);\n  if \(fit\) fitTo\(bounds\);/, '지도를 그릴 때마다 목록도');
@@ -699,7 +700,7 @@ test('R6-1·2: 오프라인 대체 첫 화면은 <base>로 자산을 앱 루트�
 });
 
 test('R6-3·5·6: 시트 손잡이는 세 단계를 돌고(같은 높이는 건너뜀), 높이는 살짝 ≤ 반 ≤ 크게, 위치 버튼은 시트가 보일 때만 숨김', () => {
-  const app = read('app.js');
+  const app = appSource();
   assert.match(app, /const order = SHEET_STATES\.filter\(\(s, i\) => i === 0 \|\| hs\[s\] > hs\[SHEET_STATES\[i - 1\]\]\);/);
   assert.match(app, /if \(e\.detail && performance\.now\(\) < suppressClick\) return;/, '키보드 활성화(detail 0)는 막지 않는다');
   assert.match(app, /half: Math\.min\(full, Math\.max\(peek, Math\.round\(H \* 0\.46\)\)\), full/);

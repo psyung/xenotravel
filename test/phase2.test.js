@@ -1,5 +1,6 @@
 // 2차 안정화·고도화: 정산, 시간 겹침, 외부 지도 길찾기, 캘린더(항공·숙소), 샘플 편집 보존, 통화별 합계
 import test from 'node:test';
+import { appSource } from './helpers/app-source.js';
 import assert from 'node:assert/strict';
 import * as M from '../public/lib/model.js';
 import * as B from '../public/lib/budget.js';
@@ -136,7 +137,7 @@ test('보관함 "보낼 날" select: 포커스해도 보관함이 숨지 않고,
     assert.doesNotMatch(sel, /\bselect\b/, 'select 포커스로 보관함을 숨기지 않는다');
     assert.match(sel, /:not\(\.inbox-dock \*\)/, '보관함 안의 칸은 제외한다');
   }
-  const app = readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
+  const app = appSource();
   const safe = /const OUTSIDE_SAFE = '([^']*)'/.exec(app)[1];
   assert.match(safe, /\.inbox-dock/);
   assert.match(safe, /\bselect\b/);

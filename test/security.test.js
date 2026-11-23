@@ -1,5 +1,6 @@
 // Phase 0 (보안 기본, docs/qa-2026-11-23.md PART G S-1 ~ S-5) 회귀 테스트
 import test from 'node:test';
+import { appSource } from './helpers/app-source.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as M from '../public/lib/model.js';
@@ -58,12 +59,12 @@ test('S-2·S-3: 외부 CDN 스크립트 없이 vendor/에서, 글꼴 CSS는 SRI,
 
 test('S-4: 모든 href 출력은 safeUrl 검사와 이스케이프를 거친다 (정적 검사)', () => {
   for (const f of ['public/app.js', 'public/lib/summary.js', 'public/lib/export.js']) {
-    const src = read(f);
+    const src = f === 'public/app.js' ? appSource() : read(f);
     for (const m of src.matchAll(/href="\$\{([^}]*)\}/g)) {
       assert.match(m[1], /^(href|esc)\(/, `${f}: href="\${${m[1]}}"`);
     }
   }
-  assert.match(read('public/app.js'), /const href = \(u\) => esc\(M\.safeUrl\(u\)\);/);
+  assert.match(appSource(), /const href = \(u\) => esc\(M\.safeUrl\(u\)\);/);
 });
 
 /** 장소 n개짜리 최소 여행 */
