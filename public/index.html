@@ -292,6 +292,17 @@
       <button type="submit" id="flightSubmit" form="flightForm" class="btn primary"></button>
     </div>
   </dialog>
+  <dialog id="coverDialog" class="p3-dialog" aria-labelledby="coverTitle">
+    <h2 class="dialog-heading" id="coverTitle" data-i18n="여행 커버 바꾸기">여행 커버 바꾸기</h2>
+    <div class="dialog-body p3-form">
+      <label><span data-i18n="사진 선택">사진 선택</span><input id="coverFile" type="file" accept="image/*"></label>
+      <div class="p3-actions">
+        <button type="button" class="btn" id="resetCover" data-i18n="기본으로 되돌리기">기본으로 되돌리기</button>
+        <button type="button" class="btn" id="closeCover" data-i18n="닫기">닫기</button>
+      </div>
+      <p class="fine" id="coverStatus" role="status"></p>
+    </div>
+  </dialog>
   <dialog id="stayDialog" class="p3-dialog" aria-labelledby="stayTitle">
     <h2 class="dialog-heading" id="stayTitle" data-i18n="숙소">숙소</h2>
     <div class="dialog-body">

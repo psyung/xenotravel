@@ -314,7 +314,7 @@ test('F-1: 첫 저장 때 영구 저장 요청, 메뉴에 마지막 백업 표�
   assert.match(app, /navigator\.storage\.persist\(\)/);
   assert.match(app, /if \(r\.ok && !auto\) afterUserSave\(\);/);
   assert.match(app, /\$\('#backupAge'\)\.textContent = /);
-  assert.match(app, /if \(prefs\.changes\) prefs\.changes\[trip\.id\] = 0;/);
+  assert.match(app, /if \(prefs\.changes\) prefs\.changes\[snapshot\.id\] = 0;/);
   assert.match(read('index.html'), /id="backupAge"/);
 });
 

@@ -10,7 +10,7 @@ test('trends.json: 필수 필드와 좌표가 도시 근처에 있다', () => {
   const ids = new Set();
   for (const c of data.cities) {
     assert.ok(c.id && c.name && c.center);
-    for (const p of c.places) {
+    for (const p of c.trending) {
       assert.ok(!ids.has(p.id), `중복 id ${p.id}`);
       ids.add(p.id);
       assert.ok(p.name && p.summary && p.category, p.id);
@@ -56,7 +56,7 @@ test('activePlaces / statusLabel: 끝난 이벤트 제외, 상태 문구', () =>
 });
 
 test('trendToPlace → addItem: 메모·출처 링크가 일정에 들어간다', () => {
-  const p = data.cities[1].places[0];
+  const p = data.cities[1].trending[0];
   const t = M.createTrip({ startDate: '2026-12-01', endDate: '2026-12-01' });
   const item = M.addItem(t, t.days[0].id, T.trendToPlace(p, '오사카'));
   assert.equal(item.name, p.name);

@@ -45,6 +45,7 @@ const APP_FILES = [
   'data/trends-i18n.json',
   'data/checklist-presets.json',
   'lib/backup.js',
+  'lib/covers.js',
   'lib/budget.js',
   'lib/checklist.js',
   'lib/datepicker.js',

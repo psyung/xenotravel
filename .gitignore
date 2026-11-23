@@ -9,3 +9,7 @@ node_modules/
 
 # 밤샘 작업 진행 기록 (로컬 전용)
 /.overnight/
+
+# Codex/QA temporary browser profiles and scripts
+.phase3-browser-*/
+.phase3-smoke.mjs

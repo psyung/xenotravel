@@ -7,7 +7,7 @@ import * as T from './lib/trends.js';
 import * as B from './lib/budget.js';
 import * as C from './lib/checklist.js';
 import { encodeShare, decodeShare, shareUrl, shareCodeFromHash, shareSummary, shareMessage, sharedCopy } from './lib/share.js';
-import { enhanceDates, refreshDates } from './lib/datepicker.js';
+import { enhanceDates, openDateRange, refreshDates } from './lib/datepicker.js';
 import { enhanceTimes, destroyTimes, normalizeTime } from './lib/timefield.js';
 import { watchSelects } from './lib/select.js';
 import { enhanceSuggestions } from './lib/suggestions.js';
@@ -19,8 +19,9 @@ import * as D from './lib/dayops.js';
 import { stayRangeWithin, overlappingStays, splitStayAround } from './lib/stays.js';
 import { groupPlaces, removePlaceGroup } from './lib/place-groups.js';
 import { summaryModel, drawSummary, summaryFileName } from './lib/summary.js';
-import { DESTINATIONS, resolveDestination, repairTripCenter } from './lib/destinations.js';
+import { DESTINATIONS, destinationLabel, resolveDestination, repairTripCenter } from './lib/destinations.js';
 import { backupReason, backupReasonText, lastBackupLabel } from './lib/backup.js';
+import * as Covers from './lib/covers.js';
 import { init as initBudget, renderBudget, fetchRate } from './pages/budget.js';
 import { init as initChecks, renderChecks, initPresets } from './pages/check.js';
 import { init as initScrollFab } from './ui/scroll-fab.js';
@@ -790,15 +791,17 @@ $('#mapPlace').addEventListener('click', (e) => {
   }
 });
 
+function expandMap() {
+  if (!prefs.mapHidden || narrowMq.matches) return;
+  prefs.mapHidden = false;
+  savePrefs();
+  applyView();
+  map.invalidateSize();
+}
+
 function locateMapPlace(item) {
   ui.keepView = $('.layout').dataset.tab !== 'map';
-  if (prefs.mapHidden && !narrowMq.matches) {
-    // 데스크톱에서 지도를 접어 두었으면 펼친 뒤 보여 준다
-    prefs.mapHidden = false;
-    savePrefs();
-    applyView();
-    map.invalidateSize();
-  }
+  expandMap();
   showTab('map');
   map.setView([item.lat, item.lng], Math.max(map.getZoom(), 16));
   setTimeout(() => markers.get(item.id)?.fire('click'), 0);
@@ -813,9 +816,22 @@ function currentCity() {
   return T.cityByName(trends.cities, trip.destination);
 }
 
+const trendCollection = () => ui.trendCollection ?? 'trending';
+const trendLabel = (collection) => collection === 'popular' ? t('많이 가는 곳') : t('요즘 뜨는 곳');
+
+$('#days').addEventListener('keydown', (e) => {
+  const tab = e.target.closest('[data-collection]');
+  if (!tab || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const collection = e.key === 'Home' ? 'trending' : e.key === 'End' ? 'popular' :
+    (tab.dataset.collection === 'trending' ? 'popular' : 'trending');
+  $(`#trend-tab-${collection}`)?.click();
+});
+
 function findTrend(id) {
   for (const c of trends.cities) {
-    const p = c.places.find((x) => x.id === id);
+    const p = [...T.activePlaces(c, TODAY), ...T.activePlaces(c, TODAY, 'popular')].find((x) => x.id === id);
     if (p) return { place: p, city: c };
   }
   return null;
@@ -828,7 +844,8 @@ const trendsOpen = () => curView() === 'board' || (prefs.trendsUser ?? placeCoun
 function renderTrendMarkers() {
   const city = currentCity();
   if (!city || ui.readonly || (curView() === 'list' && !trendsOpen())) return;
-  for (const p of T.activePlaces(city, TODAY)) {
+  const collection = trendCollection();
+  for (const p of T.activePlaces(city, TODAY, collection)) {
     const loc = tp(p);
     const m = L.marker([p.lat, p.lng], {
       icon: L.divIcon({ className: '', html: '<div class="trend-pin" aria-hidden="true">★</div>', iconSize: [22, 22], iconAnchor: [11, 11] }),
@@ -836,12 +853,12 @@ function renderTrendMarkers() {
     })
       .bindPopup(
         `<div class="popup-name">${esc(loc.name)}</div>` +
-          `<div class="popup-meta">${esc(t('요즘 뜨는 곳'))} · ${esc(T.statusLabel(p, TODAY))}</div>` +
-          `<p class="popup-sum"${origAttr(loc)}>${esc(loc.summary)}${origTag(loc)}</p>` +
+          `<div class="popup-meta">${esc(trendLabel(collection))}${p.status ? ` · ${esc(T.statusLabel(p, TODAY))}` : ''}</div>` +
+          (loc.summary ? `<p class="popup-sum"${origAttr(loc)}>${esc(loc.summary)}${origTag(loc)}</p>` : '') +
           `<button class="popup-add" data-add-trend="${esc(p.id)}">${esc(t('+ 일정에 담기'))}</button>`,
       )
       .addTo(layer);
-    labelMarker(m, `${t('요즘 뜨는 곳')}: ${loc.name}`);
+    labelMarker(m, `${trendLabel(collection)}: ${loc.name}`);
   }
 }
 
@@ -849,7 +866,8 @@ function trendSectionHtml() {
   const city = currentCity();
   const board = curView() === 'board';
   const open = trendsOpen();
-  const places = T.activePlaces(city, TODAY);
+  const collection = trendCollection();
+  const places = T.activePlaces(city, TODAY, collection);
   // P0-8: 여행지 트렌드 데이터가 없으면 접힌 한 줄 안내 + 장소 검색 바로가기만
   if (!city) {
     return `<section class="trend-col trend-empty card" style="--c:${TREND_COLOR}">
@@ -861,26 +879,32 @@ function trendSectionHtml() {
     .map((p) => [p, tp(p)])
     .map(
       ([p, loc]) => `<li class="trend-card" data-trend="${esc(p.id)}">
-        <div class="tc-top"><span class="tc-badge s-${esc(p.status)}">${esc(T.statusLabel(p, TODAY))}</span><span class="tc-cat">${esc(loc.category)}</span></div>
+        ${p.status ? `<div class="tc-top"><span class="tc-badge s-${esc(p.status)}">${esc(T.statusLabel(p, TODAY))}</span><span class="tc-cat">${esc(loc.category)}</span></div>` : ''}
         <div class="tc-name">${esc(loc.name)}</div>
-        <div class="tc-area">${esc(loc.area)}${p.approx ? ` · ${esc(t('대략 위치'))}` : ''}</div>
-        <p class="tc-sum"${origAttr(loc)}>${esc(loc.summary)}${origTag(loc)}</p>
+        ${loc.area ? `<div class="tc-area">${esc(loc.area)}${p.approx ? ` · ${esc(t('대략 위치'))}` : ''}</div>` : ''}
+        ${loc.summary ? `<p class="tc-sum"${origAttr(loc)}>${esc(loc.summary)}${origTag(loc)}</p>` : ''}
         <div class="tc-foot">
-          <span class="tc-src">${esc(t('출처'))} ${p.sources.map((s, i) => `<a href="${href(s.url)}" target="_blank" rel="noopener" title="${esc(s.title)}" aria-label="${esc(t('출처 {n}: {title}', { n: i + 1, title: s.title }))}">${i + 1}</a>`).join(' ')}</span>
+          <span class="tc-src">${p.source === '편집 선정' ? esc(t('편집 선정')) : `${esc(t('출처'))} ${(p.sources ?? []).map((s, i) => `<a href="${href(s.url)}" target="_blank" rel="noopener" title="${esc(s.title)}" aria-label="${esc(t('출처 {n}: {title}', { n: i + 1, title: s.title }))}">${i + 1}</a>`).join(' ')}`}</span>
           <button class="tc-add" data-action="add-trend" aria-label="${esc(t('{name} 일정에 담기', { name: loc.name }))}">${esc(t('+ 담기'))}</button>
         </div>
       </li>`,
     )
     .join('');
-  const body = `<p class="trend-note">${esc(t('{date} 조사 · 카드를 끌어서 원하는 날에 놓으세요', { date: trends.researchedAt }))}</p><ul class="trend-list">${cards}</ul>`;
+  const criterion = collection === 'popular' ? t('대표 명소 · 편집 선정') :
+    t('{date} 조사 · 최근 SNS·뉴스 언급', { date: city.researchedAt ?? trends.researchedAt });
+  const tabs = ['trending', 'popular'].map((type) => `<button type="button" class="btn" id="trend-tab-${type}" role="tab" aria-controls="trend-panel" aria-selected="${collection === type}" tabindex="${collection === type ? 0 : -1}" data-action="trend-collection" data-collection="${type}">${esc(trendLabel(type))}</button>`).join('');
+  const body = `<div class="trend-tabs" role="tablist" aria-label="${esc(t('추천 장소'))}">${tabs}</div>
+    <div id="trend-panel" role="tabpanel" aria-labelledby="trend-tab-${collection}"${open ? '' : ' hidden'}>
+      ${open ? `<p class="trend-note">${esc(criterion)}</p><ul class="trend-list">${cards}</ul>` : ''}
+    </div>`;
   return `<section class="day trend-col card" style="--c:${TREND_COLOR}">
     <header class="day-head">
       <button class="day-title" data-action="trend-toggle"${board ? ' disabled' : ` aria-expanded="${open}"`}>
-        <span class="dot"></span><strong>${esc(t('요즘 뜨는 곳'))}</strong><span class="count">${esc(t('{n}곳', { n: places.length }))}${board ? '' : open ? ' ▾' : ' ▸'}</span>
+        <span class="dot"></span><strong>${esc(t('추천 장소'))}</strong><span class="count">${esc(t('{n}곳', { n: places.length }))}${board ? '' : open ? ' ▾' : ' ▸'}</span>
       </button>
       ${!board && open && places.length > 1 ? `<span class="trend-arrows"><button type="button" class="icon" data-action="trend-scroll" data-dir="-1" aria-label="${esc(t('이전 카드'))}">‹</button><button type="button" class="icon" data-action="trend-scroll" data-dir="1" aria-label="${esc(t('다음 카드'))}">›</button></span>` : ''}
     </header>
-    ${open ? body : ''}
+    ${body}
   </section>`;
 }
 
@@ -2663,6 +2687,16 @@ $('#days').addEventListener('click', (e) => {
     const q = $('#search');
     q.scrollIntoView({ block: 'center', behavior: 'smooth' });
     q.focus({ preventScroll: true });
+  } else if (action === 'trend-collection') {
+    if (btn.dataset.collection === trendCollection() && trendsOpen()) return;
+    ui.trendCollection = btn.dataset.collection;
+    if (!trendsOpen()) {
+      prefs.trendsUser = true;
+      savePrefs();
+    }
+    renderDays();
+    renderMap();
+    $(`#trend-tab-${ui.trendCollection}`)?.focus({ preventScroll: true });
   } else if (action === 'trend-toggle') {
     prefs.trendsUser = !trendsOpen();
     savePrefs();
@@ -2865,11 +2899,15 @@ $('#pinLegend').addEventListener('click', (e) => {
   $(`#pinLegend [data-pin="${mode}"]`)?.focus();
 });
 
-$('#showAll').addEventListener('click', () => {
-  if (ui.focusList == null) return selectDay(ui.day, { scroll: false });
+function showAllRoutes() {
   ui.focusList = null;
   renderDays();
   renderMap({ fit: true });
+}
+
+$('#showAll').addEventListener('click', () => {
+  if (ui.focusList == null) return selectDay(ui.day, { scroll: false });
+  showAllRoutes();
 });
 
 initScrollFab({ $, $$ });
@@ -3315,13 +3353,29 @@ function renderBackupReminder() {
   $('.menu summary').setAttribute('aria-label', due ? t('더보기 · 백업 파일을 저장할 때예요') : t('더보기'));
 }
 
-function saveTripBackup() {
+function openBackup() {
+  ask({
+    title: t('전체 백업 저장 (.json)'),
+    body: t('백업 파일로 여행을 다른 기기에 옮길 수 있어요.'),
+    actions: [{ value: 'save', label: t('백업 파일 저장'), primary: true }],
+  }).then((choice) => { if (choice === 'save') saveTripBackup(); });
+}
+
+async function saveTripBackup() {
   if (!trip) return;
-  downloadJson(trip);
-  if (ui.readonly) return;
+  const snapshot = structuredClone(trip);
+  const readonly = ui.readonly;
+  try {
+    const blob = readonly ? null : await Covers.get(snapshot.id);
+    downloadJson({ ...snapshot, cover: blob ? await Covers.encode(blob) : null });
+  } catch {
+    toast(t('백업 파일을 저장하지 못했어요'), 4000);
+    return;
+  }
+  if (readonly) return;
   prefs.backups ??= {};
-  prefs.backups[trip.id] = Date.now();
-  if (prefs.changes) prefs.changes[trip.id] = 0;
+  prefs.backups[snapshot.id] = Date.now();
+  if (prefs.changes) prefs.changes[snapshot.id] = 0;
   savePrefs();
   renderBackupReminder();
 }
@@ -3337,10 +3391,18 @@ $('#importFile').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   e.target.value = '';
   if (!file) return;
-  let imported;
+  let imported, cover;
   try {
     if (file.size > 10 * 1024 * 1024) throw new Error(t('파일이 너무 커요 (10MB 이하)'));
-    imported = M.validateTrip(JSON.parse(await file.text()));
+    const data = JSON.parse(await file.text());
+    imported = M.validateTrip(data);
+    if (Object.hasOwn(data, 'cover')) {
+      try {
+        cover = data.cover === null ? null : await Covers.decode(data.cover);
+      } catch {
+        throw new Error(t('커버 사진을 읽지 못했어요'));
+      }
+    }
     if (imported.expenses) B.normalizeExpenses(imported); // 예전 백업: 결제수단·통화·적용 환율 기본값
   } catch (err) {
     return void ask({
@@ -3362,7 +3424,15 @@ $('#importFile').addEventListener('change', async (e) => {
   }
   const existing = store.trips[imported.id];
   if (existing) {
-    const same = !dropped && JSON.stringify(existing) === JSON.stringify(imported);
+    let same = !dropped && JSON.stringify(existing) === JSON.stringify(imported);
+    if (same && cover !== undefined) {
+      try {
+        const current = await Covers.get(imported.id);
+        same = cover && current ? await Covers.encode(cover) === await Covers.encode(current) : !cover && !current;
+      } catch {
+        return toast(t('커버 사진을 읽지 못했어요'), 4000);
+      }
+    }
     const choice = await ask({
       title: t('이미 있는 여행이에요'),
       body: same
@@ -3376,8 +3446,27 @@ $('#importFile').addEventListener('change', async (e) => {
     if (!choice) return;
     if (choice === 'copy') imported = { ...imported, id: M.uid(), title: t('{title} (사본)', { title: imported.title }), createdAt: new Date().toISOString() };
   }
+  let previousCover;
+  if (cover !== undefined) {
+    try {
+      previousCover = await Covers.get(imported.id);
+      if (cover) await Covers.put(imported.id, cover);
+      else if (previousCover) await Covers.remove(imported.id);
+    } catch {
+      return toast(t('커버 사진을 저장하지 못했어요'), 4000);
+    }
+  }
   const r = switchTrip(imported, { save: true });
-  if (r?.ok) toast(dropped ? t('"{title}"을(를) 불러왔어요 · 읽지 못한 기록 {n}건은 빠졌어요', { title: imported.title, n: dropped }) : t('"{title}"을(를) 불러왔어요', { title: imported.title }), dropped ? 5000 : 2200);
+  if (r?.ok) {
+    toast(dropped ? t('"{title}"을(를) 불러왔어요 · 읽지 못한 기록 {n}건은 빠졌어요', { title: imported.title, n: dropped }) : t('"{title}"을(를) 불러왔어요', { title: imported.title }), dropped ? 5000 : 2200);
+  } else if (cover !== undefined) {
+    try {
+      if (previousCover) await Covers.put(imported.id, previousCover);
+      else if (cover) await Covers.remove(imported.id);
+    } catch {
+      toast(t('커버 사진을 저장하지 못했어요'), 4000);
+    }
+  }
 });
 
 /* ───────── 메인 페이지 · 주소(라우팅) ─────────
@@ -3402,6 +3491,8 @@ function tripHash(page, id) {
   return `#/trip/${id}${page === 'budget' || page === 'check' ? `/${page}` : ''}`;
 }
 
+let homeFeature = null;
+
 /** 화면 이동: 주소를 바꾸면 hashchange → route()가 그린다 (뒤로 가기도 같은 길로) */
 function go(page, id = trip?.id ?? store.currentId) {
   const h = tripHash(page, id);
@@ -3412,6 +3503,8 @@ function go(page, id = trip?.id ?? store.currentId) {
 /** 주소에 맞는 화면을 그린다. 이 브라우저에 없는 여행 주소면 이유와 복구 방법을 메인에 보여준다. */
 function route() {
   if (ui.readonly) return;
+  const feature = homeFeature?.hash === location.hash ? homeFeature.action : null;
+  homeFeature = null;
   const m = /^#\/trip\/([^/]+)(?:\/(budget|check))?$/.exec(location.hash);
   let id = null;
   try {
@@ -3431,6 +3524,9 @@ function route() {
   if (ui.homeAlert?.kind === 'missing') ui.homeAlert = null;
   if (trip?.id !== found.id) openTrip(found);
   showPage(m[2] || 'plan');
+  if (feature === 'share') $('#shareBtn').click();
+  else if (feature === 'flights') openFlights();
+  else if (feature === 'backup') openBackup();
 }
 
 /** 여행 열기 (화면 이동 없이 상태만) */
@@ -3440,6 +3536,7 @@ function openTrip(tr, { save = false } = {}) {
   map.closePopup();
   clearCandidate();
   trip = tr;
+  ui.trendCollection = 'trending';
   ui.mapLastDay = null;
   store.currentId = tr.id;
   if (save) store.trips[tr.id] = tr;
@@ -3470,7 +3567,9 @@ function deleteTrip(id) {
     trip = null;
     store.currentId = Object.values(store.trips).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]?.id ?? null;
   }
-  saved(saveNow(), t('"{title}"을(를) 삭제했어요', { title: tr.title }));
+  if (saved(saveNow(), t('"{title}"을(를) 삭제했어요', { title: tr.title }))) {
+    Covers.remove(id).catch(() => {});
+  }
   go('home');
 }
 
@@ -3517,15 +3616,73 @@ function tripCardHtml(tr) {
   const color = dayColor([...(tr.destination || tr.title)].reduce((h, c) => h + c.charCodeAt(0), 0));
   return `<li class="tcard${ended ? ' ended' : ''}" style="--c:${color}">
       <button class="tc-open" data-open="${tr.id}">
-        <span class="tc-cover"><span class="tc-dday">${esc(s.dday.label)}</span><span class="tc-dest">${esc(tr.destination || t('여행'))}</span></span>
+        <span class="tc-cover" data-cover-image="${esc(tr.id)}"><span class="tc-dday">${esc(s.dday.label)}</span><span class="tc-dest">${esc(destinationLabel(tr.destination) || t('여행'))}</span></span>
         <span class="tc-body">
           <b>${esc(tr.title)}</b>
           <small>${tr.startDate ? `${shortDate(tr.startDate)} – ${shortDate(tr.endDate)} · ` : ''}${esc(s.length)} · ${esc(t('{n}곳', { n: s.places }))}</small>
         </span>
       </button>
+      <button type="button" class="btn tc-edit-cover" data-edit-cover="${esc(tr.id)}" aria-haspopup="dialog" aria-label="${esc(t('{name} 커버 바꾸기', { name: tr.title }))}">${esc(t('커버 바꾸기'))}</button>
       <button class="icon tc-del" data-del="${tr.id}" title="${esc(t('삭제'))}" aria-label="${esc(t('{name} 삭제', { name: tr.title }))}">✕</button>
     </li>`;
 }
+
+function paintCover(el, blob) {
+  $('img', el)?.remove();
+  if (!blob) return;
+  const img = document.createElement('img');
+  img.alt = '';
+  const url = URL.createObjectURL(blob);
+  const release = () => URL.revokeObjectURL(url);
+  img.addEventListener('load', release, { once: true });
+  img.addEventListener('error', () => { release(); img.remove(); }, { once: true });
+  img.src = url;
+  el.prepend(img);
+}
+
+const coverDialog = $('#coverDialog');
+let coverTripId = null;
+let coverBusy = false;
+closeOnBackdrop(coverDialog, () => !coverBusy);
+$('#closeCover').addEventListener('click', () => coverDialog.close());
+coverDialog.addEventListener('cancel', (e) => { if (coverBusy) e.preventDefault(); });
+
+function openCover(id) {
+  if (coverBusy || !store.trips[id]) return;
+  coverTripId = id;
+  $('#coverStatus').textContent = '';
+  showDialog(coverDialog);
+}
+
+async function editCover(file) {
+  const id = coverTripId;
+  if (!id || coverBusy || !store.trips[id]) return;
+  coverBusy = true;
+  const controls = $$('#coverDialog input, #coverDialog button');
+  for (const control of controls) control.disabled = true;
+  $('#coverStatus').textContent = '';
+  try {
+    const blob = file ? await Covers.compress(file) : null;
+    if (!store.trips[id]) return;
+    if (blob) await Covers.put(id, blob);
+    else await Covers.remove(id);
+    const el = $(`[data-cover-image="${CSS.escape(id)}"]`);
+    if (el) paintCover(el, blob);
+    coverDialog.close();
+  } catch {
+    $('#coverStatus').textContent = t('커버 사진을 저장하지 못했어요');
+  } finally {
+    for (const control of controls) control.disabled = false;
+    coverBusy = false;
+  }
+}
+
+$('#coverFile').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (file) editCover(file);
+});
+$('#resetCover').addEventListener('click', () => editCover(null));
 
 function newTripForm(id) {
   const [ds, de] = defaultDates();
@@ -3633,7 +3790,7 @@ function renderHome() {
       <h1>${esc(t('지도와 일정을 한 화면에.'))}<br><span>${esc(t('설치 없이 공유까지.'))}</span></h1>
       <p>${esc(t('가입 없이 바로 시작하는 해외여행 플래너. 일정은 이 브라우저에 저장돼요.'))}</p>
       ${newTripForm('homeNew')}
-      <div class="dest-chips"><span>${esc(t('많이 가는 곳'))}</span>${POPULAR.map((d) => `<button type="button" data-dest="${esc(t(d))}">${esc(t(d))}</button>`).join('')}</div>
+      <div class="dest-chips"><span>${esc(t('추천 여행지'))}</span>${POPULAR.map((d) => `<button type="button" data-dest="${esc(t(d))}">${esc(t(d))}</button>`).join('')}</div>
       ${all.length ? '' : `<div class="home-sample"><button type="button" class="btn" data-home="sample">${esc(t('도쿄 3박 4일 샘플 열기'))}</button></div>`}
     </section>
 
@@ -3669,15 +3826,22 @@ function renderHome() {
     <section class="home-sec">
       <div class="sec-head"><h2>${esc(t('XenoTravel로 할 수 있는 것'))}</h2></div>
       <ul class="feats">
-        <li><b>${esc(t('지도와 일정을 한 화면에'))}</b><p>${esc(t('날짜별 타임라인과 지도 동선을 같이 보고, 끌어서 순서·날짜를 바꿔요.'))}</p></li>
-        <li><b>${esc(t('설치 없이 공유'))}</b><p>${esc(t('링크 하나면 친구가 앱 없이 바로 봐요. 원하면 자기 여행으로 저장해 고쳐요.'))}</p></li>
-        <li><b>${esc(t('어디든 장소 추가'))}</b><p>${esc(t('한국어 검색, 구글맵 링크 붙여넣기, 지도에서 찍기. 소도시도 빠짐없이.'))}</p></li>
-        <li><b>${esc(t('거리 · 길찾기'))}</b><p>${esc(t('장소 사이 거리와 도보 시간, 누르면 구글맵 길찾기가 열려요.'))}</p></li>
-        <li><b>${esc(t('가계부 · 체크리스트'))}</b><p>${esc(t('현지 돈으로 적으면 원화도 같이. 출발 전 할 일, 짐, 쇼핑 리스트까지.'))}</p></li>
-        <li><b>${esc(t('전부 무료'))}</b><p>${esc(t('엑셀 · PDF 내보내기, 다크 모드, 백업까지 돈 내는 기능이 없어요.'))}</p></li>
+        ${featureCard('plan', t('지도와 일정을 한 화면에'), t('날짜별 타임라인과 지도 동선을 같이 보고, 끌어서 순서·날짜를 바꿔요.'))}
+        ${featureCard('share', t('설치 없이 공유'), t('링크 하나면 친구가 앱 없이 바로 봐요. 원하면 자기 여행으로 저장해 고쳐요.'))}
+        ${featureCard('plan', t('어디든 장소 추가'), t('한국어 검색, 구글맵 링크 붙여넣기, 지도에서 찍기. 소도시도 빠짐없이.'))}
+        ${featureCard('plan', t('거리 · 길찾기'), t('장소 사이 거리와 도보 시간, 누르면 구글맵 길찾기가 열려요.'))}
+        ${featureCard('budget', t('가계부'), t('현지 돈으로 적으면 원화도 같이.'))}
+        ${featureCard('check', t('체크리스트'), t('출발 전 할 일, 짐, 쇼핑 리스트까지.'))}
+        ${featureCard('flights', t('항공편'), t('출국·귀국편과 여행 중 항공편을 기록해요.'))}
+        ${featureCard('backup', t('백업 저장'), t('백업 파일로 여행을 다른 기기에 옮길 수 있어요.'))}
       </ul>
     </section>
   </div>`;
+  for (const cover of $$('[data-cover-image]', el)) {
+    Covers.get(cover.dataset.coverImage).then((blob) => {
+      if (blob && cover.isConnected && !$('img', cover)) paintCover(cover, blob);
+    }).catch(() => {});
+  }
   if (keep) for (const [k, v] of Object.entries(keep)) if (v) $(`#homeNew [name="${k}"]`).value = v;
   enhanceDates(el);
   const destination = $('#homeNewDestination');
@@ -3688,13 +3852,30 @@ function renderHome() {
   } else if (focusSel) $(focusSel, el)?.focus({ preventScroll: true });
 }
 
+function featureCard(action, title, detail) {
+  return `<li><button type="button" data-feature="${action}"><b>${esc(title)}</b><span>${esc(detail)}</span></button></li>`;
+}
+
+function openHomeFeature(action) {
+  const current = store.trips[store.currentId] ??
+    Object.values(store.trips).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+  if (!current) return openNewTrip();
+  const page = action === 'budget' || action === 'check' ? action : 'plan';
+  homeFeature = { hash: tripHash(page, current.id), action };
+  go(page, current.id);
+}
+
 $('#page-home').addEventListener('click', (e) => {
   const open = e.target.closest('[data-open]')?.dataset.open;
   const del = e.target.closest('[data-del]')?.dataset.del;
   const dest = e.target.closest('[data-dest]')?.dataset.dest;
   const cityId = e.target.closest('[data-city]')?.dataset.city;
   const home = e.target.closest('[data-home]')?.dataset.home;
-  if (open && store.trips[open]) go('plan', open);
+  const feature = e.target.closest('[data-feature]')?.dataset.feature;
+  const cover = e.target.closest('[data-edit-cover]')?.dataset.editCover;
+  if (feature) openHomeFeature(feature);
+  else if (cover) openCover(cover);
+  else if (open && store.trips[open]) go('plan', open);
   else if (del) deleteTrip(del);
   else if (e.target.closest('[data-focus-new]')) openNewTrip();
   else if (dest) {
@@ -4074,16 +4255,16 @@ function flightRoute(f) {
 
 function renderHero() {
   const s = M.tripStats(trip, TODAY);
-  const dest = (trip.destination || '').trim();
+  const dest = destinationLabel(trip.destination);
   $('#heroTag').textContent = dest ? t('{dest} 여행', { dest }) : t('여행 계획');
   const staysTxt = trip.stays.length ? `${trip.stays[0].name}${trip.stays.length > 1 ? ` ${t('외 {n}곳', { n: trip.stays.length - 1 })}` : ''}` : '';
   $('#heroMeta').textContent = [s.length, staysTxt].filter(Boolean).join(' · ');
   const km = s.km >= 10 ? Math.round(s.km) : s.km.toFixed(1);
   $('#heroStats').innerHTML = `
-    <div class="tile dday"><span>${esc(s.dday.sub)}</span><b>${esc(s.dday.label)}</b></div>
-    <div class="tile"><span>${esc(t('여행 기간'))}</span><b>${s.days}<small>${esc(t('일'))}</small></b></div>
+    <button type="button" class="tile dday" data-summary="today"><span>${esc(s.dday.sub)}</span><b>${esc(s.dday.label)}</b></button>
+    <button type="button" class="tile" data-summary="dates" aria-haspopup="dialog" aria-controls="datePicker" aria-expanded="false"${ui.readonly ? ' disabled' : ''}><span>${esc(t('여행 기간'))}</span><b>${s.days}<small>${esc(t('일'))}</small></b></button>
     <button type="button" class="tile" data-open-place-groups><span>${esc(t('들를 곳'))}</span><b>${s.places}<small>${esc(t('곳'))}</small></b></button>
-    <div class="tile wide"><span>${esc(t('이동 (직선)'))}</span><b>${num(Number(km), { maximumFractionDigits: 1 })}<small>km</small></b></div>`;
+    <button type="button" class="tile wide" data-summary="routes"><span>${esc(t('이동 (직선)'))}</span><b>${num(Number(km), { maximumFractionDigits: 1 })}<small>km</small></b></button>`;
   const out = trip.flights.find((f) => f.kind === 'out');
   const back = trip.flights.find((f) => f.kind === 'in');
   const flights = [out, ...trip.flights.filter((f) => f.kind === 'move'), back].filter(Boolean);
@@ -4093,6 +4274,26 @@ function renderHero() {
     ? ''
     : `<button class="route add" data-hero="flights"><span class="rt-kind">${esc(t('항공편'))}</span><span class="rt-add">${esc(t('+ 출국·귀국편 넣기'))}</span></button>`;
 }
+
+$('#heroStats').addEventListener('click', (e) => {
+  const button = e.target.closest('[data-summary]');
+  const action = button?.dataset.summary;
+  if (!trip || !action) return;
+  if (action === 'dates') {
+    openDateRange($('#startDate'), button);
+  } else if (action === 'routes') {
+    expandMap();
+    showTab('map');
+    showAllRoutes();
+    revealMap();
+  } else if (action === 'today') {
+    const index = M.todayIndex(trip, TODAY);
+    showTab('plan');
+    selectDay(index, { scroll: false });
+    const card = $(`#day-${index}`);
+    card?.scrollIntoView({ block: 'start', inline: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  }
+});
 
 /* ───────── 여행 당일: 오늘 카드 ─────────
  * 여행 기간 중에만 맨 위에 보인다. 현장에서 자주 하는 일(다음 장소 길찾기, 주소 보여주기, 숙소로 가기,
@@ -4274,6 +4475,7 @@ function showPage(page, { scroll = true } = {}) {
   document.title = `${trip.title} · XenoTravel`;
   renderTripSwitcher();
   if (prefs.page === 'plan') {
+    renderHero();
     if (!$('#days').childElementCount) {
       renderPlanEmpty();
       renderDays();

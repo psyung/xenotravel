@@ -146,6 +146,7 @@ export function dateTime(iso) {
 export const dayName = (i) => t('Day {n}', { n: i + 1 });
 
 /** "3박 4일" / "당일" */
-export function tripLength(days, dayTrip = '당일') {
-  return days > 1 ? t('{n}박 {d}일', { n: days - 1, d: days }) : t(dayTrip);
+export function tripLength(days, dayTrip) {
+  if (days > 1) return t('{n}박 {d}일', { n: days - 1, d: days });
+  return dayTrip === undefined ? t('당일') : t(dayTrip);
 }

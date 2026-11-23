@@ -1,7 +1,7 @@
 // 새 여행 자동완성의 여행지 목록 (P0-1). 도시마다 고정 좌표와 국가 코드를 둔다 → 이 목록의 도시는 지오코딩하지 않는다.
 // 예전에는 좌표 없이 "자싱"을 그대로 Nominatim에 보내 첫 결과(인도 라자스탄)를 믿었다.
 // 이름(value)과 나라(detail)는 번역 키 (화면에서는 t()). en은 목록 밖 도시를 영어로 찾을 때도 쓰는 영어 이름.
-import { k, allVersions } from './i18n.js';
+import { k, t, allVersions } from './i18n.js';
 import { distanceKm } from './model.js';
 
 export const DESTINATIONS = [
@@ -42,6 +42,11 @@ export function resolveDestination(text, extra = []) {
 }
 
 /** 담긴 장소(일정·보관함·숙소)의 평균 좌표 (없으면 null) */
+export function destinationLabel(destination) {
+  const known = resolveDestination(destination);
+  return known ? t(known.value) : String(destination ?? '').trim();
+}
+
 export function placesCenter(trip) {
   const pts = [...trip.days.flatMap((d) => d.items), ...(trip.inbox ?? []), ...(trip.stays ?? [])].filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
   if (!pts.length) return null;

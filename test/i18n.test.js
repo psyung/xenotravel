@@ -139,7 +139,7 @@ test('3-2: 추천 카드(트렌드) 문구는 네 언어로 현지화되고, 번
   const data = JSON.parse(readFileSync(new URL('data/trends.json', pub), 'utf8'));
   const tr = JSON.parse(readFileSync(new URL('data/trends-i18n.json', pub), 'utf8'));
   for (const city of data.cities) {
-    for (const p of city.places) {
+    for (const p of city.trending) {
       for (const lang of ['en', 'zh', 'ja']) {
         const loc = T.localizePlace(p, lang, tr);
         assert.equal(loc.original, false, `${p.id} ${lang}`);

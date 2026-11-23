@@ -294,6 +294,12 @@ function paint(btn, value, disabled, short = false) {
   btn.disabled = disabled;
 }
 
+const rangeOpeners = new WeakMap();
+
+export function openDateRange(start, trigger) {
+  if (!start.disabled) rangeOpeners.get(start)?.(trigger);
+}
+
 function enhancePair(scope) {
   const start = scope.querySelector('input[data-dp="start"]');
   const end = scope.querySelector('input[data-dp="end"]');
@@ -317,7 +323,7 @@ function enhancePair(scope) {
       anchor,
       startButton: bs,
       endButton: be,
-      activeField: anchor === bs ? 'start' : 'end',
+      activeField: anchor === be ? 'end' : 'start',
       title: t(scope.dataset.dpPair || '날짜'),
       minNights: Number(scope.dataset.dpMinNights) || 0,
       start: start.value,
@@ -336,6 +342,7 @@ function enhancePair(scope) {
     });
   bs.addEventListener('click', () => show(bs));
   be.addEventListener('click', () => show(be));
+  rangeOpeners.set(start, show);
 }
 
 function enhanceDateTime(input) {

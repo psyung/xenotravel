@@ -1,7 +1,7 @@
 // 트렌드(요즘 뜨는 곳) 데이터 처리. 순수 함수만 둔다.
 
 import { distanceKm, categoryFromText } from './model.js';
-import { t, monthName } from './i18n.js';
+import { t, monthName, allVersions } from './i18n.js';
 
 export { distanceKm };
 
@@ -21,7 +21,7 @@ export function tripAnchor(trip) {
 export function cityByName(cities, destination) {
   const d = String(destination ?? '').trim().toLowerCase();
   if (!d) return null;
-  return cities.find((c) => d.includes(c.name.toLowerCase()) || d.includes(c.id.toLowerCase())) ?? null;
+  return cities.find((c) => [...allVersions(c.name), c.id].some((name) => d.includes(name.toLowerCase()))) ?? null;
 }
 
 export function nearestCity(cities, point, maxKm = 150) {
@@ -35,8 +35,9 @@ export function nearestCity(cities, point, maxKm = 150) {
 }
 
 /** 이미 끝난 기간 한정 이벤트는 뺀다. today: 'YYYY-MM-DD' */
-export function activePlaces(city, today) {
-  return (city?.places ?? []).filter((p) => !p.until || p.until >= today);
+export function activePlaces(city, today, collection = 'trending') {
+  if (collection === 'popular') return city?.popular ?? [];
+  return (city?.trending ?? city?.places ?? []).filter((p) => !p.until || p.until >= today);
 }
 
 const md = (s) => {
@@ -67,7 +68,7 @@ export function trendToPlace(p, cityName, rawCategory = p.category) {
     lng: p.lng,
     url: p.sources?.[0]?.url ?? '',
     memo: p.summary ?? '',
-    category: categoryFromText(rawCategory),
+    category: p.source === '편집 선정' ? 'sight' : categoryFromText(rawCategory),
   };
 }
 
@@ -82,5 +83,5 @@ export function localizePlace(p, lang, i18n) {
   const tr = i18n?.places?.[p.id]?.[lang];
   const category = i18n?.categories?.[p.category]?.[lang] ?? p.category;
   if (!tr) return { ...base, category, original: true };
-  return { name: tr.name ?? p.name, area: tr.area ?? p.area, category, summary: tr.summary ?? p.summary, original: !tr.summary };
+  return { name: tr.name ?? p.name, area: tr.area ?? p.area, category, summary: tr.summary ?? p.summary, original: Boolean(p.summary && !tr.summary) };
 }

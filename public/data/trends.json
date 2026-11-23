@@ -7,7 +7,12 @@
       "name": "도쿄",
       "country": "JP",
       "center": { "lat": 35.6812, "lng": 139.7671 },
-      "places": [
+      "popular": [
+        {"id":"tokyo-landmark-sensoji","name":"센소지","lat":35.7148,"lng":139.7967,"source":"편집 선정"},
+        {"id":"tokyo-landmark-skytree","name":"도쿄 스카이트리","lat":35.7101,"lng":139.8107,"source":"편집 선정"},
+        {"id":"tokyo-landmark-meiji","name":"메이지 신궁","lat":35.6764,"lng":139.6993,"source":"편집 선정"}
+      ],
+      "trending": [
         {
           "id": "tokyo-pokepark-kanto",
           "name": "PokéPark Kanto",
@@ -111,7 +116,12 @@
       "name": "오사카",
       "country": "JP",
       "center": { "lat": 34.7025, "lng": 135.4959 },
-      "places": [
+      "popular": [
+        {"id":"osaka-landmark-castle","name":"오사카성","lat":34.6873,"lng":135.5262,"source":"편집 선정"},
+        {"id":"osaka-landmark-dotonbori","name":"도톤보리","lat":34.6687,"lng":135.5013,"source":"편집 선정"},
+        {"id":"osaka-landmark-tsutenkaku","name":"쓰텐카쿠","lat":34.6525,"lng":135.5063,"source":"편집 선정"}
+      ],
+      "trending": [
         {
           "id": "osaka-grand-green",
           "name": "GRAND GREEN OSAKA (우메키타)",
@@ -186,7 +196,12 @@
       "name": "교토",
       "country": "JP",
       "center": { "lat": 35.0116, "lng": 135.7681 },
-      "places": [
+      "popular": [
+        {"id":"kyoto-landmark-kiyomizu","name":"기요미즈데라","lat":34.9948,"lng":135.785,"source":"편집 선정"},
+        {"id":"kyoto-landmark-fushimi-inari","name":"후시미 이나리 신사","lat":34.9671,"lng":135.7718,"source":"편집 선정"},
+        {"id":"kyoto-landmark-kinkakuji","name":"금각사","lat":35.0394,"lng":135.7292,"source":"편집 선정"}
+      ],
+      "trending": [
         {
           "id": "kyoto-teamlab-biovortex",
           "name": "teamLab Biovortex Kyoto",
@@ -262,7 +277,12 @@
       "name": "후쿠오카",
       "country": "JP",
       "center": { "lat": 33.5902, "lng": 130.4017 },
-      "places": [
+      "popular": [
+        {"id":"fukuoka-landmark-ohori","name":"오호리 공원","lat":33.5859,"lng":130.3763,"source":"편집 선정"},
+        {"id":"fukuoka-landmark-tower","name":"후쿠오카 타워","lat":33.5933,"lng":130.3515,"source":"편집 선정"},
+        {"id":"fukuoka-landmark-kushida","name":"쿠시다 신사","lat":33.593,"lng":130.4105,"source":"편집 선정"}
+      ],
+      "trending": [
         {
           "id": "fukuoka-kuohka",
           "name": "CANAL Gourmet Street KUOHKA",

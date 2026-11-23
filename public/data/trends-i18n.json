@@ -23,6 +23,18 @@
     "숙소": { "en": "Hotel", "zh": "住宿", "ja": "宿泊" }
   },
   "places": {
+    "tokyo-landmark-sensoji": {"en":{"name":"Sensō-ji"},"zh":{"name":"浅草寺"},"ja":{"name":"浅草寺"}},
+    "tokyo-landmark-skytree": {"en":{"name":"Tokyo Skytree"},"zh":{"name":"东京晴空塔"},"ja":{"name":"東京スカイツリー"}},
+    "tokyo-landmark-meiji": {"en":{"name":"Meiji Jingu"},"zh":{"name":"明治神宫"},"ja":{"name":"明治神宮"}},
+    "osaka-landmark-castle": {"en":{"name":"Osaka Castle"},"zh":{"name":"大阪城"},"ja":{"name":"大阪城"}},
+    "osaka-landmark-dotonbori": {"en":{"name":"Dōtonbori"},"zh":{"name":"道顿堀"},"ja":{"name":"道頓堀"}},
+    "osaka-landmark-tsutenkaku": {"en":{"name":"Tsūtenkaku"},"zh":{"name":"通天阁"},"ja":{"name":"通天閣"}},
+    "kyoto-landmark-kiyomizu": {"en":{"name":"Kiyomizu-dera"},"zh":{"name":"清水寺"},"ja":{"name":"清水寺"}},
+    "kyoto-landmark-fushimi-inari": {"en":{"name":"Fushimi Inari Taisha"},"zh":{"name":"伏见稻荷大社"},"ja":{"name":"伏見稲荷大社"}},
+    "kyoto-landmark-kinkakuji": {"en":{"name":"Kinkaku-ji"},"zh":{"name":"金阁寺"},"ja":{"name":"金閣寺"}},
+    "fukuoka-landmark-ohori": {"en":{"name":"Ōhori Park"},"zh":{"name":"大濠公园"},"ja":{"name":"大濠公園"}},
+    "fukuoka-landmark-tower": {"en":{"name":"Fukuoka Tower"},"zh":{"name":"福冈塔"},"ja":{"name":"福岡タワー"}},
+    "fukuoka-landmark-kushida": {"en":{"name":"Kushida Shrine"},"zh":{"name":"栉田神社"},"ja":{"name":"櫛田神社"}},
     "tokyo-pokepark-kanto": {
       "en": { "area": "Yomiuriland (Inagi)", "summary": "A permanent outdoor Pokémon park inside Yomiuriland. Tickets for overseas visitors open two months ahead at 6 p.m. JST and tend to sell out fast." },
       "zh": { "area": "读卖乐园（稻城）", "summary": "位于读卖乐园内的常设户外宝可梦乐园。外国游客门票在两个月前的日本时间下午6点开售，通常很快售罄。" },
