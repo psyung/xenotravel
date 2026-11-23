@@ -81,17 +81,18 @@ test('F04: 번역 사전에 쓰지 않는 키가 쌓이지 않는다', () => {
   assert.deepEqual(unused, []);
 });
 
-test('F04: 언어 선택 — 저장값이 없거나 이상하면 한국어, 저장이 막혀도 이번 화면은 바뀐다', () => {
+test('F04·P0-7: 언어 선택 — 저장값이 없거나 이상하면 브라우저 언어, 저장이 막혀도 이번 화면은 바뀐다', () => {
   const store = new Map();
   const ok = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
-  assert.equal(I.loadLang(ok), 'ko');
+  assert.equal(I.loadLang(ok, ['ko-KR', 'en']), 'ko');
+  assert.equal(I.loadLang(ok, ['fr-FR']), 'en');
   store.set(I.LANG_KEY, 'fr');
-  assert.equal(I.loadLang(ok), 'ko');
+  assert.equal(I.loadLang(ok, ['ja-JP']), 'ja');
   store.set(I.LANG_KEY, 'ja');
-  assert.equal(I.loadLang(ok), 'ja');
+  assert.equal(I.loadLang(ok, ['ko-KR']), 'ja', '사용자가 고른 언어가 먼저');
   assert.equal(I.t('일정'), MESSAGES['일정'][2]);
   const denied = { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); } };
-  assert.equal(I.loadLang(denied), 'ko');
+  assert.equal(I.loadLang(denied, ['ko']), 'ko');
   I.setLang('en');
   assert.equal(I.saveLang(denied), false);
   assert.equal(I.getLang(), 'en');

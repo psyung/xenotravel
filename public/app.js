@@ -16,6 +16,8 @@ import { privacySections } from './lib/privacy.js';
 import { createUndoStack } from './lib/undo.js';
 import * as D from './lib/dayops.js';
 import { summaryModel, drawSummary, summaryFileName } from './lib/summary.js';
+import { DESTINATIONS, resolveDestination, repairTripCenter } from './lib/destinations.js';
+import { backupReason, backupReasonText, lastBackupLabel } from './lib/backup.js';
 
 const undoStack = createUndoStack(); // 실행 취소 스택 (toast·pushUndo가 쓴다, 시작 중 알림도 안전하게 맨 위에 둔다)
 // 일차 색: 색상환에서 고르게 벌려 지도 동선이 바로 구분되고, 흰 숫자 대비 5:1 이상 (시안 A)
@@ -749,10 +751,10 @@ function locateMapPlace(item) {
 /* ───────── 트렌드 (요즘 뜨는 곳) ─────────
  * 트렌드 장소 이름·요약은 조사한 원문 자료라 번역하지 않는다 (도시 이름과 상태 문구만 지금 언어로).
  */
+/** P0-8: 여행 페이지는 여행지 도시 데이터만 쓴다 (다른 도시를 고르는 칸 없음 — 도시 고르기는 홈에서만) */
 function currentCity() {
   if (!trip || !trends.cities.length) return null;
-  const chosen = trends.cities.find((c) => c.id === trip.trendCity);
-  return chosen ?? T.cityByName(trends.cities, trip.destination) ?? T.nearestCity(trends.cities, T.tripAnchor(trip));
+  return T.cityByName(trends.cities, trip.destination);
 }
 
 function findTrend(id) {
@@ -792,10 +794,13 @@ function trendSectionHtml() {
   const board = prefs.view === 'board';
   const open = trendsOpen();
   const places = T.activePlaces(city, TODAY);
-  const options = [
-    city ? '' : `<option value="">${esc(t('도시 선택'))}</option>`,
-    ...trends.cities.map((c) => `<option value="${c.id}"${c.id === city?.id ? ' selected' : ''}>${esc(t(c.name))}</option>`),
-  ].join('');
+  // P0-8: 여행지 트렌드 데이터가 없으면 접힌 한 줄 안내 + 장소 검색 바로가기만
+  if (!city) {
+    return `<section class="trend-col trend-empty card" style="--c:${TREND_COLOR}">
+      <span class="dot" aria-hidden="true"></span><span>${esc(t('이 도시 추천은 준비 중이에요'))}</span>
+      <button type="button" class="link" data-action="trend-search">${esc(t('장소 검색하기'))}</button>
+    </section>`;
+  }
   const cards = places
     .map((p) => [p, tp(p)])
     .map(
@@ -811,15 +816,12 @@ function trendSectionHtml() {
       </li>`,
     )
     .join('');
-  const body = city
-    ? `<p class="trend-note">${esc(t('{date} 조사 · 카드를 끌어서 원하는 날에 놓으세요', { date: trends.researchedAt }))}</p><ul class="trend-list">${cards}</ul>`
-    : `<p class="empty-list">${esc(t('이 여행지는 아직 트렌드 정보가 없어요. 지금은 {cities}만 있어요.', { cities: trends.cities.map((c) => t(c.name)).join('·') }))}</p>`;
+  const body = `<p class="trend-note">${esc(t('{date} 조사 · 카드를 끌어서 원하는 날에 놓으세요', { date: trends.researchedAt }))}</p><ul class="trend-list">${cards}</ul>`;
   return `<section class="day trend-col card" style="--c:${TREND_COLOR}">
     <header class="day-head">
       <button class="day-title" data-action="trend-toggle"${board ? ' disabled' : ` aria-expanded="${open}"`}>
-        <span class="dot"></span><strong>${esc(t('요즘 뜨는 곳'))}</strong><span class="count">${city ? esc(t('{n}곳', { n: places.length })) : ''}${board ? '' : open ? ' ▾' : ' ▸'}</span>
+        <span class="dot"></span><strong>${esc(t('요즘 뜨는 곳'))}</strong><span class="count">${esc(t('{n}곳', { n: places.length }))}${board ? '' : open ? ' ▾' : ' ▸'}</span>
       </button>
-      <select class="trend-city" aria-label="${esc(t('트렌드 도시'))}">${options}</select>
     </header>
     ${open ? body : ''}
   </section>`;
@@ -1169,7 +1171,50 @@ function commit({ fit = false, auto = false } = {}) {
   store.trips[trip.id] = trip;
   const r = saveNow();
   render({ fit });
+  if (r.ok && !auto) afterUserSave();
   return r;
+}
+
+/* ───────── F-1: 여행 데이터 유실 방지 ─────────
+ * 첫 저장 때 브라우저에 영구 저장을 요청하고(거절되면 한 번 안내), 출발 7일 전·여행 끝난 다음 날·큰 변경 20회 뒤에 백업을 권한다.
+ */
+function afterUserSave() {
+  prefs.changes ??= {};
+  prefs.changes[trip.id] = (prefs.changes[trip.id] ?? 0) + 1;
+  savePrefs();
+  requestPersist();
+  scheduleNag(2600); // 방금 저장 알림이 먼저 보이게
+}
+async function requestPersist() {
+  if (prefs.persistAsked || !navigator.storage?.persist) return;
+  prefs.persistAsked = true;
+  savePrefs();
+  try {
+    if (await navigator.storage.persisted()) return;
+    if (await navigator.storage.persist()) return;
+  } catch {
+    /* 지원하지 않으면 안내만 */
+  }
+  const installed = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  toast(installed
+    ? t('이 브라우저는 저장 공간 보호를 허락하지 않았어요. 일정이 사라지지 않게 가끔 백업 파일을 저장해 두세요')
+    : t('이 브라우저는 저장 공간 보호를 허락하지 않았어요. 홈 화면에 추가해 앱으로 쓰거나, 가끔 백업 파일을 저장해 두세요'), 7000);
+}
+let nagTimer = 0;
+/** 시간 기준 권유(출발 7일 전·여행 끝난 다음 날)는 편집하지 않고 열기만 해도 확인한다 */
+function scheduleNag(ms = 3000) {
+  clearTimeout(nagTimer);
+  nagTimer = setTimeout(nagBackup, ms);
+}
+function nagBackup() {
+  if (!trip || ui.readonly || prefs.page === 'home') return;
+  if (undoStack.size()) return scheduleNag(Math.max(1000, undoStack.left() + 500)); // 실행 취소 알림을 가리지 않게 뒤로
+  const r = backupReason(trip, { last: prefs.backups?.[trip.id] ?? 0, changes: prefs.changes?.[trip.id] ?? 0 });
+  if (!r || prefs.backupNag?.[trip.id] === r.key) return;
+  prefs.backupNag ??= {};
+  prefs.backupNag[trip.id] = r.key;
+  savePrefs();
+  toast(backupReasonText(r.reason), 8000, { label: t('백업 저장'), run: saveTripBackup });
 }
 
 /**
@@ -1337,11 +1382,17 @@ function render({ fit = false } = {}) {
   refreshWeatherSoon();
 }
 
-/** 여행지 이름이 트렌드 도시인데 좌표가 그 도시와 멀면(예전 검색이 서울의 "오사카○○" 식당을 찾은 경우) 도시 좌표로 고친다. */
+/**
+ * 저장된 여행의 여행지 좌표 고치기 (P0-1): 목록의 도시인데 멀면(예전 검색이 서울의 "오사카○○" 식당·인도의 동명 지역을 찾은 경우)
+ * 도시 좌표로, 목록 밖이면 담긴 장소 평균과 300km 넘게 떨어졌을 때 장소 평균으로.
+ */
 function repairCenter() {
+  if (trip.centerManual) return;
   const named = T.cityByName(trends.cities, trip.destination);
-  if (!named || (trip.center && T.distanceKm(trip.center, named.center) <= 150)) return;
-  trip.center = { ...named.center };
+  const fixed = named && (!trip.center || T.distanceKm(trip.center, named.center) > 150)
+    ? Boolean((trip.center = { ...named.center }))
+    : repairTripCenter(trip, trends.cities);
+  if (!fixed) return;
   if (!ui.readonly) {
     store.trips[trip.id] = trip;
     persistSoon();
@@ -1417,12 +1468,11 @@ function renderStayOpts() {
 
 /** 체크인·체크아웃 달력 값과 고를 수 있는 범위(여행 기간)를 맞춘다. */
 function setStayCalendar(inEl, outEl, startIndex, nights) {
+  // P0-9: 여행 기간 밖도 고를 수 있다 (달력에서 흐리게만). 고르면 여행을 늘릴지 묻는다.
   const n = trip.days.length;
-  inEl.min = M.dateAtIndex(trip, 0);
-  inEl.max = M.dateAtIndex(trip, n - 1);
+  inEl.dataset.dpSoftMin = M.dateAtIndex(trip, 0);
+  outEl.dataset.dpSoftMax = M.dateAtIndex(trip, n);
   inEl.value = M.dateAtIndex(trip, startIndex);
-  outEl.min = M.dateAtIndex(trip, startIndex + 1);
-  outEl.max = M.dateAtIndex(trip, n);
   outEl.value = M.dateAtIndex(trip, startIndex + nights);
 }
 
@@ -1483,9 +1533,9 @@ function stayRowHtml(stay, dayIndex, pos, flags, leg = null) {
         <label>${esc(t('숙소 이름'))}<input data-sfield="name" value="${esc(stay.name)}"></label>
         <div class="stay-range" data-dp-pair="숙소 날짜" data-dp-min-nights="1">
           <label>${esc(t('체크인'))}<input type="date" data-srange="in" data-dp="start" aria-label="체크인" value="${M.dateAtIndex(trip, stay.startIndex)}"
-            min="${M.dateAtIndex(trip, 0)}" max="${M.dateAtIndex(trip, n - 1)}"></label>
+            data-dp-soft-min="${M.dateAtIndex(trip, 0)}"></label>
           <label>${esc(t('체크아웃'))}<input type="date" data-srange="out" data-dp="end" aria-label="체크아웃" value="${M.dateAtIndex(trip, stay.startIndex + stay.nights)}"
-            min="${M.dateAtIndex(trip, stay.startIndex + 1)}" max="${M.dateAtIndex(trip, n)}"></label>
+            data-dp-soft-max="${M.dateAtIndex(trip, n)}"></label>
           <span class="nights-chip">${esc(t('{n}박', { n: stay.nights }))}</span>
         </div>
         <label>${esc(t('메모'))}<textarea data-sfield="memo" placeholder="${esc(t('예약번호, 체크인 시간…'))}">${esc(stay.memo)}</textarea></label>
@@ -1654,24 +1704,20 @@ function dayFlightIdOf(it) {
 }
 /** 그날 시간이 꼬인 장소 id. 그날 비행기 도착 시각보다 이르거나, 귀국 비행기 출발 이후인 장소도 포함 */
 function dayTimeConflicts(dayIndex) {
-  const hhmm = (v) => (v ? v.slice(11, 16) : '');
-  const arrive = dayFlights(dayIndex, 'top').filter(({ role }) => role !== 'depart').map(({ flight }) => hhmm(flight.arriveAt)).filter(Boolean).sort().at(-1) ?? '';
-  const leave = dayFlights(dayIndex, 'bottom').filter(({ role }) => role !== 'arrive').map(({ flight }) => hhmm(flight.departAt)).filter(Boolean).sort()[0] ?? '';
-  return M.timeConflictKinds(trip.days[dayIndex]?.items, { after: arrive, before: leave });
+  return M.timeConflictKinds(trip.days[dayIndex]?.items, M.flightTimeBounds(M.flightsForDay(trip, dayIndex)));
 }
 
 /* ───────── 항공편 ───────── */
-/** 그날 항공편. top = 출국·이동(하루 시작), bottom = 귀국(하루 끝) */
+/** 그날 항공편(출발 시각순). top = 출국·이동(하루 시작), bottom = 귀국(하루 끝). 기간 밖 출국·귀국편은 Day 1·마지막 날 (P0-2) */
 function dayFlights(dayIndex, where) {
-  const date = trip.days[dayIndex]?.date;
-  if (!date) return [];
-  return M.flightsOnDate(trip, date).filter(({ flight }) => (flight.kind === 'in') === (where === 'bottom'));
+  return M.flightsForDay(trip, dayIndex).filter(({ flight }) => (flight.kind === 'in') === (where === 'bottom'));
 }
 
 function flightRowsHtml(dayIndex, where) {
   return dayFlights(dayIndex, where)
-    .map(({ flight: f, role }) => {
-      const note = role === 'depart' ? t('출발') : role === 'arrive' ? t('도착') : '';
+    .map((x) => {
+      const { flight: f, role } = x;
+      const note = role === 'depart' ? t('출발') : role === 'arrive' ? (x.offset ? `${M.pinnedFlightNote(x)} · ${t('도착')}` : t('도착')) : role === 'pinned' ? M.pinnedFlightNote(x) : '';
       const tm = (role === 'arrive' ? f.arriveAt : f.departAt).slice(11, 16);
       return `<div class="tl-row flight"><div class="tl-time">${esc(tm)}</div><div class="tl-box">
         <button class="flight-main" data-action="flight-edit" data-flight="${f.id}" title="${esc(t('항공편 수정'))}">
@@ -1707,7 +1753,7 @@ function renderFlightList() {
       (f) => `<li class="${ui.editFlight === f.id ? 'current' : ''}">
         <button class="t-open" data-fedit="${f.id}">
           <strong><span class="fl-kind">${esc(M.flightKind(f.kind))}</span> ${esc(M.flightSummary(f))}</strong>
-          <span class="t-meta">${esc(M.formatDate(f.departAt.slice(0, 10)))}${f.bookingRef ? ` · ${esc(t('예약번호 {ref}', { ref: f.bookingRef }))}` : ''}${flightOutside(f) ? ` · <b class="warn-text">${esc(t('여행 기간 밖'))}</b>` : ''}</span>
+          <span class="t-meta">${esc(M.formatDate(f.departAt.slice(0, 10)))}${f.bookingRef ? ` · ${esc(t('예약번호 {ref}', { ref: f.bookingRef }))}` : ''}${M.pinnedFlight(trip, f) ? ` · ${esc(M.pinnedFlight(trip, f) === 'first' ? t('Day 1에 표시') : t('마지막 날에 표시'))}` : flightOutside(f) ? ` · <b class="warn-text">${esc(t('여행 기간 밖'))}</b>` : ''}</span>
         </button>
         <button class="icon danger" data-fdel="${f.id}" title="${esc(t('삭제'))}" aria-label="${esc(t('{name} 삭제', { name: M.flightSummary(f) }))}">✕</button>
       </li>`,
@@ -1756,7 +1802,7 @@ flightForm.addEventListener('input', () => {
   $('#flightError').hidden = true;
   flightFormLabels();
 });
-flightForm.addEventListener('submit', (e) => {
+flightForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const data = Object.fromEntries(new FormData(flightForm));
   const problem = M.flightProblem(data);
@@ -1788,10 +1834,29 @@ flightForm.addEventListener('submit', (e) => {
     flightFormLabels();
     return;
   }
+  // P0-2·P0-9: 출발일이 여행 기간 밖이면 여행을 늘릴지, 그대로 두고 Day 1(출국)·마지막 날(귀국)에 붙일지 고른다
+  const dep = data.departAt.slice(0, 10);
+  if (trip.startDate && (dep < trip.startDate || dep > trip.endDate)) {
+    const found = M.extendedRange(trip, dep < trip.startDate ? dep : trip.startDate, dep > trip.endDate ? dep : trip.endDate);
+    const r = found && !found.tooLong ? found : null;
+    const keepLabel = data.kind === 'out' ? t('기간은 그대로, Day 1에 붙이기') : data.kind === 'in' ? t('기간은 그대로, 마지막 날에 붙이기') : t('기간은 그대로 저장');
+    const choice = r
+      ? await ask({
+          title: t('출발일이 여행 기간 밖이에요'),
+          body: t('{date} 출발이에요. 여행 기간({range})을 늘릴까요?', { date: M.formatDate(dep), range: `${M.formatDate(trip.startDate)} – ${M.formatDate(trip.endDate)}` }),
+          actions: [
+            { value: 'extend', label: t('여행 기간을 {range}로 늘리기', { range: `${M.formatDate(r.start)} – ${M.formatDate(r.end)}` }), primary: true },
+            { value: 'keep', label: keepLabel },
+          ],
+        })
+      : 'keep';
+    if (choice !== 'extend' && choice !== 'keep') return;
+    if (choice === 'extend') M.setTripDates(trip, r.start, r.end, { keepDates: true });
+  }
   const savedFlight = ui.editFlight ? M.updateFlight(trip, ui.editFlight, data) : M.addFlight(trip, data);
   const r = commit();
-  const outside = flightOutside(savedFlight);
-  saved(r, outside ? t('저장했어요. 출발일이 여행 기간 밖이라 일정에는 보이지 않아요') : t('{name} 저장했어요', { name: M.flightSummary(savedFlight) }), outside ? 4000 : 2200);
+  const hidden = flightOutside(savedFlight) && savedFlight.kind === 'move';
+  saved(r, hidden ? t('저장했어요. 출발일이 여행 기간 밖이라 일정에는 보이지 않아요') : t('{name} 저장했어요', { name: M.flightSummary(savedFlight) }), hidden ? 4000 : 2200);
   fillFlightForm(null);
 });
 $('#flightList').addEventListener('click', async (e) => {
@@ -2344,6 +2409,10 @@ $('#days').addEventListener('click', (e) => {
     renderTarget();
     renderDays();
     renderMap({ fit: true });
+  } else if (action === 'trend-search') {
+    const q = $('#search');
+    q.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    q.focus({ preventScroll: true });
   } else if (action === 'trend-toggle') {
     prefs.trendsUser = !trendsOpen();
     savePrefs();
@@ -2452,15 +2521,16 @@ $('#days').addEventListener('input', (e) => {
   if (field === 'name') $$(`.stay-row[data-stay="${CSS.escape(stay.id)}"] .stay-name`).forEach((el) => (el.textContent = stay.name));
   refreshMapSoon();
 });
-$('#days').addEventListener('change', (e) => {
+$('#days').addEventListener('change', async (e) => {
   const field = e.target.dataset.srange;
   const editorEl = field && e.target.closest('.stay-editor');
   const stay = editorEl && M.findStay(trip, editorEl.dataset.stay);
   if (!stay || !e.target.value) return;
   // 체크인을 옮기면 박 수는 유지(기간 통째로 이동), 체크아웃을 바꾸면 박 수가 바뀐다.
   const checkIn = $('[data-srange="in"]', editorEl).value;
-  const checkOut =
-    field === 'in' ? M.dateAtIndex(trip, M.indexOfDate(trip, checkIn) + stay.nights) : $('[data-srange="out"]', editorEl).value;
+  const checkOut = field === 'in' ? M.addDays(checkIn, stay.nights) : $('[data-srange="out"]', editorEl).value;
+  // P0-9: 여행 기간 밖이면 여행을 늘릴지 묻고(기존 일정은 날짜 그대로), 취소하면 원래대로
+  if (!(await extendTripFor(checkIn, checkOut, { checkout: true }))) return render();
   const range = M.rangeFromDates(trip, checkIn, checkOut);
   if (!range) return;
   M.updateStayRange(trip, stay.id, range);
@@ -2533,13 +2603,6 @@ $('#days').addEventListener('change', (e) => {
   commit();
 });
 
-$('#days').addEventListener('change', (e) => {
-  if (!e.target.matches('.trend-city')) return;
-  trip.trendCity = e.target.value || null;
-  commit();
-  const city = currentCity();
-  if (city && !T.tripAnchor(trip)) map.setView([city.center.lat, city.center.lng], 12);
-});
 
 $('#pinLegend').addEventListener('click', (e) => {
   if (e.target.closest('[data-legend-toggle]')) {
@@ -2840,16 +2903,17 @@ $('#target').addEventListener('change', (e) => {
   renderStayOpts();
   renderPlanEmpty();
 });
-$('#stayIn').addEventListener('change', (e) => {
-  const range = M.rangeFromDates(trip, e.target.value, M.dateAtIndex(trip, M.indexOfDate(trip, e.target.value) + (ui.stayNights ?? M.DEFAULT_NIGHTS)));
+/** 숙소 추가 옵션의 체크인·체크아웃을 고르면: 기간 밖이면 여행을 늘릴지 묻고(P0-9), 일차·박 수로 바꿔 둔다 */
+async function pickStayOpts(checkIn, checkOut) {
+  const before = trip.days.length;
+  if (!(await extendTripFor(checkIn, checkOut, { checkout: true }))) return renderStayOpts();
+  const range = M.rangeFromDates(trip, checkIn, checkOut);
   if (range) [ui.stayStart, ui.stayNights] = [range.startIndex, range.nights];
-  renderStayOpts();
-});
-$('#stayOut').addEventListener('change', (e) => {
-  const range = M.rangeFromDates(trip, $('#stayIn').value, e.target.value);
-  if (range) [ui.stayStart, ui.stayNights] = [range.startIndex, range.nights];
-  renderStayOpts();
-});
+  if (trip.days.length !== before) commit(); // 여행을 늘렸으면 저장하고 전체를 다시 그린다
+  else renderStayOpts();
+}
+$('#stayIn').addEventListener('change', (e) => pickStayOpts(e.target.value, M.addDays(e.target.value, ui.stayNights ?? M.DEFAULT_NIGHTS)));
+$('#stayOut').addEventListener('change', (e) => pickStayOpts($('#stayIn').value, e.target.value));
 $('#pickBtn').addEventListener('click', () => setPicking(!ui.picking, { cancelled: ui.picking }));
 $('#pickCancel').addEventListener('click', () => setPicking(false, { cancelled: true }));
 
@@ -2870,8 +2934,11 @@ async function onDatesChange() {
   let end = $('#endDate').value;
   if (!start) return render();
   if (!end || end < start) end = start;
-  const impact = M.dateChangeImpact(trip, start, end);
+  // P0-9: 기본은 "날짜 기준 유지" — 장소·숙소·지출이 원래 날짜에 남는다. 시작일이 바뀌면 "일차 기준"도 고를 수 있다.
+  const impact = M.dateChangeImpact(trip, start, end, { keepDates: true });
   if (!impact) return render();
+  const hasContent = placeCount() || trip.stays.length || (trip.expenses ?? []).some((e) => Number.isInteger(e.day) && e.day >= 0);
+  const choose = impact.shifted && M.dateShift(trip, start) != null && hasContent;
   const items = [];
   const names = (list, key = 'name') => list.slice(0, 5).map((x) => x[key]).filter(Boolean).join(', ') + (list.length > 5 ? ` ${t('외 {n}곳', { n: list.length - 5 })}` : '');
   if (impact.places.length) items.push([t('장소 {n}곳은 장소 보관함으로 옮겨요', { n: impact.places.length }), names(impact.places)]);
@@ -2883,20 +2950,95 @@ async function onDatesChange() {
   }
   if (impact.stays.length) items.push([t('숙소 {n}곳은 줄어든 기간만큼 밤이 빠져요 (숙소는 지우지 않아요)', { n: impact.stays.length }), names(impact.stays)]);
   if (impact.flights.length) items.push([t('항공편 {n}개는 여행 기간 밖이 되어 일정에 안 보여요 (항공편은 지우지 않아요)', { n: impact.flights.length }), impact.flights.map((f) => M.flightSummary(f)).join(', ')]);
-  if (impact.shifted && placeCount()) items.push([t('시작일이 바뀌어도 일차별 장소는 그대로이고, 날짜만 {date}부터로 바뀌어요', { date: M.formatDate(start) }), '']);
+  if (choose) {
+    const byIndex = M.dateChangeImpact(trip, start, end);
+    const extra = [
+      byIndex.places.length ? t('장소 {n}곳은 장소 보관함으로 옮겨요', { n: byIndex.places.length }) : '',
+      byIndex.expenses.length ? t('지출 {n}건은 ‘일정 외’로 남아요', { n: byIndex.expenses.length }) : '',
+    ].filter(Boolean).join(' · ');
+    items.push([
+      t('기존 장소·숙소·지출은 날짜 그대로 유지돼요'),
+      t('‘일차 순서대로 옮기기’를 고르면 모두 일차 번호를 따라 {date}부터로 함께 옮겨져요', { date: M.formatDate(start) }) + (extra ? ` (${extra})` : ''),
+    ]);
+  }
+  let mode = 'date';
   if (items.length) {
-    const ok = await ask({
+    mode = await ask({
       title: t('여행 날짜를 바꿀까요?'),
       html: `<p>${esc(`${M.formatDate(start)} – ${M.formatDate(end)} · ${tripLength(M.dateRange(start, end).length)}`)}</p>
         <ul class="impact">${items.map(([head, detail]) => `<li><b>${esc(head)}</b>${detail ? `<small>${esc(detail)}</small>` : ''}</li>`).join('')}</ul>`,
-      actions: [{ value: 'ok', label: t('날짜 바꾸기'), primary: true }],
+      actions: choose
+        ? [
+            { value: 'date', label: t('날짜 그대로 두고 바꾸기'), primary: true },
+            { value: 'index', label: t('일차 순서대로 옮기기') },
+          ]
+        : [{ value: 'date', label: t('날짜 바꾸기'), primary: true }],
     });
-    if (ok !== 'ok') return render();
+    if (mode !== 'date' && mode !== 'index') return render();
   }
-  M.setTripDates(trip, start, end);
+  const res = M.setTripDates(trip, start, end, { keepDates: mode === 'date' });
   if (ui.bf && ui.bf.day >= trip.days.length) ui.bf.day = -1;
-  saved(commit(), impact.places.length || impact.expenses.length ? t('날짜를 바꿨어요') : '');
+  saved(commit(), res.moved || impact.expenses.length ? t('날짜를 바꿨어요') : '');
 }
+
+/**
+ * P0-9: 여행 기간 밖 날짜(숙소·항공편)를 골랐을 때 여행을 늘릴지 묻는다. 늘리면 기존 일정은 날짜 그대로 둔다.
+ * 반환: true(늘렸거나 늘릴 필요 없음) | false(취소)
+ */
+async function extendTripFor(from, to, opts) {
+  const r = M.extendedRange(trip, from, to, opts);
+  if (!r) return true;
+  if (r.tooLong) {
+    toast(t('여행은 최대 {n}일까지예요. 기간을 늘리지 않았어요', { n: M.MAX_DAYS }), 4500);
+    return false;
+  }
+  const ok = await ask({
+    title: t('여행 기간을 늘릴까요?'),
+    body: t('여행을 {range}로 늘릴까요? 기존 일정은 날짜 그대로 유지돼요', { range: `${M.formatDate(r.start)} – ${M.formatDate(r.end)}` }),
+    actions: [{ value: 'ok', label: t('늘리고 저장'), primary: true }],
+  });
+  if (ok !== 'ok') return false;
+  M.setTripDates(trip, r.start, r.end, { keepDates: true });
+  return true;
+}
+/**
+ * P0-1: 여행지 위치 확인·다시 고르기. 작은 지도에 지금 여행지 좌표를 보여 주고, 지도를 누르거나 핀을 끌어 옮긴다.
+ * 여행지 좌표는 장소가 없는 날의 지도 중심·날씨·장소 검색 거리 기준으로 쓰인다.
+ */
+async function openDestLocation() {
+  if (!trip || ui.readonly) return;
+  const start = trip.center ?? map.getCenter();
+  let pick = { lat: start.lat, lng: start.lng };
+  const choice = ask({
+    title: t('여행지 위치'),
+    html: `<p>${esc(t('장소가 없는 날의 지도·날씨와 검색 거리는 이 위치를 기준으로 해요. 지도를 누르거나 핀을 끌어 옮기세요.'))}</p>
+      <div id="destMiniMap" class="dest-mini" role="application" aria-label="${esc(t('여행지 위치 지도'))}"></div>
+      <p class="fine" id="destMiniCoord"></p>`,
+    actions: [{ value: 'ok', label: t('이 위치로 정하기'), primary: true }],
+  });
+  const el = $('#destMiniMap');
+  const mini = L.map(el, { zoomControl: true, attributionControl: true }).setView([pick.lat, pick.lng], trip.center ? 10 : 4);
+  tileGroup(isDark() ? 'dark' : 'light').addTo(mini);
+  const pin = L.marker([pick.lat, pick.lng], { draggable: true, keyboard: true, title: t('여행지 위치') }).addTo(mini);
+  const show = () => ($('#destMiniCoord').textContent = `${pick.lat.toFixed(4)}, ${pick.lng.toFixed(4)}`);
+  const move = (ll) => {
+    pick = { lat: ll.lat, lng: ll.lng };
+    pin.setLatLng(ll);
+    show();
+  };
+  pin.on('dragend', () => move(pin.getLatLng()));
+  mini.on('click', (e) => move(e.latlng));
+  show();
+  requestAnimationFrame(() => mini.invalidateSize());
+  const v = await choice;
+  mini.remove();
+  if (v !== 'ok' || !trip) return;
+  trip.center = { lat: +pick.lat.toFixed(6), lng: +pick.lng.toFixed(6) };
+  trip.centerManual = true; // 직접 고른 위치는 자동 고치기(repairCenter)가 되돌리지 않는다
+  saved(commit(), t('여행지 위치를 바꿨어요'));
+}
+$('#destLocBtn').addEventListener('click', openDestLocation);
+
 $('#startDate').addEventListener('change', onDatesChange);
 $('#endDate').addEventListener('change', onDatesChange);
 
@@ -2931,6 +3073,11 @@ function renderBackupReminder() {
   const due = Boolean(trip && !ui.readonly && prefs.page !== 'home' &&
     (last ? Date.now() - last >= BACKUP_INTERVAL : count >= 10 || Date.now() - Date.parse(trip.createdAt) >= BACKUP_INTERVAL));
   $('#backupDot').hidden = !due;
+  $('#backupAge').textContent = trip && !ui.readonly ? lastBackupLabel(last) : '';
+  if (trip && !ui.readonly && prefs.page !== 'home' && trip.id !== ui.nagChecked) {
+    ui.nagChecked = trip.id; // 여행을 열 때 한 번
+    scheduleNag();
+  }
   $('.menu summary').setAttribute('aria-label', due ? t('더보기 · 백업 파일을 저장할 때예요') : t('더보기'));
 }
 
@@ -2940,6 +3087,7 @@ function saveTripBackup() {
   if (ui.readonly) return;
   prefs.backups ??= {};
   prefs.backups[trip.id] = Date.now();
+  if (prefs.changes) prefs.changes[trip.id] = 0;
   savePrefs();
   renderBackupReminder();
 }
@@ -3004,15 +3152,7 @@ $('#importFile').addEventListener('change', async (e) => {
  * 공유 링크(/s/<id>, #s=…)는 따로 처리한다.
  */
 const POPULAR = [k('오사카'), k('도쿄'), k('후쿠오카'), k('교토'), k('삿포로'), k('오키나와'), k('다낭'), k('방콕'), k('타이베이'), k('파리')];
-const DESTINATIONS = [
-  [k('오사카'), k('일본'), 'osaka', 'ㅇㅅㅋ', '大阪'], [k('도쿄'), k('일본'), 'tokyo', '동경', 'ㄷㅋ', '東京', '东京'],
-  [k('후쿠오카'), k('일본'), 'fukuoka', 'ㅎㅋㅇㅋ', '福岡'], [k('교토'), k('일본'), 'kyoto', 'ㄱㅌ', '京都'],
-  [k('삿포로'), k('일본'), 'sapporo', 'ㅅㅍㄹ', '札幌'], [k('오키나와'), k('일본'), 'okinawa', 'ㅇㅋㄴㅇ', '沖縄', '冲绳'],
-  [k('다낭'), k('베트남'), 'da nang', 'danang', 'ㄷㄴ', '岘港', 'ダナン'], [k('방콕'), k('태국'), 'bangkok', 'ㅂㅋ', '曼谷', 'バンコク'],
-  [k('타이베이'), k('대만'), 'taipei', 'ㅌㅇㅂㅇ', '台北'], [k('파리'), k('프랑스'), 'paris', 'ㅍㄹ', '巴黎', 'パリ'],
-  [k('도하'), k('카타르'), 'doha', 'ㄷㅎ', '多哈', 'ドーハ'], [k('리스본'), k('포르투갈'), 'lisbon', 'ㄹㅅㅂ', '里斯本', 'リスボン'],
-  [k('상하이'), k('중국'), 'shanghai', 'ㅅㅎㅇ', '上海'], [k('자싱'), k('중국'), 'jiaxing', 'ㅈㅅ', '嘉兴'],
-].map(([value, detail, ...keywords]) => ({ value, detail, keywords }));
+// 여행지 목록(고정 좌표·국가 코드)은 lib/destinations.js (P0-1)
 
 function destinationOptions() {
   const countryNames = Intl.DisplayNames ? new Intl.DisplayNames([locale()], { type: 'region' }) : null;
@@ -3107,11 +3247,14 @@ async function createTripFrom({ destination, title = '', startDate, endDate }, s
     submit.disabled = true;
     submit.textContent = t('여행지 찾는 중…');
   }
-  let found = null;
-  try {
-    found = await geocodeDestination(destination);
-  } catch {
-    /* 여행지 좌표를 못 찾아도 여행은 만든다 */
+  // P0-1: 자동완성 목록(과 트렌드 도시)은 고정 좌표·국가 코드를 쓰고 지오코딩하지 않는다
+  let found = resolveDestination(destination, trends.cities);
+  if (!found) {
+    try {
+      found = await geocodeDestination(destination);
+    } catch {
+      /* 여행지 좌표를 못 찾아도 여행은 만든다 */
+    }
   }
   if (submit) {
     submit.disabled = false;
@@ -3461,7 +3604,8 @@ function handbookHtml({ maps = true } = {}) {
           const has = l.items.length || st.start || (l.isDay && dayFlights(i, 'top').length + dayFlights(i, 'bottom').length);
           const flightRows = (where) =>
             dayFlights(i, where)
-              .map(({ flight: fl }) => `<tr class="flight"><td class="n">${esc(t('항'))}</td><td class="t">${esc(M.flightKind(fl.kind))}</td><td><strong>${esc(M.flightSummary(fl))}</strong></td><td class="memo">${esc([fl.bookingRef && t('예약번호 {ref}', { ref: fl.bookingRef }), fl.memo].filter(Boolean).join(' / '))}</td></tr>`)
+              .map((x) => ({ fl: x.flight, note: x.role === 'pinned' ? M.pinnedFlightNote(x) : '' }))
+              .map(({ fl, note }) => `<tr class="flight"><td class="n">${esc(t('항'))}</td><td class="t">${esc(M.flightKind(fl.kind))}</td><td><strong>${esc(M.flightSummary(fl))}</strong>${note ? ` <small>(${esc(note)})</small>` : ''}</td><td class="memo">${esc([fl.bookingRef && t('예약번호 {ref}', { ref: fl.bookingRef }), fl.memo].filter(Boolean).join(' / '))}</td></tr>`)
               .join('');
           const rows = flightRows('top') + stayRow(st.start, t('출발')) + l.items
             .map(
@@ -4118,8 +4262,9 @@ function drawBudget(el) {
   s.totalU = code === 'KRW' ? b.total : B.toUnits(B.toBase(b.total, b), code);
   const plan = B.combinePlans(C.planned(trip), B.placePlanned(trip));
   const hasOut = s.byDay.out != null || trip.expenses.some((e) => B.expenseDay(trip, e) === 'out');
-  const dayKeys = [-1, ...trip.days.map((_, i) => i), ...(hasOut ? ['out'] : [])];
-  const dayMax = Math.max(1, ...dayKeys.map((k) => s.byDay[k] ?? 0));
+  // P0-5: 막대는 카드 폭 안에서 줄이고 라벨은 간격을 두고, 30일 이상은 주 단위로 묶는다
+  const bars = B.dayBars(trip, s.byDay, { hasOut });
+  const barMax = Math.max(1, ...bars.bars.map((x) => x.value));
   const recs = [...trip.expenses].reverse();
   if (ui.payFilter && !trip.expenses.some((e) => e.pay === ui.payFilter)) ui.payFilter = null;
   const shown = ui.payFilter ? recs.filter((e) => e.pay === ui.payFilter) : recs;
@@ -4192,8 +4337,12 @@ function drawBudget(el) {
       <div class="box"><h3>${esc(plan.priced ? t('계획 대비') : t('분류별'))}</h3>${plan.priced ? planRows(s.byCat, plan.byCat) : barRows(s.byCat, B.EXPENSE_CATS, Math.max(1, ...Object.values(s.byCat)))}</div>
       <div class="box">
         <h3>${esc(t('날짜별'))}</h3>
-        <div class="daybars" role="list">${dayKeys
-          .map((k) => `<div role="listitem" title="${esc(dayLabel(k))} ${bm(s.byDay[k] ?? 0)}" aria-label="${esc(dayLabel(k))} ${bm(s.byDay[k] ?? 0)}"><i style="height:${((s.byDay[k] ?? 0) / dayMax) * 100}%"></i>${esc(dayShort(k))}</div>`)
+        <div class="daybars${bars.bars.length > 16 ? ' dense' : ''}" role="list">${bars.bars
+          .map((x) => {
+            const full = x.kind === 'week' ? `${dayName(x.from)}–${dayName(x.to)}` : dayLabel(x.key);
+            const short = x.kind === 'week' ? t('{n}주차', { n: Number(x.key.slice(1)) + 1 }) : dayShort(x.key);
+            return `<div role="listitem" title="${esc(full)} ${bm(x.value)}" aria-label="${esc(full)} ${bm(x.value)}"><i style="height:${(x.value / barMax) * 100}%"></i><span${x.label ? '' : ' aria-hidden="true" class="off"'}>${esc(short)}</span></div>`;
+          })
           .join('')}</div>
         ${hasOut ? `<p class="fine">${esc(t('‘일정 외’는 여행 기간을 줄여 사라진 날의 지출이에요. 원래 날짜로 남아 있고 합계에 들어가요.'))}</p>` : ''}
         <h3 style="margin-top:16px">${esc(t('결제 수단'))}</h3>${barRows(s.byPay, B.PAYMENTS, Math.max(1, ...Object.values(s.byPay)))}
@@ -4218,7 +4367,7 @@ function drawBudget(el) {
                 const link = e.checkId ? t('체크리스트') : e.placeId ? t('장소') : '';
                 const who = payerLabel(e);
                 return `<li>
-                  <span class="rec-main"><b>${esc(e.memo || t(c.label))}</b><small>${esc(B.expenseDayLabel(trip, e))} · ${esc(t(c.label))} · <span class="pay-tag" data-pay="${esc(e.pay)}">${esc(t(pay.label))}</span>${link ? ` · ${esc(link)}` : ''}${who ? ` · ${esc(who)}` : ''}</small></span>
+                  <span class="rec-main"><b>${esc(e.memo || t(c.label))}</b><small>${esc(B.expenseDayLabel(trip, e))} · ${esc(t(c.label))} · <span class="pay-tag" data-pay="${esc(e.pay)}">${esc(t(pay.label))}</span>${link ? ` · <span class="src-tag">${e.checkId ? '<svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>' : '<svg class="ic" aria-hidden="true"><use href="#i-pin"/></svg>'}${esc(link)}</span>` : ''}${who ? ` · ${esc(who)}` : ''}</small></span>
                   <span class="rec-amt">${units == null ? `<span class="pend">${esc(t('환율 미정'))}</span>` : bu(units)}${orig ? `<small>${esc(orig)}${rate ? ` · ${esc(rate)}` : ''}</small>` : ''}</span>
                   <span class="rec-acts"><button class="icon" data-b="edit" data-id="${e.id}" title="${esc(t('수정'))}" aria-label="${esc(t('{name} 수정', { name: e.memo || t(c.label) }))}">✎</button><button class="icon" data-b="del" data-id="${e.id}" title="${esc(t('삭제'))}" aria-label="${esc(t('{name} 삭제', { name: e.memo || t(c.label) }))}">✕</button></span></li>`;
               })
@@ -4843,15 +4992,61 @@ function savePrice(form) {
   if (c?.price && B.toKrw(c.price, c.cur, trip.budget) == null) saved(r, t('가계부에서 환율을 정하면 원화 예상에 잡혀요'), 3200);
 }
 
-$('#page-check').addEventListener('change', (e) => {
+/**
+ * P0-3·P0-4: 체크 해제로 지운 지출 되돌리기 — 지출을 되살리고 그 항목들을 다시 체크한다.
+ * 그사이 다시 체크해 새 지출이 생겼으면 그 항목은 건드리지 않는다.
+ */
+function uncheckUndo(checkIds, removed) {
+  const tripId = trip.id;
+  // 그사이 여행 날짜를 바꿔도 원래 날짜에 돌아가도록 일차 번호가 아니라 날짜를 기억한다
+  const copies = removed.map((e) => ({ e: structuredClone(e), date: Number.isInteger(e.day) && e.day >= 0 ? e.date || trip.days[e.day]?.date || '' : '' }));
+  return () => {
+    if (trip?.id !== tripId || ui.readonly) return;
+    for (const id of checkIds) {
+      const c = trip.checks.find((x) => x.id === id);
+      if (c && !c.done) c.done = true;
+    }
+    for (const { e, date } of copies) {
+      if (trip.expenses.some((x) => x.id === e.id) || C.linkedExpense(trip, e.checkId)) continue;
+      if (date) {
+        const i = trip.days.findIndex((d) => d.date === date);
+        if (i >= 0) {
+          e.day = i;
+          delete e.date;
+        } else e.date = date; // 지금 여행 기간 밖이면 '일정 외'
+      }
+      trip.expenses.push(e);
+    }
+    saved(commit(), t('되돌렸어요'));
+  };
+}
+
+$('#page-check').addEventListener('change', async (e) => {
   if (e.target.dataset.c !== 'toggle') return;
   const id = e.target.dataset.id;
   const c = trip.checks.find((x) => x.id === id);
   const linked = c?.done ? C.linkedExpense(trip, id) : null;
-  const r = C.toggleCheck(trip, id, TODAY);
+  const focus = () => $(`#page-check [data-c="toggle"][data-id="${CSS.escape(id)}"]`)?.focus();
+  // P0-3: 자동 기록 그대로인 지출은 함께 지우고(실행 취소), 금액을 고친 지출이면 물어본다
+  let drop = Boolean(linked);
+  if (linked && C.expenseEdited(trip, c, linked)) {
+    const tripId = trip.id;
+    const choice = await ask({
+      title: t('체크를 풀까요?'),
+      body: t('결제 금액을 직접 고친 지출이 있어요: {amount}', { amount: expenseLabel(linked) }),
+      actions: [
+        { value: 'drop', label: t('지출도 삭제'), danger: true },
+        { value: 'keep', label: t('체크만 해제'), primary: true },
+      ],
+    });
+    if (trip?.id !== tripId || !c.done || (choice !== 'drop' && choice !== 'keep')) return void (trip && render());
+    drop = choice === 'drop';
+  }
+  const r = C.toggleCheck(trip, id, TODAY, { dropExpense: drop });
   const res = commit();
-  $(`#page-check [data-c="toggle"][data-id="${CSS.escape(id)}"]`)?.focus();
+  focus();
   if (r.expense) saved(res, `${r.expense.krw == null ? t('가계부에 기록했어요. 원화는 환율을 받으면 계산해요') : t('가계부에 {amount} 기록했어요', { amount: bm(r.expense.krw) })} · ${t('금액이 달랐다면 ‘결제’를 눌러 고치세요')}`, 3500);
+  else if (r.removed && res.ok) pushUndo(t('체크를 풀고 가계부 지출 {amount}도 지웠어요', { amount: expenseLabel(r.removed) }), uncheckUndo([id], [r.removed]));
   else if (linked) saved(res, t('체크를 풀었어요. 가계부 지출은 그대로 남겼어요'));
 });
 async function changeCheckGroup(group, action) {
@@ -4871,27 +5066,41 @@ async function changeCheckGroup(group, action) {
   if (action === 'toggle-group') {
     const next = done.length !== entries.length;
     const expenses = linked(done);
+    let dropExpenses = false;
     if (!next && expenses.length) {
+      // P0-4: [체크 해제 + 지출 n건 삭제] [체크만 해제] [취소]. 금액을 직접 고친 지출은 지우지 않고 남긴다
+      const edited = done.filter((c) => C.linkedExpense(trip, c.id) && C.expenseEdited(trip, c)).length;
+      const deletable = expenses.length - edited;
       const choice = await ask({
         title: t('전체 해제'),
-        body: t('연결된 지출 {n}건: {amounts}', { n: expenses.length, amounts: expenses.map(expenseLabel).join(', ') }),
+        body: `${t('연결된 지출 {n}건: {amounts}', { n: expenses.length, amounts: expenses.map(expenseLabel).join(', ') })}${edited ? ` ${t('직접 고친 지출 {n}건은 남겨요', { n: edited })}` : ''}`,
         actions: [
-          { value: 'keep', label: t('체크만 해제'), primary: true },
+          ...(deletable ? [{ value: 'drop', label: t('체크 해제 + 지출 {n}건 삭제', { n: deletable }), primary: true }] : []),
+          { value: 'keep', label: t('체크만 해제'), primary: !deletable },
         ],
       });
-      if (!choice || !valid()) return;
+      if ((choice !== 'drop' && choice !== 'keep') || !valid()) return;
+      dropExpenses = choice === 'drop';
     }
     const before = trip.expenses.length;
-    C.setGroupDone(trip, group, next, TODAY);
-    const added = trip.expenses.length - before;
+    const removed = C.setGroupDone(trip, group, next, TODAY, { dropExpenses });
+    const added = trip.expenses.length - before + removed.length;
     const kept = next ? 0 : linked(done).length;
-    saved(
-      commit(),
-      next
-        ? added ? t('체크 {n}건 · 가계부 지출 {m}건 기록됨', { n: entries.length - done.length, m: added }) : t('{n}개를 체크했어요', { n: entries.length - done.length })
-        : kept ? t('체크 해제 {n}건 (가계부 지출 {m}건은 유지됨)', { n: done.length, m: kept }) : t('{n}개를 해제했어요', { n: done.length }),
-      added || kept ? 3500 : 2200,
-    );
+    const res = commit();
+    if (removed.length && res.ok) {
+      pushUndo(
+        `${t('체크 해제 {n}건 · 가계부 지출 {m}건 삭제됨', { n: done.length, m: removed.length })}${kept ? ` (${t('직접 고친 지출 {n}건은 남겨요', { n: kept })})` : ''}`,
+        uncheckUndo(done.map((c) => c.id), removed),
+      );
+    } else {
+      saved(
+        res,
+        next
+          ? added ? t('체크 {n}건 · 가계부 지출 {m}건 기록됨', { n: entries.length - done.length, m: added }) : t('{n}개를 체크했어요', { n: entries.length - done.length })
+          : kept ? t('체크 해제 {n}건 (가계부 지출 {m}건은 유지됨)', { n: done.length, m: kept }) : t('{n}개를 해제했어요', { n: done.length }),
+        added || kept ? 3500 : 2200,
+      );
+    }
     restoreFocus();
     return;
   }

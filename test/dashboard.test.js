@@ -72,7 +72,10 @@ test('tripNotices: 숙소 빈 밤, 기간 밖 항공편', () => {
   assert.match(M.tripNotices(t)[0], /숙소를 아직/);
   M.addStay(t, { name: 'H', lat: 34.6, lng: 135.5 }, 0, 1);
   assert.match(M.tripNotices(t)[0], /Day 2 밤/);
+  // P0-2 (QA 2026-11-23): 기간 밖 귀국편은 마지막 날에 붙으므로 경고하지 않고, 기간 밖 이동편만 경고한다
   M.addFlight(t, { kind: 'in', from: 'KIX', to: 'ICN', departAt: '2026-12-09T10:00' });
+  assert.ok(!M.tripNotices(t).some((x) => /기간 밖 항공편/.test(x)));
+  M.addFlight(t, { kind: 'move', from: 'KIX', to: 'FUK', departAt: '2026-12-09T10:00' });
   assert.ok(M.tripNotices(t).some((x) => /기간 밖 항공편 1개/.test(x)));
 });
 

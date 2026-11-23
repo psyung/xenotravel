@@ -16,7 +16,10 @@
 
 작업을 시작하기 전에 아래 문서를 순서대로 확인하세요.
 
-0. **`docs/phase4_qa_fixes_and_core_features.md` *(최신 완료 작업 — Phase 4 QA 잔여 결함 + 핵심 기능 4종)***
+0. **`docs/qa-2026-11-23.md` *(현재 최우선 활성 지시서 — 2026-11-23 QA, Phase 0~6)***
+   * 진행: Phase 0(보안 S-1~S-5) · Phase 1(P0-1~P0-9, F-1) 완료. 회귀 테스트: `test/security.test.js`, `test/qa1123.test.js`.
+   * 결정: P0-5 막대 폭 축소+라벨 간격(Codex 협의), P0-7 그 밖의 언어는 영어, P0-8 데이터 없으면 접힌 한 줄 안내.
+0-1. **`docs/phase4_qa_fixes_and_core_features.md` *(직전 완료 작업 — Phase 4 QA 잔여 결함 + 핵심 기능 4종)***
    * 회귀 테스트: `test/phase4.test.js`. 배포 식별자는 `scripts/build-version.mjs`(Vercel buildCommand)가 넣습니다.
 1. **`docs/CODEX_PHASE3_FINAL_POLISH_SPEC.md` *(Phase 3 마감 지시서)***
    * 2차 QA에서 도출된 **잔여 결함 10건(`B1`~`B10`)**과 **보완 2건(`C1` 기준 통화 선택, `C2` 체크리스트 개별 삭제 Undo)**을 정의한 최종 마감 명세서입니다.

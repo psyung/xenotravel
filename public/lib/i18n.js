@@ -22,13 +22,31 @@ export const getLang = () => lang;
 export const setLang = (v) => (lang = normalizeLang(v));
 export const locale = () => LANGS[lang].tag;
 
-/** 저장된 언어로 시작한다. 저장값이 없거나 이상하면 한국어. 저장소를 못 쓰면(시크릿 모드 등) 한국어. */
-export function loadLang(storage = globalThis.localStorage) {
-  try {
-    return setLang(storage?.getItem(LANG_KEY));
-  } catch {
-    return setLang('ko');
+/**
+ * P0-7: 브라우저 언어 목록(navigator.languages)에서 앞에서부터 지원 언어를 찾는다.
+ * ko* → 한국어, ja* → 일본어, zh*(번체 zh-TW·zh-HK·zh-Hant 포함, 번체 지원 전까지 간체) → 중국어, en* → 영어.
+ * 하나도 없으면 영어. (public/boot.js가 첫 화면에서 같은 규칙을 쓴다)
+ */
+export function detectLang(languages = globalThis.navigator?.languages ?? [globalThis.navigator?.language]) {
+  for (const raw of languages ?? []) {
+    const l = String(raw ?? '').toLowerCase();
+    for (const code of ['ko', 'ja', 'zh', 'en']) if (l === code || l.startsWith(`${code}-`)) return code;
   }
+  return 'en';
+}
+
+/**
+ * 시작 언어: 사용자가 언어 버튼으로 고른 저장값이 있으면 그것, 없거나 이상하면 브라우저 언어(detectLang).
+ * 저장은 언어 버튼을 누를 때만 한다 (saveLang). 저장소를 못 써도(시크릿 모드 등) 브라우저 언어로.
+ */
+export function loadLang(storage = globalThis.localStorage, languages) {
+  let saved = null;
+  try {
+    saved = storage?.getItem(LANG_KEY);
+  } catch {
+    /* 저장소를 못 쓰면 브라우저 언어 */
+  }
+  return setLang(Object.hasOwn(LANGS, saved ?? '') ? saved : detectLang(languages));
 }
 
 /** 저장 성공 여부. 실패해도 지금 화면의 언어는 그대로 바뀐다. */

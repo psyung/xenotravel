@@ -6,7 +6,7 @@ import { t, longDate, dayName, tripLength } from './i18n.js';
 import { checkTripLimits } from './limits.js';
 
 export const INBOX = 'inbox';
-const MAX_DAYS = 60;
+export const MAX_DAYS = 60;
 
 export function uid() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -21,6 +21,40 @@ export function parseDate(s) {
 }
 
 const toISODate = (d) => d.toISOString().slice(0, 10);
+
+/** 'YYYY-MM-DD' + n일 (읽을 수 없으면 '') */
+export function addDays(date, n) {
+  const d = parseDate(date);
+  if (!d) return '';
+  d.setUTCDate(d.getUTCDate() + n);
+  return toISODate(d);
+}
+
+/**
+ * 날짜 기준 유지(P0-9)에서 기존 일차 i가 옮겨 가는 새 일차 번호의 차이 k (새 일차 = i + k).
+ * 시작일을 k일 앞당기면 +k, 늦추면 -k. 날짜 없는 여행이면 null → 일차 기준으로 바꾼다.
+ */
+export function dateShift(trip, start) {
+  const a = parseDate(trip.days[0]?.date);
+  const b = parseDate(start);
+  if (!a || !b || !trip.startDate) return null;
+  return Math.round((a - b) / 86400000);
+}
+
+/**
+ * 여행 기간 밖 날짜(숙소 체크인~체크아웃, 항공편 날짜)를 담도록 늘린 기간 { start, end }. 이미 안이면 null.
+ * checkout: true면 to는 체크아웃 날이라 그 전날 밤까지만 여행에 들어오면 된다.
+ */
+export function extendedRange(trip, from, to = from, { checkout = false } = {}) {
+  if (!trip.startDate || !trip.endDate || !parseDate(from)) return null;
+  const last = checkout && parseDate(to) ? addDays(to, -1) : to || from;
+  const start = from < trip.startDate ? from : trip.startDate;
+  const end = last > trip.endDate ? last : trip.endDate;
+  if (start === trip.startDate && end === trip.endDate) return null;
+  // 최대 일수를 넘으면 늘리지 않는다 (늘리면 끝쪽 날이 잘려 일정이 보관함으로 밀린다)
+  const days = Math.round((parseDate(end) - parseDate(start)) / 86400000) + 1;
+  return { start, end, tooLong: days > MAX_DAYS };
+}
 
 /** 시작~종료일(포함)의 날짜 배열. 종료일이 없거나 앞서면 하루짜리. */
 export function dateRange(start, end) {
@@ -74,18 +108,21 @@ export function overflowCount(trip, start, end) {
  * { days: 새 일수, removedDays, places: 보관함으로 갈 장소, expenses: '일정 외'로 남을 지출,
  *   stays: 기간이 줄어 일부 밤이 빠지는 숙소, flights: 새로 기간 밖이 되는 항공편, shifted: 시작일이 바뀌어 일차 날짜가 달라짐 }
  */
-export function dateChangeImpact(trip, start, end) {
+export function dateChangeImpact(trip, start, end, { keepDates = false } = {}) {
   const dates = dateRange(start, end);
   const n = dates.length;
   if (!n) return null;
-  const removed = trip.days.slice(n);
+  // keepDates(P0-9 날짜 기준 유지): 기존 일차 i는 새 일차 i+k로 간다 (일차 기준이면 k = 0)
+  const k = (keepDates ? dateShift(trip, start) : null) ?? 0;
+  const out = (i) => i + k < 0 || i + k >= n;
+  const removed = trip.days.filter((_, i) => out(i));
   const inside = (d, a, b) => Boolean(a) && d >= a && d <= b;
   return {
     days: n,
     removedDays: removed.length,
     places: removed.flatMap((d) => d.items),
-    expenses: (trip.expenses ?? []).filter((e) => Number.isInteger(e.day) && e.day >= n && e.day < trip.days.length),
-    stays: n < trip.days.length ? (trip.stays ?? []).filter((s) => s.startIndex + s.nights > n) : [],
+    expenses: (trip.expenses ?? []).filter((e) => Number.isInteger(e.day) && e.day >= 0 && e.day < trip.days.length && !e.date && out(e.day)),
+    stays: (trip.stays ?? []).filter((s) => s.startIndex + k < 0 || s.startIndex + s.nights + k > n),
     flights: (trip.flights ?? []).filter((f) => {
       const d = f.departAt.slice(0, 10);
       return inside(d, trip.startDate, trip.endDate) && !inside(d, dates[0], dates.at(-1));
@@ -98,15 +135,37 @@ export function dateChangeImpact(trip, start, end) {
  * 날짜 변경. 기존 일차는 순서대로 유지하고, 줄어든 날의 장소는 보관함으로 옮긴다.
  * 줄어든 날의 지출은 지우지 않고 원래 날짜(expense.date)를 적어 둔다 → 가계부에 '일정 외'로 잡힌다.
  */
-export function setTripDates(trip, start, end) {
+export function setTripDates(trip, start, end, { keepDates = false } = {}) {
   const dates = dateRange(start, end);
   if (!dates.length) return { moved: 0 };
+  const n = dates.length;
+  // 날짜 기준 유지(P0-9): 시작일을 k일 앞당기면 앞에 빈 날 k개, 일차·숙소·지출 번호 +k (늦추면 반대)
+  const k = (keepDates ? dateShift(trip, start) : null) ?? 0;
+  const old = trip.days;
   for (const e of trip.expenses ?? []) {
-    if (Number.isInteger(e.day) && e.day >= dates.length && trip.days[e.day]?.date && !e.date) e.date = trip.days[e.day].date;
+    if (!Number.isInteger(e.day) || e.day < 0 || e.date) continue;
+    const j = e.day + k;
+    if (j >= 0 && j < n) e.day = j;
+    else if (old[e.day]?.date) e.date = old[e.day].date; // 잘려 나간 날: '일정 외'
   }
-  const leftover = trip.days.slice(dates.length).flatMap((d) => d.items);
-  trip.days = dates.map((date, i) => (trip.days[i] ? { ...trip.days[i], date } : { id: uid(), date, items: [] }));
+  const leftover = old.filter((_, i) => i + k < 0 || i + k >= n).flatMap((d) => d.items);
+  trip.days = dates.map((date, j) => (old[j - k] ? { ...old[j - k], date } : { id: uid(), date, items: [] }));
   trip.inbox.push(...leftover);
+  if (k) {
+    // 숙소: 남는 밤만 두고, 남는 밤이 없으면 보관함 장소로 (지우지 않는다)
+    const keep = [];
+    for (const s of trip.stays ?? []) {
+      const a = Math.max(0, s.startIndex + k);
+      const b = Math.min(n, s.startIndex + s.nights + k);
+      if (b > a) keep.push(Object.assign(s, { startIndex: a, nights: b - a }));
+      else {
+        const { startIndex: _s, nights: _n, ...place } = s;
+        trip.inbox.push({ time: '', category: '', ...place });
+        leftover.push(place);
+      }
+    }
+    trip.stays = keep;
+  }
   trip.startDate = dates[0];
   trip.endDate = dates.at(-1);
   // '일정 외'로 남겨 둔 지출은 원래 날짜가 다시 여행 기간에 들어올 때만 그날로 돌아간다 (일차 번호로 붙이지 않는다)
@@ -576,8 +635,7 @@ export function nightStay(trip, nightIndex) {
 export function dayStays(trip, dayIndex) {
   const prev = dayIndex > 0 ? nightStay(trip, dayIndex - 1) : null;
   const tonight = nightStay(trip, dayIndex);
-  const date = trip.days[dayIndex]?.date;
-  const flights = date ? flightsOnDate(trip, date) : [];
+  const flights = flightsForDay(trip, dayIndex);
   // 첫날 비행기로 도착하면 하루가 공항에서 시작하고, 마지막 날 비행기를 타면 공항에서 끝난다.
   const isFirst = dayIndex === 0 && !flights.some((x) => x.role !== 'depart');
   const isLast = dayIndex === trip.days.length - 1 && !flights.some((x) => x.role !== 'arrive');
@@ -716,6 +774,58 @@ export function flightsOnDate(trip, date) {
   return out;
 }
 
+/**
+ * P0-2: 여행 기간 밖 날짜의 출국·귀국편은 날짜가 아니라 종류로 붙인다.
+ * 'first' = 출국편 → Day 1 맨 위, 'last' = 귀국편 → 마지막 날 맨 아래. 이동편이나 기간 안 항공편은 null(날짜로 붙임).
+ */
+export function pinnedFlight(trip, f) {
+  if (!trip.startDate || !trip.endDate || f.kind === 'move') return null;
+  const inside = (d) => d >= trip.startDate && d <= trip.endDate;
+  const dep = f.departAt.slice(0, 10);
+  const arr = (f.arriveAt || f.departAt).slice(0, 10);
+  if (inside(dep) || inside(arr)) return null;
+  return f.kind === 'in' ? 'last' : 'first';
+}
+
+/**
+ * 그 일차에 보일 항공편 (출발 시각순). flightsOnDate + 종류로 붙인 출국·귀국편(role 'pinned', offset = 출발일 - 그날, 일 단위).
+ * pinned 항공편은 그날 시간 범위(도착 후·출발 전)에 영향을 주지 않는다.
+ */
+export function flightsForDay(trip, dayIndex) {
+  const date = trip.days[dayIndex]?.date;
+  if (!date) return [];
+  const out = flightsOnDate(trip, date)
+    .filter(({ flight }) => !pinnedFlight(trip, flight))
+    .map((x) => {
+      // 전날 밤 출발해 그날 도착하는 비행기: 도착 시각은 그대로 쓰고 "전날 출발"을 함께 보여 준다
+      const dep = x.flight.departAt.slice(0, 10);
+      return x.role === 'arrive' && dep < date ? { ...x, offset: Math.round((parseDate(dep) - parseDate(date)) / 86400000) } : x;
+    });
+  const last = trip.days.length - 1;
+  for (const f of trip.flights ?? []) {
+    const p = pinnedFlight(trip, f);
+    if ((p === 'first' && dayIndex === 0) || (p === 'last' && dayIndex === last)) {
+      out.push({ flight: f, role: 'pinned', offset: Math.round((parseDate(f.departAt.slice(0, 10)) - parseDate(date)) / 86400000) });
+    }
+  }
+  return out.sort((a, b) => (a.flight.departAt < b.flight.departAt ? -1 : a.flight.departAt > b.flight.departAt ? 1 : 0));
+}
+
+/** pinned 항공편 배지: "전날 출발" · "다음 날 출발" · "11/22 출발" */
+export function pinnedFlightNote(x) {
+  if (x.offset === -1) return t('전날 출발');
+  if (x.offset === 1) return t('다음 날 출발');
+  return t('{date} 출발', { date: formatDate(x.flight.departAt.slice(0, 10)) });
+}
+
+/** 그날 장소가 들어갈 시간 범위: after = 그날 도착한 비행기의 도착 시각, before = 그날 떠나는 귀국편 출발 시각 */
+export function flightTimeBounds(flights) {
+  const hhmm = (v) => (v ? String(v).slice(11, 16) : '');
+  const after = flights.filter(({ flight, role }) => flight.kind !== 'in' && (role === 'both' || role === 'arrive')).map(({ flight }) => hhmm(flight.arriveAt)).filter(Boolean).sort().at(-1) ?? '';
+  const before = flights.filter(({ flight, role }) => flight.kind === 'in' && (role === 'both' || role === 'depart')).map(({ flight }) => hhmm(flight.departAt)).filter(Boolean).sort()[0] ?? '';
+  return { after, before };
+}
+
 /** "KE723 ICN 09:00 → KIX 11:10" */
 export function flightSummary(f) {
   const t = (v) => (v ? v.slice(11, 16) : '');
@@ -759,10 +869,11 @@ export function dayShareText(trip, dayIndex) {
   const date = formatDate(day.date);
   const lines = [`[${trip.title}] ${dayName(dayIndex)}${date ? ` · ${date}` : ''}`];
   const { start, end } = dayStays(trip, dayIndex);
-  const flights = day.date ? flightsOnDate(trip, day.date) : [];
-  const flightLine = ({ flight: f, role }) => {
+  const flights = flightsForDay(trip, dayIndex);
+  const flightLine = (x) => {
+    const { flight: f, role } = x;
     const tm = (role === 'arrive' ? f.arriveAt : f.departAt).slice(11, 16);
-    return `${tm ? `${tm} ` : ''}${flightKind(f.kind)} ${flightSummary(f)}`;
+    return `${tm ? `${tm} ` : ''}${flightKind(f.kind)} ${flightSummary(f)}${role === 'pinned' ? ` (${pinnedFlightNote(x)})` : ''}`;
   };
   lines.push(...flights.filter((x) => x.flight.kind !== 'in').map(flightLine));
   if (start) lines.push(`${t('출발')}  ${start.name}`);
@@ -801,7 +912,7 @@ export function tripToRows(trip) {
   const rows = trip.days.flatMap((d, i) => {
     const { start, end } = dayStays(trip, i);
     const label = dayName(i);
-    const fl = flightsOnDate(trip, d.date);
+    const fl = flightsForDay(trip, i);
     const flightRow = ({ flight: f }) =>
       row(label, d.date, t('항공({kind})', { kind: flightKind(f.kind) }), {
         name: flightSummary(f),
@@ -966,7 +1077,8 @@ export function tripNotices(trip) {
   if (n > 1 && !lastFlightIn && !nightStay(trip, n - 1) && (trip.flights ?? []).some((f) => f.kind === 'in')) empty.push(n);
   if (empty.length && (trip.stays ?? []).length) out.push(t('{days} 밤 숙소가 아직 비어 있어요', { days: empty.map((d) => dayName(d - 1)).join(', ') }));
   else if (!(trip.stays ?? []).length && n > 1) out.push(t('숙소를 아직 정하지 않았어요. 검색할 때 "추가할 곳"을 숙소로 고르세요'));
-  const outside = (trip.flights ?? []).filter((f) => trip.startDate && (f.departAt.slice(0, 10) < trip.startDate || f.departAt.slice(0, 10) > trip.endDate));
+  // 출국·귀국편은 기간 밖이어도 Day 1·마지막 날에 붙는다 (P0-2). 일정에 안 보이는 것은 기간 밖 이동편뿐
+  const outside = (trip.flights ?? []).filter((f) => f.kind === 'move' && trip.startDate && (f.departAt.slice(0, 10) < trip.startDate || f.departAt.slice(0, 10) > trip.endDate));
   if (outside.length) out.push(t('여행 기간 밖 항공편 {n}개는 일정에 안 보여요', { n: outside.length }));
   return out;
 }

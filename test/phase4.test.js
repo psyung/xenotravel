@@ -558,7 +558,8 @@ test('R2-9·10: 일자 순서 되돌리기는 옮긴 장소만, 충돌 종류가
 test('R2-12·13·14·16·17: 폼 비우기 시 시간 초안 삭제 · 모바일 시트 폭/버튼 줄바꿈 · 안내 높이 재측정 · 기간 칩 · 날짜변경선 투영', () => {
   assert.match(read('lib/datepicker.js'), /input\.form\?\.addEventListener\('reset', \(\) => \{\n    draftTime = '';/);
   const css = read('styles.css');
-  assert.match(css, /dialog\.dayops-dialog, dialog\.preset-dialog \{ width: 100%; max-width: 100%; \}/);
+  // P0-6 (QA 2026-11-23): 시트 폭은 모든 대화상자 공통 규칙(600px 미만)으로 합쳤다
+  assert.match(css, /dialog\.dayops-dialog:modal, dialog\.preset-dialog:modal[^{]*\{\s*width: 100%; max-width: 100%;/);
   assert.match(css, /\.dialog-actions \.btn \{ flex: 1 1 auto; min-width: 0;[^}]*white-space: normal;/);
   const app = read('app.js');
   assert.match(app, /new ResizeObserver\(syncBarHeights\)/);

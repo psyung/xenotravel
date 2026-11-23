@@ -490,6 +490,10 @@ body[data-view="board"] .board-only { display: inline-flex; }
 
 /* ───────── 요즘 뜨는 곳 ───────── */
 .trend-col { padding: 14px; }
+/* P0-8: 여행지 트렌드가 없을 때 접힌 한 줄 */
+.trend-empty { display: flex; align-items: center; gap: 8px; padding: 10px 14px; font-size: 13px; color: var(--sub); }
+.trend-empty .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.trend-empty .link { margin-left: auto; flex: none; border: 0; background: none; padding: 4px 0; color: var(--accent); font-weight: 600; font-size: 13px; }
 .trend-col .day-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .trend-col .day-title { display: flex; align-items: center; gap: 6px; flex: 1; border: 0; background: none; padding: 0; text-align: left; min-width: 0; }
 .trend-col .day-title strong { font-size: 15px; font-weight: 700; }
@@ -599,9 +603,14 @@ body[data-view="board"] .board-only { display: inline-flex; }
 .bar { height: 6px; border-radius: 999px; background: var(--soft); overflow: hidden; }
 .bar i { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
 .bar-row .v { font-weight: 700; font-variant-numeric: tabular-nums; }
-.daybars { display: flex; align-items: flex-end; gap: 8px; height: 110px; padding-top: 8px; }
-.daybars div { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; font-size: 11px; color: var(--mute); }
+/* P0-5: 막대는 카드 폭을 절대 넘지 않는다 (칸 min-width 0, 라벨은 간격을 두고만 보임). 가장자리 라벨이 잘리지 않게 안쪽 여백 */
+.daybars { display: flex; align-items: flex-end; gap: 8px; height: 110px; padding: 8px 6px 0; min-width: 0; max-width: 100%; overflow: hidden; }
+.daybars.dense { gap: 2px; }
+.daybars div { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; font-size: 11px; color: var(--mute); }
+.daybars span { display: block; height: 15px; line-height: 15px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.daybars span.off { visibility: hidden; }
 .daybars i { width: 100%; max-width: 36px; min-height: 2px; border-radius: 5px 5px 2px 2px; background: var(--accent); }
+.daybars.dense i { border-radius: 3px 3px 1px 1px; }
 .empty-note { color: var(--mute); text-align: center; padding: 12px; font-size: 13px; }
 .rec-list { list-style: none; margin: 0; padding: 0; }
 .rec-list li { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
@@ -950,7 +959,7 @@ body[data-has-trip="no"] .trip-only { display: none !important; }
 .suggestions li { display: flex; align-items: baseline; gap: 8px; padding: 9px; border-radius: 8px; cursor: pointer; }
 .suggestions li:hover, .suggestions li[aria-selected="true"] { background: var(--accent-soft); }
 .suggestions small { color: var(--sub); }
-#new-trip-modal { width: min(520px, calc(100% - 24px)); }
+#new-trip-modal { width: min(560px, calc(100vw - 32px)); padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); }
 .new-trip-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .new-trip-head h2 { margin: 0; }
 #new-trip-modal .home-new { grid-template-columns: 1fr 1fr; }
@@ -999,12 +1008,6 @@ body[data-has-trip="no"] .trip-only { display: none !important; }
 @media (max-width: 900px) {
   /* iOS는 16px보다 작은 입력칸을 누르면 화면을 확대해 버린다 */
   input, select, textarea { font-size: 16px !important; }
-  /* 팝업은 아래에서 올라오는 시트로 */
-  dialog, dialog#flightDialog, dialog.share-dialog, dialog.bulk-dialog {
-    width: 100%; max-width: 100%; margin: auto 0 0; border-radius: 22px 22px 0 0;
-    max-height: 88dvh; padding-bottom: env(safe-area-inset-bottom);
-  }
-  dialog[open] { animation: sheet-up .22s ease-out; }
   .dialog-body { padding: 18px 16px 20px; }
   .dialog-body::before { content: ""; display: block; width: 36px; height: 4px; margin: -6px auto 12px; border-radius: 4px; background: var(--line); }
   .flight-form .row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
@@ -1199,6 +1202,12 @@ button.kpi:hover { border-color: var(--accent); }
 }
 .dp-c::part(button):hover, .dp-c::part(button):active { background: var(--accent-soft); color: var(--accent); }
 .dp-c::part(disabled) { opacity: .25; }
+/* P0-3: 가계부 지출이 어디서 왔는지 (체크리스트·장소) 아이콘 */
+.src-tag { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
+.src-tag .ic { width: 12px; height: 12px; }
+/* P0-9: 여행 기간 밖 날짜는 흐리게만 (고를 수 있다) */
+calendar-month::part(off-trip) { opacity: .45; }
+calendar-month::part(off-trip selected), calendar-month::part(off-trip range-inner) { opacity: 1; }
 .dp-c svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .dp-c calendar-month { --color-accent: var(--cta); --color-text-on-accent: var(--cta-text); }
 calendar-month::part(heading) { display: block; height: 32px; margin-bottom: 6px; line-height: 32px; text-align: center; font-size: 14px; font-weight: 700; letter-spacing: -0.01em; }
@@ -1415,7 +1424,6 @@ button.td-num:hover { box-shadow: 0 0 0 2px var(--ok-soft); }
   /* 아래 탭(60px)·안전 영역에 가리지 않게: 탭이 있는 화면은 그만큼 더 띄운다 */
   body:not([data-page="home"]):not(.readonly) .site-foot { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
   .page { padding-bottom: 8px; }
-  .privacy-dialog { width: 100%; max-width: 100%; margin: auto 0 0; border-radius: 22px 22px 0 0; max-height: 88dvh; }
   .privacy-body { padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
 }
 
@@ -1911,7 +1919,6 @@ dialog.preset-dialog { width: min(520px, calc(100vw - 32px)); }
 
 /* GPT 2차 #13: 모바일 시트 폭 — 새 대화상자(일차 이동·일자 순서·스마트 추천)도 화면 폭 전체, 긴 버튼(일본어 등)은 두 줄로 */
 @media (max-width: 900px) {
-  dialog.dayops-dialog, dialog.preset-dialog { width: 100%; max-width: 100%; }
   .dialog-actions { flex-wrap: wrap; }
   .dialog-actions .btn { flex: 1 1 auto; min-width: 0; height: auto; min-height: 44px; padding-block: 8px; white-space: normal; line-height: 1.25; text-align: center; }
 }
@@ -1971,3 +1978,22 @@ dialog.preset-dialog { width: min(520px, calc(100vw - 32px)); }
 .ms-day span { width: 10px; height: 10px; border-radius: 50%; background: var(--c); }
 .ms-empty { padding: 10px 6px; color: var(--mute); font-size: 13px; }
 @media (prefers-reduced-motion: reduce) { .layout[data-tab="map"] .map-sheet { transition: none; } }
+
+/* P0-6: 모든 대화상자는 한 규칙 — 600px 이상은 화면 가운데 모달, 600px 미만은 폭 100% 바텀시트 (100dvh · 안전 영역).
+   id·클래스로 폭을 정한 대화상자(새 여행·항공편·공유 등)도 시트에서는 폭 100%로 덮는다. */
+dialog:modal { margin: auto; }
+@media (max-width: 599px) {
+  dialog:modal, dialog#flightDialog:modal, dialog#new-trip-modal:modal, dialog.share-dialog:modal, dialog.bulk-dialog:modal,
+  dialog.dayops-dialog:modal, dialog.preset-dialog:modal, dialog.privacy-dialog:modal, dialog.ask-dialog:modal {
+    width: 100%; max-width: 100%; margin: auto 0 0; border-radius: 22px 22px 0 0;
+    max-height: min(88dvh, calc(100dvh - env(safe-area-inset-top) - 12px)); padding-bottom: env(safe-area-inset-bottom);
+  }
+  dialog[open] { animation: sheet-up .22s ease-out; }
+}
+
+/* P0-1: 여행지 위치 확인·다시 고르기 */
+.sum-loc { border: 0; background: none; padding: 2px 0; color: var(--accent); font-size: 12.5px; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.dest-mini { height: 220px; border-radius: 12px; border: 1px solid var(--line); margin: 10px 0 6px; }
+/* F-1: 메뉴의 "마지막 백업: n일 전" */
+.menu-note { margin: -4px 0 4px; padding: 0 12px; font-size: 11.5px; color: var(--mute); }
+.menu-note:empty { display: none; }

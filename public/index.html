@@ -65,6 +65,7 @@
             <button data-menu="theme" id="themeMenu" class="menu-narrow"></button>
             <hr class="page-trip">
             <button data-menu="backup" class="page-trip" data-i18n="전체 백업 저장 (.json)">전체 백업 저장 (.json)</button>
+            <p id="backupAge" class="menu-note page-trip edit-only"></p>
             <button data-menu="import" class="edit-only" data-i18n="백업 파일 불러오기">백업 파일 불러오기</button>
             <button data-menu="delete" class="danger edit-only page-trip" data-i18n="이 여행 삭제">이 여행 삭제</button>
           </div>
@@ -140,6 +141,7 @@
               <span>–</span>
               <input type="date" id="endDate" data-dp="end" aria-label="종료일">
               <span id="heroMeta" class="sum-meta"></span>
+              <button type="button" id="destLocBtn" class="sum-loc edit-only" data-i18n="여행지 위치">여행지 위치</button>
             </div>
             <div id="heroFlight" class="routes"></div>
           </div>

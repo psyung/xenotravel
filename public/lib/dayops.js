@@ -1,19 +1,14 @@
 // 일차 간 이동·복제와 일자 순서 바꾸기 (Phase 4). 순수 함수만 둔다 — 화면(미리보기·실행 취소)은 app.js.
 // 일차의 날짜·숙소·항공편은 날짜에 붙어 있다. 옮기는 것은 장소(items)뿐이고, 미리보기에서 대상 날의 항공편·숙소와
 // 시간 충돌을 먼저 계산해 보여 준다. 실행한 작업마다 되돌리기 함수를 만들어 실행 취소 스택에 따로 쌓는다.
-import { uid, findItem, flightsOnDate, dayStays, timeConflictKinds, toMinutes } from './model.js';
+import { uid, findItem, flightsForDay, flightTimeBounds, dayStays, timeConflictKinds, toMinutes } from './model.js';
 
 const hhmm = (v) => (v ? String(v).slice(11, 16) : '');
 
 /** 그날 일정이 들어갈 수 있는 시간 범위: after = 도착편 도착 시각, before = 출발(귀국)편 출발 시각 */
 export function dayBounds(trip, dayIndex) {
-  const date = trip.days[dayIndex]?.date;
-  const flights = date ? flightsOnDate(trip, date) : [];
-  const top = flights.filter(({ flight }) => flight.kind !== 'in');
-  const bottom = flights.filter(({ flight }) => flight.kind === 'in');
-  const after = top.filter(({ role }) => role !== 'depart').map(({ flight }) => hhmm(flight.arriveAt)).filter(Boolean).sort().at(-1) ?? '';
-  const before = bottom.filter(({ role }) => role !== 'arrive').map(({ flight }) => hhmm(flight.departAt)).filter(Boolean).sort()[0] ?? '';
-  return { after, before, flights };
+  const flights = flightsForDay(trip, dayIndex); // 기간 밖 출국·귀국편(P0-2)은 시간 범위에 영향 없음
+  return { ...flightTimeBounds(flights), flights };
 }
 
 /** 그날 시간 충돌: Map<장소 id, 'order'|'flight'> (app.js의 배지와 같은 규칙) */

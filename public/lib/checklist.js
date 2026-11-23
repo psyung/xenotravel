@@ -226,27 +226,53 @@ export function linkedExpense(trip, checkId) {
 }
 
 /**
- * 가격이 있는 항목을 체크하면 가계부에 기록한다. 해제 후에도 결제 내역과 연결을 유지한다.
- * today: 'YYYY-MM-DD' (여행 중이면 그날, 아니면 "출발 전"으로 기록)
- * → { check, expense: 새로 적은 기록 | null }
+ * P0-3: 체크로 자동 기록된 지출의 금액을 사용자가 ‘결제’에서 고쳤는지 (예상 가격과 다르면 고친 것)
  */
-export function toggleCheck(trip, id, today = '') {
+export function expenseEdited(trip, c, e = linkedExpense(trip, c.id)) {
+  if (!e) return false;
+  // 체크로 만들 때 남긴 금액·통화(auto)와 다르면 고친 것. 예전 기록처럼 auto가 없으면 고친 것으로 보고 물어본다
+  const a = e.auto;
+  return !a || Number(e.amount) !== Number(a.amount) || e.cur !== a.cur || (e.ccy ?? null) !== (a.ccy ?? null);
+}
+
+/**
+ * 가격이 있는 항목을 체크하면 가계부에 기록한다.
+ * 해제할 때 dropExpense: true면 연결된 지출도 지운다 (P0-3: 자동 기록 그대로면 기본으로 지우고, 고친 지출은 물어본다).
+ * today: 'YYYY-MM-DD' (여행 중이면 그날, 아니면 "출발 전"으로 기록)
+ * → { check, expense: 새로 적은 기록 | null, removed: 지운 지출 | null }
+ */
+export function toggleCheck(trip, id, today = '', { dropExpense = false } = {}) {
   const c = ensureChecks(trip).find((x) => x.id === id);
-  if (!c) return { check: null, expense: null };
+  if (!c) return { check: null, expense: null, removed: null };
   c.done = !c.done;
-  if (!c.done || !(c.price > 0) || linkedExpense(trip, c.id)) return { check: c, expense: null };
+  if (!c.done) {
+    const e = dropExpense ? linkedExpense(trip, c.id) : null;
+    if (e) trip.expenses = trip.expenses.filter((x) => x !== e);
+    return { check: c, expense: null, removed: e };
+  }
+  if (!(c.price > 0) || linkedExpense(trip, c.id)) return { check: c, expense: null, removed: null };
   const i = indexOfDate(trip, today);
   const day = i != null && i >= 0 && i < trip.days.length ? i : -1;
   const e = addExpense(trip, { amount: c.price, cur: c.cur, cat: GROUP_CAT[c.group] ?? 'etc', pay: 'card', day, memo: c.text });
   e.id = `check-${c.id}`;
   e.checkId = c.id;
-  return { check: c, expense: e };
+  e.auto = { amount: e.amount, cur: e.cur, ccy: e.ccy ?? null }; // P0-3: 사용자가 고쳤는지 비교할 원래 값
+  return { check: c, expense: e, removed: null };
 }
 
-export function setGroupDone(trip, group, done, today) {
+/**
+ * 그룹 전체 체크·해제. 해제할 때 dropExpenses: true면 자동 기록 그대로인 지출만 지우고,
+ * 금액을 고친 지출은 남긴다 (P0-4). → 지운 지출 목록
+ */
+export function setGroupDone(trip, group, done, today, { dropExpenses = false } = {}) {
+  const removed = [];
   for (const check of ensureChecks(trip)) {
-    if (check.group === group && check.done !== done) toggleCheck(trip, check.id, today);
+    if (check.group !== group || check.done === done) continue;
+    const drop = dropExpenses && !done && !expenseEdited(trip, check);
+    const r = toggleCheck(trip, check.id, today, { dropExpense: drop });
+    if (r.removed) removed.push(r.removed);
   }
+  return removed;
 }
 
 /** 예상 가격 정하기 (0이나 빈 값이면 지운다) */

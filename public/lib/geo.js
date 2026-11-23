@@ -57,21 +57,30 @@ const NOMINATIM = 'https://nominatim.openstreetmap.org';
 
 const acceptLanguage = () => (getLang() === 'zh' ? 'zh-CN' : getLang());
 
-/** 여행지 이름 → {lat, lng, country} (못 찾으면 null). 한국어·영어·현지어 모두 된다. country: 'cn' 같은 국가 코드 */
-export async function geocodeDestination(query, signal) {
-  const q = String(query ?? '').trim();
+/**
+ * 여행지 이름 → {lat, lng, country} (못 찾으면 null). 한국어·영어·현지어 모두 된다. country: 'cn' 같은 국가 코드
+ * 자동완성 목록의 도시는 lib/destinations.js의 고정 좌표를 쓰고 이 함수를 부르지 않는다 (P0-1).
+ * opts.country: 고른 국가 코드 — 그 나라 안에서만 찾고, 다른 나라 결과는 버린다. opts.en: 영어 이름(있으면 그 이름으로)
+ */
+export async function geocodeDestination(query, signal, { country = '', en = '' } = {}) {
+  const q = String(en || query || '').trim();
   if (!q) return null;
+  const cc = String(country ?? '').toLowerCase();
+  const ok = (hitCountry) => !cc || String(hitCountry ?? '').toLowerCase() === cc;
   try {
     const params = new URLSearchParams({ q, format: 'jsonv2', limit: '1', addressdetails: '1', 'accept-language': acceptLanguage() });
+    if (cc) params.set('countrycodes', cc);
     const [hit] = await getJSON(`${NOMINATIM}/search?${params}`, signal);
-    if (hit && Number.isFinite(+hit.lat) && Number.isFinite(+hit.lon)) {
-      return { lat: +hit.lat, lng: +hit.lon, country: String(hit.address?.country_code ?? '').toLowerCase() };
+    const hitCountry = String(hit?.address?.country_code ?? '').toLowerCase();
+    if (hit && Number.isFinite(+hit.lat) && Number.isFinite(+hit.lon) && ok(hitCountry)) {
+      return { lat: +hit.lat, lng: +hit.lon, country: hitCountry };
     }
+    if (hit) return null; // 고른 나라와 다른 결과는 믿지 않는다
   } catch (err) {
     if (err.name === 'AbortError') throw err;
   }
   // Nominatim이 막혔을 때만 Photon으로 (영어·현지어 이름은 잘 찾는다)
-  const [first] = await searchPlaces(q, null, signal);
+  const first = (await searchPlaces(q, null, signal)).find((p) => ok(p.country));
   return first ? { lat: first.lat, lng: first.lng, country: first.country } : null;
 }
 

@@ -146,6 +146,14 @@ function focusCalendar(cal) {
 function setBounds(cal) {
   if (state.min) cal.setAttribute('min', state.min);
   if (state.max) cal.setAttribute('max', state.max);
+  // 여행 기간 밖(P0-9): 고를 수는 있지만 흐리게 (data-dp-soft-min / data-dp-soft-max)
+  const { softMin, softMax } = state;
+  if (softMin || softMax) {
+    cal.getDayParts = (d) => {
+      const iso = d.toISOString().slice(0, 10);
+      return (softMin && iso < softMin) || (softMax && iso > softMax) ? 'off-trip' : '';
+    };
+  }
 }
 
 function bindRange(cal, focusedDate) {
@@ -315,6 +323,8 @@ function enhancePair(scope) {
       end: end.value,
       min: start.min || '',
       max: end.max || '',
+      softMin: start.dataset.dpSoftMin || '',
+      softMax: end.dataset.dpSoftMax || '',
       onApply: ({ start: a, end: b }) => {
         VALUE.set.call(start, a);
         VALUE.set.call(end, b);

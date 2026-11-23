@@ -617,3 +617,30 @@ export function updateExpense(trip, id, patch) {
   }
   return e;
 }
+
+/**
+ * P0-5: 가계부 "날짜별" 막대. 막대는 카드 폭을 넘지 않게 줄이고 라벨은 n개 간격으로만 붙인다.
+ * 여행이 weekFrom(30)일 이상이면 7일씩 묶어 주 단위로 보여 준다 (마지막 주는 남은 날만).
+ * → { bars: [{ key, kind: 'pre'|'day'|'week'|'out', from, to, value, label }], step }
+ *   label: 라벨을 보일지 ('출발 전'·'일정 외'는 항상, 일차·주는 step 간격 — step이 1이면 모두)
+ */
+export function dayBars(trip, byDay, { weekFrom = 30, maxLabels = 7, hasOut = byDay.out != null } = {}) {
+  const n = trip.days.length;
+  const periods = [];
+  if (n >= weekFrom) {
+    for (let a = 0; a < n; a += 7) {
+      const to = Math.min(n, a + 7) - 1;
+      let value = 0;
+      for (let i = a; i <= to; i++) value += byDay[i] ?? 0;
+      periods.push({ key: `w${a / 7}`, kind: 'week', from: a, to, value });
+    }
+  } else {
+    for (let i = 0; i < n; i++) periods.push({ key: i, kind: 'day', from: i, to: i, value: byDay[i] ?? 0 });
+  }
+  const step = Math.max(1, Math.ceil(periods.length / maxLabels));
+  // 간격이 있으면 D{step}, D{2·step}…에만 붙인다 (맨 앞 '출발 전' 라벨과 겹치지 않게)
+  periods.forEach((p, i) => (p.label = (i + 1) % step === 0));
+  const bars = [{ key: -1, kind: 'pre', from: -1, to: -1, value: byDay[-1] ?? 0, label: true }, ...periods];
+  if (hasOut) bars.push({ key: 'out', kind: 'out', from: null, to: null, value: byDay.out ?? 0, label: true });
+  return { bars, step };
+}
