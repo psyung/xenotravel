@@ -5,11 +5,12 @@
 //   /s/<id> 페이지에는 여행 제목·요약을 미리보기 태그(og:*)로 넣어 카톡·메신저에 카드로 보이게 한다.
 //   공유 데이터는 SHARE_DIR(기본 data/shares)에 파일 하나씩 저장한다.
 import http from 'node:http';
-import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir, unlink } from 'node:fs/promises';
 import { randomInt, createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decodeShare, shareSummary, SHORT_ID, CODE_RE } from './public/lib/share.js';
+import { LIMITS } from './public/lib/limits.js';
 import { buildCommit, withBuildMeta, withSwBuild } from './scripts/build-version.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -33,8 +34,10 @@ const SECURITY_HEADERS = (JSON.parse(await readFile(path.join(here, 'vercel.json
 const COMMIT = buildCommit();
 const BUILT_AT = new Date().toISOString();
 
-const MAX_BODY = 200 * 1024; // 공유 코드 최대 크기 (장소 수천 곳도 들어간다)
-const RATE_MAX = 30; // IP당 시간당 공유 링크 생성 수
+const MAX_BODY = LIMITS.shareCode;
+const SHARE_TTL = 180 * 24 * 60 * 60_000;
+const RATE_WINDOW = 60_000;
+const RATE_MAX = 10;
 const rate = new Map();
 
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -50,26 +53,22 @@ function newId() {
   return Array.from({ length: 8 }, () => ABC[randomInt(ABC.length)]).join('');
 }
 
-/**
- * IP당 시간당 공유 링크 생성 수 제한 (GPT 3차 #12).
- * 막힌 요청은 기록에 더하지 않고, 한 시간 지난 주소는 지워 메모리가 늘지 않게 한다.
- */
-function limited(ip) {
+function retryAfter(ip) {
   const now = Date.now();
-  const hits = (rate.get(ip) ?? []).filter((t) => now - t < 3600_000);
+  const hits = (rate.get(ip) ?? []).filter((t) => now - t < RATE_WINDOW);
   if (hits.length >= RATE_MAX) {
     rate.set(ip, hits);
-    return true;
+    return Math.ceil((hits[0] + RATE_WINDOW - now) / 1000);
   }
   hits.push(now);
   rate.set(ip, hits);
   if (rate.size > RATE_KEYS) rate.delete(rate.keys().next().value);
-  return false;
+  return 0;
 }
 setInterval(() => {
   const now = Date.now();
-  for (const [ip, hits] of rate) if (!hits.some((t) => now - t < 3600_000)) rate.delete(ip);
-}, 10 * 60_000).unref();
+  for (const [ip, hits] of rate) if (!hits.some((t) => now - t < RATE_WINDOW)) rate.delete(ip);
+}, RATE_WINDOW).unref();
 
 /**
  * 요청 주소. 역방향 프록시 뒤에 둘 때만 TRUST_PROXY=<믿는 프록시 단계 수>(보통 1)를 정한다.
@@ -87,9 +86,10 @@ function clientIp(req) {
 const RATE_KEYS = 10_000; // 기록할 주소 수 상한 (넘으면 가장 오래된 주소부터 버린다)
 
 async function readBody(req) {
+  if (Number(req.headers['content-length']) > MAX_BODY) throw Object.assign(new Error('too large'), { status: 413 });
   let size = 0;
   const chunks = [];
-  for await (const c of req) {
+  for await (const c of req.iterator({ destroyOnReturn: false })) {
     size += c.length;
     if (size > MAX_BODY) throw Object.assign(new Error('too large'), { status: 413 });
     chunks.push(c);
@@ -98,14 +98,20 @@ async function readBody(req) {
 }
 
 async function createShare(req, res) {
-  if (limited(clientIp(req))) return json(res, 429, { error: '잠시 후 다시 시도해 주세요' });
+  const retry = retryAfter(clientIp(req));
+  if (retry) {
+    req.resume();
+    res.setHeader('Retry-After', retry);
+    return json(res, 429, { error: '잠시 후 다시 시도해 주세요' });
+  }
   let code;
   try {
     code = JSON.parse(await readBody(req)).code;
   } catch (err) {
+    req.resume();
     return json(res, err.status ?? 400, { error: '올바르지 않은 요청' });
   }
-  if (typeof code !== 'string' || !CODE_RE.test(code)) return json(res, 400, { error: '올바르지 않은 공유 코드' });
+  if (typeof code !== 'string' || CODE_RE.exec(code)?.[0] !== code) return json(res, 400, { error: '올바르지 않은 공유 코드' });
   let summary;
   try {
     summary = shareSummary(await decodeShare(code)); // 열리는 코드인지 미리 확인
@@ -128,11 +134,28 @@ async function createShare(req, res) {
 async function loadShare(id) {
   if (!SHORT_ID.test(id)) return null;
   try {
-    return JSON.parse(await readFile(path.join(shareDir, `${id}.json`), 'utf8'));
+    const file = path.join(shareDir, id + '.json');
+    const share = JSON.parse(await readFile(file, 'utf8'));
+    const created = Date.parse(share.createdAt);
+    if (Number.isFinite(created) && Date.now() - created < SHARE_TTL) return share;
+    await unlink(file);
+    return null;
   } catch {
     return null;
   }
 }
+
+async function cleanShares() {
+  try {
+    for (const file of await readdir(shareDir)) {
+      if (file.endsWith('.json')) await loadShare(file.slice(0, -5));
+    }
+  } catch (err) {
+    if (err.code !== 'ENOENT') console.error(err);
+  }
+}
+void cleanShares();
+setInterval(cleanShares, 24 * 60 * 60_000).unref();
 
 /** /s/<id>: 앱 화면 그대로에 미리보기 태그만 바꿔 넣는다. */
 async function sharePage(req, res, id) {
@@ -217,6 +240,7 @@ async function staticFile(res, pathname) {
 http
   .createServer(async (req, res) => {
     for (const { key, value } of SECURITY_HEADERS) res.setHeader(key, value);
+    if (/^\/(?:api|s)\//.test(req.url)) res.setHeader('X-Robots-Tag', 'noindex');
     let pathname;
     try {
       pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
@@ -224,6 +248,7 @@ http
       res.writeHead(400).end('Bad request');
       return;
     }
+    if (pathname.startsWith('/api/') || pathname.startsWith('/s/')) res.setHeader('X-Robots-Tag', 'noindex');
     try {
       if (pathname === '/api/share' && req.method === 'POST') return await createShare(req, res);
       if (pathname === '/api/share' && req.method === 'GET') return json(res, 200, { ok: true });

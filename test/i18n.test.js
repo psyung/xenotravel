@@ -46,7 +46,7 @@ export function usedKeys() {
   }
   for (const [, text] of CODES) keys.add(text);
   for (const h of M.EXPORT_HEADER) keys.add(h);
-  for (const x of ['작년 같은 날 실제 날씨예요. 예보는 출발 16일 전부터 보여요', '그날 실제 날씨예요', '현지 예보 (Open-Meteo)']) keys.add(x);
+  for (const x of ['작년 같은 날 실제 날씨예요. 예보는 출발 16일 전부터 보여요', '현지 예보 (Open-Meteo)']) keys.add(x);
   for (const x of ['도쿄', '오사카', '교토', '후쿠오카']) keys.add(x); // 트렌드 도시 (data/trends.json)
   for (const x of ['형식', 'id/title', 'days', 'items', '장소', '좌표', 'day id', '숙소 기간', '항공편', '가계부', '체크리스트']) keys.add(x); // validateTrip
   for (const x of ['시작일', '종료일', '날짜']) keys.add(x); // 달력 기본 이름

@@ -1554,7 +1554,7 @@ body.picking .leaflet-bottom.leaflet-right { opacity: .4; pointer-events: none; 
 .check-grid.grid3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .check-top { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 8px; }
 .check-top .bulk { gap: 8px; margin: 0; }
-.check-top .bulk button { min-height: 32px; padding-inline: 6px; }
+.check-top .bulk button { min-height: 40px; padding-inline: 6px; }
 .check-top .bulk button:disabled { opacity: .55; }
 .check-tabs { display: none; }
 #flightDialog[open], #bulkDialog[open], dialog.p3-dialog[open] {
@@ -2153,3 +2153,11 @@ dialog.p3-dialog { width: min(520px, calc(100vw - 32px)); overflow-wrap: anywher
 }
 .tile[data-open-place-groups]:is(:hover, :focus-visible, :active) { border-color: var(--accent); }
 #staysBtn, [data-menu="stays"], [data-ctx-add="stay"] { min-height: 40px; }
+
+.retrospective { overflow-wrap: anywhere; }
+.retrospective h2, .retrospective h3, .retrospective p { margin: 0 0 8px; }
+.retrospective ul { padding-inline-start: 22px; white-space: pre-wrap; }
+.retro-visit, .ctx-btn, .ctx .ui-select, #askActions .btn, [data-menu="wipe-device"] { min-height: 40px; }
+#askActions { flex-wrap: wrap; }
+.ms-day-picker { padding: 0 12px 6px; flex: none; }
+.ms-day-picker .ui-select { width: 100%; min-height: 40px; }

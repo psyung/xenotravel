@@ -1,14 +1,12 @@
 // 일차별 날씨: Open-Meteo (키 불필요, 무료). https://open-meteo.com
 //  - 오늘부터 15일 뒤까지: 예보 (forecast)
 //  - 그보다 먼 날: 작년 같은 날 실제 날씨 (archive) — "작년 이맘때"로 따로 표시한다
-//  - 지난 날(60일보다 전): 그날 실제 날씨 (archive)
 // 위치는 그날 숙소(없으면 첫 장소, 여행지 중심). 소수 1자리(약 10km)로 묶어서 한 도시는 요청 한 번이다.
 import { dayStays, parseDate } from './model.js';
 
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 const ARCHIVE = 'https://archive-api.open-meteo.com/v1/archive';
 const FORECAST_DAYS = 15; // 오늘 + 15일 = 16일치
-const PAST_FORECAST_DAYS = 60; // 이보다 최근 지난 날은 예보 API가 그대로 돌려준다
 
 /* WMO 날씨 코드 → 한국어 + 아이콘 종류 */
 /** 날씨 문구는 번역 키다 (화면에서 t(text)) */
@@ -53,17 +51,17 @@ export function dayPoint(trip, dayIndex) {
 }
 
 /**
- * 필요한 요청 목록. [{ kind: 'forecast'|'climate'|'past', lat, lng, start, end, days: [{ dayId, date, query }] }]
+ * 필요한 요청 목록. [{ kind: 'forecast'|'climate', lat, lng, start, end, days: [{ dayId, date, query }] }]
  * query = API에 물어볼 날짜 (climate는 1년 전).
  */
 export function planRequests(trip, today) {
   const groups = new Map();
   trip.days.forEach((day, i) => {
-    if (!parseDate(day.date)) return;
+    if (!parseDate(day.date) || day.date < today) return;
     const pt = dayPoint(trip, i);
     if (!pt) return;
     const ahead = daysBetween(today, day.date);
-    const kind = ahead > FORECAST_DAYS ? 'climate' : ahead < -PAST_FORECAST_DAYS ? 'past' : 'forecast';
+    const kind = ahead > FORECAST_DAYS ? 'climate' : 'forecast';
     const query = kind === 'climate' ? shiftYear(day.date, -1) : day.date;
     const lat = Math.round(pt.lat * 10) / 10;
     const lng = Math.round(pt.lng * 10) / 10;
@@ -143,9 +141,7 @@ export function summarize(w, kind) {
   const title =
     kind === 'climate'
       ? '작년 같은 날 실제 날씨예요. 예보는 출발 16일 전부터 보여요'
-      : kind === 'past'
-        ? '그날 실제 날씨예요'
-        : '현지 예보 (Open-Meteo)';
+      : '현지 예보 (Open-Meteo)';
   return { kind, text, icon, temp, prob: kind === 'forecast' ? w.prob : null, rainMm: w.rainMm, wet, title };
 }
 
@@ -153,7 +149,7 @@ export function summarize(w, kind) {
  * 같은 요청은 예보 3시간, 과거 기록 30일 동안 다시 묻지 않는다. 인터넷이 끊기면 오래된 캐시라도 쓴다.
  */
 const CACHE_KEY = 'xenotravel:wx';
-const TTL = { forecast: 3 * 3600e3, climate: 30 * 86400e3, past: 30 * 86400e3 };
+const TTL = { forecast: 3 * 3600e3, climate: 30 * 86400e3 };
 const MAX_ENTRIES = 40;
 
 function readCache(storage) {

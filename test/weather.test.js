@@ -59,8 +59,8 @@ test('planRequests: 16일 안은 예보, 먼 날은 작년 같은 날, 한 도�
   assert.doesNotMatch(W.requestUrl(c), /probability/);
 });
 
-test('planRequests: 오래전 여행은 실제 기록, 날짜 없는 여행은 요청 없음', () => {
-  assert.deepEqual(W.planRequests(trip('2025-03-01', '2025-03-02'), TODAY).map((r) => r.kind), ['past']);
+test('planRequests: 지난 여행과 날짜 없는 여행은 요청 없음', () => {
+  assert.deepEqual(W.planRequests(trip('2025-03-01', '2025-03-02'), TODAY), []);
   const undated = M.createTrip({ title: 'x', center: OSAKA });
   assert.deepEqual(W.planRequests(undated, TODAY), []);
 });

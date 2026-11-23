@@ -47,7 +47,7 @@ const DOC = {
       '지운 데이터는 되돌릴 수 없으니 필요하면 먼저 백업 파일을 저장하세요. 이미 보낸 공유 링크·백업 파일과 외부 서비스에 전달된 요청 기록은 이 방법으로 지워지지 않아요.',
     ] },
     { title: '7. 문의', body: [`개인정보 관련 문의: ${c}`, `시행일: ${UPDATED}`] },
-    { title: '8. 별도 설치본 (운영 서비스와 다름)', body: ['이 항목은 xenotravel.vercel.app이 아니라 코드를 받아 직접 운영하는 설치본에만 해당해요.', '짧은 링크 서버(server.js)를 함께 운영하면 공유 링크를 만들 때 사본이 그 서버에 파일로 저장될 수 있고, 지금은 저장된 사본을 지우는 기능이 없어요. 운영자가 서버 접속 기록을 남길 수 있어요.'] },
+    { title: '8. 별도 설치본 (운영 서비스와 다름)', body: ['이 항목은 xenotravel.vercel.app이 아니라 코드를 받아 직접 운영하는 설치본에만 해당해요.', '짧은 링크 서버(server.js)를 함께 운영하면 공유 링크를 만들 때 사본이 그 서버에 파일로 저장될 수 있고, 생성일로부터 180일 뒤 만료되어 삭제돼요. 운영자가 서버 접속 기록을 남길 수 있어요.'] },
   ],
   en: (c) => [
     { title: 'Summary', body: [
@@ -90,7 +90,7 @@ const DOC = {
       'Deleted data cannot be recovered, so save a backup first if you need it. Share links or backup files you already sent, and request logs held by external services, are not removed this way.',
     ] },
     { title: '7. Contact', body: [`Privacy inquiries: ${c}`, `Effective date: ${UPDATED}`] },
-    { title: '8. Self-hosted installations (not the official service)', body: ['This section applies only to installations someone runs from the source code—not to xenotravel.vercel.app.', 'If the short-link server (server.js) is also run, creating a share link may store the copy as a file on that server, and there is currently no feature to delete stored copies. Whoever runs it may keep server access logs.'] },
+    { title: '8. Self-hosted installations (not the official service)', body: ['This section applies only to installations someone runs from the source code—not to xenotravel.vercel.app.', 'If the short-link server (server.js) is also run, creating a share link may store the copy as a file on that server, and it expires 180 days after creation and is deleted. Whoever runs it may keep server access logs.'] },
   ],
   zh: (c) => [
     { title: '摘要', body: [
@@ -133,7 +133,7 @@ const DOC = {
       '删除后无法恢复，如有需要请先保存备份文件。已发送的分享链接、备份文件以及外部服务的请求记录不会因此删除。',
     ] },
     { title: '7. 联系方式', body: [`个人信息相关咨询：${c}`, `生效日期：${UPDATED}`] },
-    { title: '8. 自行部署的版本（不同于官方服务）', body: ['本节仅适用于他人用源代码自行部署运行的版本，不适用于 xenotravel.vercel.app。', '如果同时运行短链接服务器（server.js），生成分享链接时副本可能以文件形式保存在该服务器上，目前没有删除已保存副本的功能。部署者可能会保留服务器访问记录。'] },
+    { title: '8. 自行部署的版本（不同于官方服务）', body: ['本节仅适用于他人用源代码自行部署运行的版本，不适用于 xenotravel.vercel.app。', '如果同时运行短链接服务器（server.js），生成分享链接时副本可能以文件形式保存在该服务器上，副本在创建 180 天后过期并删除。部署者可能会保留服务器访问记录。'] },
   ],
   ja: (c) => [
     { title: '概要', body: [
@@ -176,7 +176,7 @@ const DOC = {
       '削除したデータは元に戻せないため、必要なら先にバックアップを保存してください。送信済みの共有リンク・バックアップファイルや、外部サービスに残るリクエスト記録はこの方法では削除されません。',
     ] },
     { title: '7. お問い合わせ', body: [`個人情報に関するお問い合わせ：${c}`, `施行日：${UPDATED}`] },
-    { title: '8. 独自に設置した環境（公式サービスとは別）', body: ['この項目は xenotravel.vercel.app ではなく、ソースコードから独自に運用している環境にのみ当てはまります。', '短縮リンクのサーバー（server.js）も運用している場合、共有リンクを作るとコピーがそのサーバーにファイルとして保存されることがあり、現在は保存済みのコピーを削除する機能はありません。運用者がサーバーのアクセス記録を残す場合があります。'] },
+    { title: '8. 独自に設置した環境（公式サービスとは別）', body: ['この項目は xenotravel.vercel.app ではなく、ソースコードから独自に運用している環境にのみ当てはまります。', '短縮リンクのサーバー（server.js）も運用している場合、共有リンクを作るとコピーがそのサーバーにファイルとして保存されることがあり、作成から180日後に有効期限が切れ、削除されます。運用者がサーバーのアクセス記録を残す場合があります。'] },
   ],
 };
 

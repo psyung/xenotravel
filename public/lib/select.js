@@ -189,6 +189,10 @@ function outside(e) {
   close(false);
 }
 
+export function closeFor(select) {
+  if (open?.select === select) close(false);
+}
+
 /** 닫기 (focus: 버튼으로 포커스 돌려주기) */
 export function close(focus = true) {
   if (!open) return;

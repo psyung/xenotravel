@@ -16,6 +16,11 @@ import { mergeStore, stable } from './sync.js';
 
 export const KEY = 'xenotravel:v1';
 const LEGACY_KEYS = ['tripnote:v1']; // 이름 변경 전 저장분을 이어받는다
+
+export function appStorageKeys(storage) {
+  return Array.from({ length: storage.length }, (_, i) => storage.key(i))
+    .filter((key) => key?.startsWith('xenotravel:') || LEGACY_KEYS.includes(key));
+}
 export const CORRUPT_KEY = 'xenotravel:corrupt'; // 읽지 못한 저장분을 지우지 않고 옮겨 둔다
 
 function removeSampleExpense(trip) {

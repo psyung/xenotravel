@@ -71,6 +71,7 @@
             <button data-menu="backup" class="page-trip" data-i18n="전체 백업 저장 (.json)">전체 백업 저장 (.json)</button>
             <p id="backupAge" class="menu-note page-trip edit-only"></p>
             <button data-menu="import" class="edit-only" data-i18n="백업 파일 불러오기">백업 파일 불러오기</button>
+            <button data-menu="wipe-device" class="danger" data-i18n="이 기기에서 모든 데이터 지우기">이 기기에서 모든 데이터 지우기</button>
             <button data-menu="delete" class="danger edit-only page-trip" data-i18n="이 여행 삭제">이 여행 삭제</button>
           </div>
         </details>
@@ -153,6 +154,7 @@
         </div>
         <div id="notice" class="notice" hidden></div>
         <section id="today" class="today-card" data-i18n-attr="aria-label=오늘 일정" hidden></section>
+        <section id="retrospective" class="today-card retrospective" aria-labelledby="retrospectiveTitle" hidden></section>
       </div>
 
       <div class="plan-toolbar">
@@ -216,6 +218,7 @@
                 </button>
                 <button type="button" id="msEdit" class="ms-edit" data-i18n="일정에서 편집">일정에서 편집</button>
               </div>
+              <div class="ms-day-picker" hidden><select id="msDay" data-ui-select data-i18n-attr="aria-label=추가할 날짜 선택"></select></div>
               <ol id="msList" class="ms-list"></ol>
             </section>
             <div id="tileError" class="map-error" role="status" hidden>
@@ -370,7 +373,7 @@
     <div class="dialog-body">
       <h2 id="shareDialogTitle" data-i18n="일정 공유하기">일정 공유하기</h2>
       <p class="fine" data-i18n="받는 사람은 앱 설치나 가입 없이 링크만 누르면 바로 봐요.">받는 사람은 앱 설치나 가입 없이 링크만 누르면 바로 봐요.</p>
-      <label><input id="shareExcludePrivate" type="checkbox" checked> <span data-i18n="메모·항공편 예약번호 제외하고 공유하기">메모·항공편 예약번호 제외하고 공유하기</span></label>
+      <label><input id="shareExcludePrivate" type="checkbox" checked> <span data-i18n="메모·예약번호 빼고 공유">메모·예약번호 빼고 공유</span></label>
       <div id="shareGauge" class="share-gauge" role="status" hidden><span class="sg-bar" aria-hidden="true"><i></i></span><span id="shareGaugeText"></span></div>
       <div class="share-card" data-i18n-attr="aria-label=공유 메시지 요약">
         <div class="share-card-top"><svg class="logo-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M9.5 10.5C14.5 10.5 17.5 23.5 23 23.5" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/><path d="M11.3 21.7L19.6 13.4" stroke="currentColor" stroke-width="3.2" stroke-linecap="butt"/><circle cx="9.5" cy="23.5" r="2.6" stroke="currentColor" stroke-width="2.4"/><circle cx="23.3" cy="9.7" r="3.4" fill="var(--accent-primary, #0A6FC2)"/></svg></div>

@@ -63,6 +63,19 @@ export function downloadJson(trip, { kind = 'backup' } = {}) {
   download(JSON.stringify(trip, null, 2), 'application/json', jsonFileName(trip, kind));
 }
 
+export async function downloadAllTrips(trips) {
+  const { CFB } = await loadXlsx();
+  const archive = CFB.utils.cfb_new();
+  const encoder = new TextEncoder();
+  trips.forEach((trip, index) => {
+    CFB.utils.cfb_add(archive, 'trip-' + (index + 1) + '.json', encoder.encode(JSON.stringify(trip, null, 2)));
+  });
+  const bytes = CFB.write(archive, { fileType: 'zip', type: 'array' });
+  const now = new Date();
+  const date = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10); // 내 기기 날짜 (UTC가 아니라)
+  download(bytes, 'application/zip', 'xenotravel-backup-all-' + date + '.zip');
+}
+
 function download(content, type, filename) {
   const blob = new Blob([content], { type });
   const a = document.createElement('a');

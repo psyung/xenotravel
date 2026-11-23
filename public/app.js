@@ -1,15 +1,15 @@
 import * as M from './lib/model.js';
 import { parseLocationInput, parseLocationList } from './lib/links.js';
 import { searchPlaces, searchPlacesKo, HANGUL, reversePlace, geocodeDestination } from './lib/geo.js';
-import { openStore, KEY as STORE_KEY } from './lib/store.js';
-import { exportXlsx, downloadJson, downloadCalendar } from './lib/export.js';
+import { openStore, appStorageKeys, KEY as STORE_KEY } from './lib/store.js';
+import { exportXlsx, downloadJson, downloadAllTrips, downloadCalendar } from './lib/export.js';
 import * as T from './lib/trends.js';
 import * as B from './lib/budget.js';
 import * as C from './lib/checklist.js';
 import { encodeShare, decodeShare, shareUrl, shareCodeFromHash, shareSummary, shareMessage, sharedCopy } from './lib/share.js';
 import { enhanceDates, openDateRange, refreshDates } from './lib/datepicker.js';
 import { enhanceTimes, destroyTimes, normalizeTime } from './lib/timefield.js';
-import { watchSelects } from './lib/select.js';
+import { watchSelects, enhanceSelect, focusSelect, closeFor as closeSelectFor } from './lib/select.js';
 import { enhanceSuggestions } from './lib/suggestions.js';
 import { loadWeather, weatherSignature } from './lib/weather.js';
 import { t, k, missing as i18nMissing, LANGS, LANG_KEY, getLang, setLang, loadLang, saveLang, locale, num, dayName, shortDate, weekday, dateTime, normalizeLang, tripLength, allVersions } from './lib/i18n.js';
@@ -155,7 +155,7 @@ const ui = {
 /* ───────── 지도 ───────── */
 const map = L.map('map', { worldCopyJump: true, tapHold: false }).setView([30, 20], 2);
 let locationChoice;
-const mapDayContext = () => JSON.stringify([trip?.id, ui.focusList, getLang(), trip?.days.map(({ id, date }) => [id, date])]);
+const mapDayContext = () => JSON.stringify([trip?.id, ui.day, ui.focusList, getLang(), trip?.days.map(({ id, date }) => [id, date])]);
 map.zoomControl.setPosition('topright');
 const mapStyleControl = L.control({ position: 'topright' });
 mapStyleControl.onAdd = () => {
@@ -489,7 +489,6 @@ function renderMap({ fit = false } = {}) {
   layer.clearLayers();
   markers.clear();
   if (!trip) return;
-  if (trip.days.some((d) => d.id === ui.focusList)) ui.mapLastDay = ui.focusList;
   const bounds = [];
   const plan = currentRoutePlan();
   allLists().forEach((l, dayIndex) => {
@@ -579,12 +578,17 @@ function setSheet(state) {
   el.dataset.state = sheetState;
   $('.mapwrap').style.setProperty('--sheet-h', `${sheetHeights()[sheetState]}px`);
   $('#msHandle').setAttribute('aria-expanded', String(sheetState !== 'peek'));
+  $('#msDay').parentElement.hidden = sheetState === 'peek';
   $('#msList').inert = sheetState === 'peek'; // 살짝 상태에서는 가려진 목록에 포커스가 가지 않게
   // 오프라인 미니맵은 시트를 뺀 자리에 다시 그린다. 크게 펼치면 가려진 핀은 탭 순서에서도 뺀다 (GPT 6차 #4)
   const mini = $('#miniMap');
   if (mini) mini.inert = sheetPad() > 0 && sheetState === 'full';
   if (ui.tilesDown && prev !== sheetState && !mini?.hidden) renderMiniMap();
 }
+function mapDayOptions() {
+  return trip.days.map((day, i) => `<option value="${esc(day.id)}">${esc(dayName(i))}${day.date ? ` · ${esc(shortDate(day.date))}` : ''}</option>`).join('');
+}
+
 function renderMapSheet() {
   if (!trip) return;
   const focus = trip.days.findIndex((d) => d.id === ui.focusList);
@@ -609,6 +613,9 @@ function renderMapSheet() {
   const date = focus >= 0 ? trip.days[focus].date : '';
   $('#msTitle').textContent = focus >= 0 ? `${dayName(focus)}${date ? ` · ${shortDate(date)}` : ''}` : t('전체 동선');
   $('#msCount').textContent = count ? t('{n}곳', { n: count }) : '';
+  const picker = $('#msDay');
+  picker.innerHTML = `<option value="">${esc(t('전체 동선'))}</option>${mapDayOptions()}`;
+  picker.value = focus >= 0 ? ui.focusList : '';
   $('#msList').innerHTML = rows;
   $('#msEdit').hidden = Boolean(ui.readonly) && focus < 0;
   setSheet(sheetState);
@@ -672,6 +679,11 @@ function renderMapSheet() {
     const card = $('#mapPlace');
     card.dataset.fromSheet = id;
     card.querySelector('a, button')?.focus({ preventScroll: true });
+  });
+  $('#msDay').addEventListener('change', (e) => {
+    const index = trip.days.findIndex((day) => day.id === e.target.value);
+    if (index >= 0) selectDay(index, { scroll: false });
+    else showAllRoutes();
   });
   $('#msEdit').addEventListener('click', () => {
     setSheet('peek');
@@ -999,15 +1011,15 @@ async function showLocationChoices(latlng) {
   const { lat, lng } = latlng;
   const context = mapDayContext();
   let place = { name: t('선택한 위치'), address: '', lat, lng };
-  let dayId = trip.days.some((d) => d.id === ui.focusList) ? ui.focusList : ui.mapLastDay;
   const all = !trip.days.some((d) => d.id === ui.focusList);
+  let dayId = all ? '' : ui.focusList;
   const content = document.createElement('div');
   content.className = 'ctx';
   content.innerHTML = `<div class="popup-name">${esc(place.name)}</div>
     <div class="popup-meta">${lat.toFixed(5)}, ${lng.toFixed(5)}</div>
-    ${all ? `<select aria-label="${esc(t('추가할 날짜 선택'))}">
+    ${all ? `<select data-ui-select aria-label="${esc(t('추가할 날짜 선택'))}">
       <option value="">${esc(t('추가할 날짜 선택'))}</option>
-      ${trip.days.map((d, i) => `<option value="${esc(d.id)}">${esc(dayName(i))} · ${esc(shortDate(d.date))}</option>`).join('')}
+      ${mapDayOptions()}
     </select>` : ''}
     <button class="ctx-btn" data-ctx-add="item"></button>
     <button class="ctx-btn stay" data-ctx-add="stay"></button>`;
@@ -1019,13 +1031,11 @@ async function showLocationChoices(latlng) {
     const start = dayIndex();
     item.disabled = start < 0;
     stay.disabled = start < 0;
-    item.textContent = t('+ 이 위치 추가') + (start < 0 ? '' : ` (${dayName(start)})`);
-    stay.textContent = t('숙소로 추가');
+    const day = start < 0 ? '—' : dayName(start);
+    item.textContent = t('+ 이 위치 추가 ({day})', { day });
+    stay.textContent = t('숙소로 추가 ({day}부터 1박)', { day });
   }
   if (select) {
-    select.value = dayId ?? '';
-    if (select.selectedIndex < 0) select.selectedIndex = 0;
-    dayId = select.value;
     select.addEventListener('change', () => {
       dayId = select.value;
       updateActions();
@@ -1036,6 +1046,7 @@ async function showLocationChoices(latlng) {
   const back = document.activeElement;
   const popup = L.popup({ maxWidth: Math.max(180, Math.min(280, mapEl.clientWidth - 58)) }).setLatLng(latlng).setContent(content).openOn(map);
   locationChoice = { popup, context };
+  if (select) enhanceSelect(select);
   const popupEl = popup.getElement();
   const close = popupEl.querySelector('.leaflet-popup-close-button');
   close?.setAttribute('aria-label', t('닫기'));
@@ -1045,12 +1056,14 @@ async function showLocationChoices(latlng) {
     map.closePopup(popup);
   });
   popup.once('remove', () => {
+    if (select) closeSelectFor(select);
     if (locationChoice?.popup === popup) locationChoice = null;
     if (document.activeElement === document.body || content.contains(document.activeElement) || document.activeElement === close) {
       (back instanceof HTMLElement && back !== document.body && back.isConnected ? back : mapEl).focus({ preventScroll: true });
     }
   });
-  (select ?? item).focus({ preventScroll: true });
+  if (select) focusSelect(select);
+  else item.focus({ preventScroll: true });
   item.addEventListener('click', () => {
     if (context !== mapDayContext() || dayIndex() < 0) return;
     map.closePopup(popup);
@@ -1163,9 +1176,10 @@ const SAVE_ERRORS = {
   unavailable: k('이 브라우저에서 저장소를 쓸 수 없어요. 새로고침하면 사라지니 백업 파일로 저장해 주세요.'),
 };
 
+let wipingDevice = false;
 function saveNow(choices) {
   persistSoon.cancel();
-  if (ui.readonly) return { ok: true, changed: [] };
+  if (ui.readonly || wipingDevice) return { ok: true, changed: [] };
   const r = db.save(store, { choices });
   afterSave(r);
   return r;
@@ -1307,6 +1321,12 @@ addEventListener('storage', (e) => {
     return;
   }
   if (e.key !== STORE_KEY && e.key !== null) return;
+  if (e.key === STORE_KEY && e.newValue === null && localStorage.getItem(STORE_KEY) === null) {
+    persistSoon.cancel();
+    history.replaceState(null, '', appBase());
+    location.reload();
+    return;
+  }
   const before = trip;
   const r = saveNow();
   if (r.ok && r.changed.length) {
@@ -1325,7 +1345,7 @@ addEventListener('storage', (e) => {
  */
 const askDialog = $('#askDialog');
 let askResolve = null;
-function ask({ title, body = '', html = '', actions, cancel = t('취소') }) {
+function ask({ title, body = '', html = '', actions, cancel = t('취소'), focusCancel = false }) {
   if (askResolve) askResolve(null);
   const back = document.activeElement;
   $('#askTitle').textContent = title;
@@ -1338,7 +1358,7 @@ function ask({ title, body = '', html = '', actions, cancel = t('취소') }) {
   askDialog.dataset.cancelable = cancel ? '1' : '';
   askDialog.returnValue = '';
   askDialog.showModal();
-  ($('#askActions .primary', askDialog) ?? $('#askActions button:last-child', askDialog))?.focus();
+  ($(focusCancel ? '#askActions .ghost' : '#askActions .primary', askDialog) ?? $('#askActions button:last-child', askDialog))?.focus();
   return new Promise((resolve) => {
     askResolve = (v) => {
       askResolve = null;
@@ -1435,6 +1455,7 @@ function render({ fit = false } = {}) {
   renderToday();
   renderTarget();
   if (prefs.page === 'plan') {
+    renderRetrospective();
     renderPlanEmpty();
     renderDays();
   } else clearPlanDom();
@@ -1643,6 +1664,7 @@ function itemHtml(it, i, isDay, leg = null, listItems = null, overlap = '') {
       <label>${esc(t('시간'))}<input type="time" data-field="time" value="${esc(it.time)}"></label>
       ${isDay ? `<label class="pin-toggle"><input type="checkbox" data-pin${it.pinned ? ' checked' : ''}> ${esc(t('동선 정리할 때 이 순서 그대로 두기'))} <small>(${esc(t('시간을 정한 곳은 늘 그대로'))})</small></label>` : ''}
       ${isDay ? costEditorHtml(it) : ''}
+      ${dayPos >= 0 && trip.days[dayPos].date && trip.days[dayPos].date <= TODAY ? `<label class="pin-toggle retro-visit"><input type="checkbox" data-visited${it.visited ? ' checked' : ''}> ${esc(t('다녀왔어요'))}</label>` : ''}
       <label>${esc(t('메모'))}<textarea data-field="memo" placeholder="${esc(t('영업시간, 예약번호, 꼭 먹을 것…'))}">${esc(it.memo)}</textarea></label>
       <label>${esc(t('링크'))}<input type="url" data-field="url" value="${esc(it.url)}" placeholder="${esc(t('예약 페이지, 블로그 등'))}"></label>
       <div class="order-row" role="group" aria-label="${esc(t('순서 바꾸기'))}">
@@ -1766,7 +1788,7 @@ function openStays({ id = null, place = null, start = firstUncoveredNight(), dra
   const stay = id ? M.findStay(trip, id) : null;
   if (id && !stay) return;
   const checkIn = M.dateAtIndex(trip, start);
-  const nights = Math.min(M.DEFAULT_NIGHTS, trip.days.length - start);
+  const nights = Math.min(place ? 1 : M.DEFAULT_NIGHTS, trip.days.length - start);
   const dates = stay ? M.stayDates(trip, stay) : { checkIn, checkOut: checkIn ? M.addDays(checkIn, nights) : '' };
   const values = draft ?? { ...(stay ?? place ?? {}), ...dates };
   stayEditId = stay?.id ?? null;
@@ -2259,8 +2281,13 @@ const WX_ICONS = {
   fog: '<path d="M4 9h16 M6 13h12 M4 17h16"/>',
 };
 
+function wxDayVisible(dayId) {
+  const day = trip?.days.find((d) => d.id === dayId);
+  return day?.date >= TODAY;
+}
+
 function wxChipHtml(w, dayId) {
-  if (!w) return '';
+  if (!w || !wxDayVisible(dayId)) return '';
   if (w.kind === 'climate') {
     // 예보 전: 작년 기록은 눌러야 보인다 (다음 달 비 소식으로 읽히지 않게)
     const from = w.forecastFrom ? t('{date}부터', { date: shortDate(w.forecastFrom) }) : '';
@@ -2273,15 +2300,15 @@ function wxChipHtml(w, dayId) {
   return `<span class="chip wx wx-${w.icon}${w.wet ? ' wx-wet' : ''}" title="${esc(t(w.title))}">${icon}${esc(t(w.text))} <b>${esc(w.temp)}</b>${rain}</span>`;
 }
 
-function wxHintHtml(w) {
-  if (!w?.wet) return '';
+function wxHintHtml(w, dayId) {
+  if (!w?.wet || !wxDayVisible(dayId)) return '';
   const what = w.icon === 'snow' ? t('눈') : t('비');
   return `<p class="wx-hint">${esc(t('{what} 소식이 있어요{prob}. 실내 장소 위주로 짜거나 우산을 챙기세요', { what, prob: w.prob != null ? ` (${what} ${w.prob}%)` : '' }))}</p>`;
 }
 
 function paintWeather() {
   for (const el of $$('[data-wx]')) el.innerHTML = wxChipHtml(ui.weather.data[el.dataset.wx], el.dataset.wx);
-  for (const el of $$('[data-wx-hint]')) el.innerHTML = wxHintHtml(ui.weather.data[el.dataset.wxHint]);
+  for (const el of $$('[data-wx-hint]')) el.innerHTML = wxHintHtml(ui.weather.data[el.dataset.wxHint], el.dataset.wxHint);
 }
 
 function refreshWeather() {
@@ -2289,6 +2316,8 @@ function refreshWeather() {
   const sig = `${trip.id}#${weatherSignature(trip, TODAY)}`;
   if (sig === ui.weather.sig) return;
   ui.weather.sig = sig;
+  ui.weather.data = {};
+  paintWeather();
   loadWeather(trip, TODAY)
     .then((data) => {
       if (ui.weather.sig !== sig) return; // 그사이 날짜·여행이 바뀜
@@ -2469,7 +2498,7 @@ function dayCardHtml(l) {
         <div class="day-tools">${dayToolsHtml(l)}</div>
       </div>
       <div class="chips">${chips}</div>
-      <div class="wx-hint-slot" data-wx-hint="${dayId}">${wxHintHtml(ui.weather.data[dayId])}</div>
+      <div class="wx-hint-slot" data-wx-hint="${dayId}">${wxHintHtml(ui.weather.data[dayId], dayId)}</div>
       ${ui.readonly ? '' : routePlanHtml(l)}
       ${dayBodyHtml(l)}
     </section>`;
@@ -2783,6 +2812,15 @@ $('#days').addEventListener('click', (e) => {
   }
 });
 
+$('#days').addEventListener('change', (e) => {
+  if (!e.target.hasAttribute('data-visited') || ui.readonly) return;
+  const found = M.findItem(trip, e.target.closest('.item')?.dataset.id);
+  if (!found) return;
+  found.item.visited = e.target.checked;
+  commit();
+  $(`.item[data-id="${CSS.escape(found.item.id)}"] [data-visited]`)?.focus({ preventScroll: true });
+});
+
 const refreshMapSoon = debounce(() => renderMap(), 300);
 $('#days').addEventListener('input', (e) => {
   const field = e.target.dataset.field;
@@ -2801,6 +2839,7 @@ $('#days').addEventListener('input', (e) => {
   $('.item-sub', li).textContent = li.classList.contains('dock-card') ? it.memo.split('\n')[0] || it.address : it.memo || it.address;
   const timeEl = $('.tl-time', li);
   if (timeEl) timeEl.textContent = it.time;
+  if (field === 'memo' || field === 'name') renderRetrospective();
   refreshMapSoon();
 });
 
@@ -3325,6 +3364,10 @@ $('.menu .menu-pop').addEventListener('click', (e) => {
   else if (action === 'calendar' && !downloadCalendar(trip)) toast(t('캘린더에 내보낼 일정이 없어요. 날짜가 있는 일차에 장소를 넣으면 내보낼 수 있어요'), 3500);
   else if (action === 'import') $('#importFile').click();
   else if (action === 'delete') deleteTrip(trip.id);
+  else if (action === 'wipe-device') {
+    $('.menu summary').focus();
+    void wipeDevice();
+  }
   else if (action === 'flights') openFlights();
   else if (action === 'stays') openStays();
   else if (action === 'share') {
@@ -3361,13 +3404,57 @@ function openBackup() {
   }).then((choice) => { if (choice === 'save') saveTripBackup(); });
 }
 
+async function backupCover(id) {
+  const cover = await Covers.get(id);
+  return cover ? Covers.encode(cover) : null;
+}
+
+async function wipeDevice() {
+  if (wipingDevice) return;
+  const count = Object.keys(store.trips).length;
+  const choice = await ask({
+    title: t('이 기기에서 모든 데이터 지우기'),
+    focusCancel: true,
+    body: t('여행 {n}개와 이 기기의 앱 설정을 지워요. 지운 데이터는 되돌릴 수 없어요.', { n: num(count) }),
+    actions: [
+      { value: 'backup', label: t('백업 후 지우기') },
+      { value: 'wipe', label: t('지우기'), danger: true },
+    ],
+  });
+  if (!choice) return;
+  wipingDevice = true;
+  document.body.inert = true;
+  try {
+    if (choice === 'backup') {
+      const trips = structuredClone(Object.values(store.trips));
+      const snapshots = await Promise.all(trips.map(async (snapshot) => ({ ...snapshot, cover: await backupCover(snapshot.id) })));
+      await downloadAllTrips(snapshots);
+    }
+    persistSoon.cancel();
+    refreshWeatherSoon.cancel();
+    if (globalThis.indexedDB) await Covers.clear();
+    const worker = await navigator.serviceWorker?.getRegistration(appBase());
+    await worker?.unregister();
+    if (globalThis.caches) {
+      const keys = (await caches.keys()).filter((key) => key.startsWith('xenotravel-'));
+      await Promise.all(keys.map((key) => caches.delete(key)));
+    }
+    for (const key of appStorageKeys(localStorage)) localStorage.removeItem(key);
+    history.replaceState(null, '', appBase());
+    location.reload();
+  } catch {
+    wipingDevice = false;
+    document.body.inert = false;
+    toast(t('백업 또는 데이터 삭제를 완료하지 못했어요'), 4000);
+  }
+}
+
 async function saveTripBackup() {
   if (!trip) return;
   const snapshot = structuredClone(trip);
   const readonly = ui.readonly;
   try {
-    const blob = readonly ? null : await Covers.get(snapshot.id);
-    downloadJson({ ...snapshot, cover: blob ? await Covers.encode(blob) : null });
+    downloadJson({ ...snapshot, cover: readonly ? null : await backupCover(snapshot.id) });
   } catch {
     toast(t('백업 파일을 저장하지 못했어요'), 4000);
     return;
@@ -3537,7 +3624,6 @@ function openTrip(tr, { save = false } = {}) {
   clearCandidate();
   trip = tr;
   ui.trendCollection = 'trending';
-  ui.mapLastDay = null;
   store.currentId = tr.id;
   if (save) store.trips[tr.id] = tr;
   ui.openItem = null;
@@ -4130,7 +4216,11 @@ function showTab(tab) {
   if (prefs.page !== 'plan') showPage('plan');
   const layout = $('.layout');
   if (layout.dataset.tab === tab) return;
-  if (tab !== 'map' && ui.picking) setPicking(false);
+  if (tab !== 'map') {
+    if (ui.picking) setPicking(false);
+    cancelMapHold();
+    if (locationChoice) map.closePopup(locationChoice.popup);
+  }
   layout.dataset.tab = tab;
   $$('.mtabs button').forEach((b) => {
     b.classList.toggle('active', b.dataset.tab === tab);
@@ -4329,6 +4419,29 @@ function todayRowHtml(it, n, isNext) {
     </li>`;
 }
 
+function renderRetrospective() {
+  const el = $('#retrospective');
+  el.hidden = !trip || !M.tripEnded(trip, TODAY);
+  if (el.hidden) {
+    el.innerHTML = '';
+    return;
+  }
+  const budget = B.ensureBudget(trip);
+  const spent = B.formatUnits(B.spentUnits(trip), B.shownBaseCode(budget));
+  const pending = trip.expenses.filter((entry) => B.expenseBaseUnits(entry, budget) == null).length;
+  const places = trip.days.flatMap((day) => day.items);
+  const visited = places.filter((place) => place.visited);
+  const notes = [...places, ...trip.inbox, ...trip.stays, ...trip.flights]
+    .filter((entry) => entry.memo?.trim());
+  const list = (entries, row) => `<ul>${entries.map((entry) => `<li>${row(entry)}</li>`).join('')}</ul>`;
+  el.innerHTML = `<h2 id="retrospectiveTitle">${esc(t('지난 여행 돌아보기'))}</h2>
+    <p>${esc(t('실제 지출 합계'))} <b>${esc(spent)}</b>${pending ? ` <small>${esc(t('환율 미정 {n}건 제외', { n: pending }))}</small>` : ''}</p>
+    <h3>${esc(t('방문한 곳'))} · ${esc(t('{n}곳', { n: visited.length }))}</h3>
+    ${visited.length ? list(visited, (place) => esc(place.name)) : ''}
+    <h3>${esc(t('메모'))}</h3>
+    ${notes.length ? list(notes, (entry) => `<b>${esc(entry.name || entry.flightNo || t('항공편'))}</b> ${esc(entry.memo)}`) : `<p>${esc(t('남긴 메모가 없어요'))}</p>`}`;
+}
+
 function renderToday() {
   const el = $('#today');
   const p = trip && M.todayPlan(trip, TODAY, nowHHMM());
@@ -4480,6 +4593,7 @@ function showPage(page, { scroll = true } = {}) {
       renderPlanEmpty();
       renderDays();
     }
+    renderRetrospective();
     setTimeout(() => map.invalidateSize(), 0);
   } else clearPlanDom();
   if (prefs.page === 'budget') {
