@@ -457,7 +457,8 @@ test('R1-8·12 / R2-11·18: 옛 검색 결과는 Enter·추가 버튼으로 넣�
 
 test('R1-9·13: 고정 안내는 쌓이고(오프라인 → 저장 오류 → 날짜 칩), 경고·완료 글자는 AA 대비', () => {
   const css = read('styles.css');
-  assert.match(css, /\.daytabs \{ top: calc\(var\(--head\) \+ var\(--offbar, 0px\) \+ var\(--savebar, 0px\)\); \}/);
+  // P1-7 (QA 2026-11-23): 고정 검색 바(--search)도 같은 순서로 쌓인다
+  assert.match(css, /\.daytabs \{ top: calc\(var\(--head\) \+ var\(--offbar, 0px\) \+ var\(--savebar, 0px\) \+ var\(--search, 0px\)\); \}/);
   assert.match(css, /\.save-bar \{ top: calc\(var\(--head\) \+ var\(--offbar, 0px\)\); \}/);
   assert.match(css, /\.time-warn\.flight \.tw-badge[^{]*\{ color: color-mix\(in srgb, var\(--warn\) 50%, var\(--ink\)\); \}/);
 });

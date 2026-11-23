@@ -55,6 +55,11 @@ const savePrefs = () => {
     /* 무시 */
   }
 };
+// P1-3: 767px 이하에서는 보드를 숨기고 늘 목록으로 (저장값 prefs.view는 그대로 — 데스크톱에선 보드 유지)
+const narrowMq = matchMedia('(max-width: 767px)');
+function curView() {
+  return narrowMq.matches ? 'list' : prefs.view;
+}
 let trends = { cities: [] };
 let trendsI18n = null; // data/trends-i18n.json (트렌드 문구 번역)
 /** 트렌드 장소 문구를 지금 언어로. 번역이 없으면 한국어 원문 (original) */
@@ -767,11 +772,11 @@ function findTrend(id) {
 
 const placeCount = () => (trip ? trip.days.reduce((n, d) => n + d.items.length, 0) + trip.inbox.length : 0);
 /** 요즘 뜨는 곳 펼침: 직접 접거나 펼쳤으면 그대로, 아니면 장소가 없을 때만 펼친다 (장소가 생기면 Day 1이 아래로 밀리지 않게) */
-const trendsOpen = () => prefs.view === 'board' || (prefs.trendsUser ?? placeCount() === 0);
+const trendsOpen = () => curView() === 'board' || (prefs.trendsUser ?? placeCount() === 0);
 
 function renderTrendMarkers() {
   const city = currentCity();
-  if (!city || ui.readonly || (prefs.view === 'list' && !trendsOpen())) return;
+  if (!city || ui.readonly || (curView() === 'list' && !trendsOpen())) return;
   for (const p of T.activePlaces(city, TODAY)) {
     const loc = tp(p);
     const m = L.marker([p.lat, p.lng], {
@@ -791,7 +796,7 @@ function renderTrendMarkers() {
 
 function trendSectionHtml() {
   const city = currentCity();
-  const board = prefs.view === 'board';
+  const board = curView() === 'board';
   const open = trendsOpen();
   const places = T.activePlaces(city, TODAY);
   // P0-8: 여행지 트렌드 데이터가 없으면 접힌 한 줄 안내 + 장소 검색 바로가기만
@@ -822,6 +827,7 @@ function trendSectionHtml() {
       <button class="day-title" data-action="trend-toggle"${board ? ' disabled' : ` aria-expanded="${open}"`}>
         <span class="dot"></span><strong>${esc(t('요즘 뜨는 곳'))}</strong><span class="count">${esc(t('{n}곳', { n: places.length }))}${board ? '' : open ? ' ▾' : ' ▸'}</span>
       </button>
+      ${!board && open && places.length > 1 ? `<span class="trend-arrows"><button type="button" class="icon" data-action="trend-scroll" data-dir="-1" aria-label="${esc(t('이전 카드'))}">‹</button><button type="button" class="icon" data-action="trend-scroll" data-dir="1" aria-label="${esc(t('다음 카드'))}">›</button></span>` : ''}
     </header>
     ${open ? body : ''}
   </section>`;
@@ -1893,41 +1899,19 @@ function moveToList(itemId, listId) {
   saved(commit(), t('"{name}" → {list}(으)로 옮겼어요', { name: found.item.name, list: listName(listId) }));
 }
 
-/**
- * 보관함 카드 너비: 주소가 짧으면 주소가 다 보이게, 길면 장소 이름보다 살짝(80px)만 길게 하고 나머지는 … 처리.
- */
-const DOCK_EXTRA = 80;
-function sizeDockCards() {
-  for (const card of $$('#inboxDock .dock-card')) {
-    const text = $('.dock-text', card);
-    const name = $('.item-name', card);
-    const sub = $('.item-sub', card);
-    card.style.width = '';
-    const chrome = card.offsetWidth - text.clientWidth; // 손잡이·아이콘·여백
-    const want = Math.max(name.scrollWidth, Math.min(sub.scrollWidth, name.scrollWidth + DOCK_EXTRA));
-    card.style.width = `${Math.min(320, Math.max(180, want + chrome + 2))}px`;
-  }
-}
 
 function renderDock() {
   const dock = $('#inboxDock');
   const items = trip.inbox;
   dock.hidden = ui.readonly && !items.length; // 공유받은 일정: 빈 보관함은 보여줄 게 없다
   dock.classList.toggle('is-empty', !items.length);
-  const open = prefs.dockOpen !== false;
-  const cards = items
+  // P1-5: 모바일은 접힌 한 줄("장소 보관함 5")이 기본. 직접 펼치거나 접었으면 그대로
+  const open = prefs.dockOpen ?? !narrowMq.matches;
+  // 이름만 있는 칩: 누르면 액션 시트(보낼 날·지도에서 보기·삭제), 길게 눌러(터치) 끌면 일차로 옮긴다
+  const chips = items
     .map(
-      (it) => `<li class="item dock-card" data-id="${it.id}" style="--c:${INBOX_COLOR}">
-        <div class="dock-top">
-          <span class="drag" title="${esc(t('끌어서 원하는 날에 놓기'))}" aria-hidden="true">⋮⋮</span>
-          <div class="dock-text">
-            <span class="item-name"><span class="nm">${esc(it.name)}</span>${catIcon(it)}</span>
-            <span class="item-sub">${esc(it.memo.split('\n')[0] || it.address)}</span>
-          </div>
-          <button class="icon" data-action="locate" title="${esc(t('지도에서 보기'))}" aria-label="${esc(t('{name} 지도에서 보기', { name: it.name }))}">◎</button>
-          <button class="icon" data-action="delete" title="${esc(t('삭제'))}" aria-label="${esc(t('{name} 삭제', { name: it.name }))}">✕</button>
-        </div>
-        <select class="move-to" aria-label="${esc(t('{name} 보낼 날', { name: it.name }))}">${moveOptions(M.INBOX, t('보낼 날 →'))}</select>
+      (it) => `<li class="item dock-card dock-chip" data-id="${it.id}" style="--c:${INBOX_COLOR}">
+        <button type="button" class="chip-btn" data-action="chip-menu" title="${esc(it.name)}" aria-label="${esc(t('{name} — 보낼 날·지도·삭제', { name: it.name }))}"><span class="nm">${esc(it.name)}</span></button>
       </li>`,
     )
     .join('');
@@ -1936,14 +1920,43 @@ function renderDock() {
         <span class="dot" style="--c:${INBOX_COLOR}"></span><strong>${esc(t('장소 보관함'))}</strong>
         <span class="count">${esc(t('{n}곳', { n: items.length }))}</span><span class="chev">${esc(open ? t('접기 ▾') : t('펼치기 ▴'))}</span>
       </button>
-      ${open ? `<span class="dock-hint">${esc(items.length ? t('끌어서 원하는 날에 놓거나, 보낼 날을 고르세요') : t('가고 싶은 곳을 날짜 없이 모아두는 곳이에요'))}</span>` : ''}
     </div>
     ${
       open
-        ? `<ol class="items dock-items" data-list="${M.INBOX}" data-empty="${esc(t('여기로 끌어오거나, 추가할 곳을 장소 보관함으로 고르세요'))}">${cards}</ol>`
+        ? `<ol class="items dock-items dock-chips" data-list="${M.INBOX}" data-empty="${esc(t('여기로 끌어오거나, 추가할 곳을 장소 보관함으로 고르세요'))}">${chips}</ol>`
         : ''
     }`;
-  sizeDockCards();
+}
+
+/** P1-5: 보관함 칩을 누르면 — 보낼 날 / 지도에서 보기 / 삭제 */
+async function openChipMenu(id) {
+  const found = M.findItem(trip, id);
+  if (!found || ui.readonly) return;
+  const choice = await ask({
+    title: found.item.name,
+    html: `<label class="chip-send">${esc(t('보낼 날'))}<select id="chipMoveTo" class="inp">${moveOptions(M.INBOX, t('보낼 날 →'))}</select></label>`,
+    actions: [
+      { value: 'delete', label: t('삭제'), danger: true },
+      { value: 'locate', label: t('지도에서 보기') },
+      { value: 'send', label: t('보내기'), primary: true },
+    ],
+  });
+  const target = $('#chipMoveTo')?.value;
+  if (choice === 'send' && target) moveToList(id, target);
+  else if (choice === 'locate') locateMapPlace(found.item);
+  else if (choice === 'delete') {
+    const index = found.index;
+    const copy = structuredClone(found.item);
+    const tripId = trip.id;
+    M.removeItem(trip, id);
+    if (commit().ok) {
+      pushUndo(t('"{name}"을(를) 삭제했어요', { name: copy.name }), () => {
+        if (trip?.id !== tripId || ui.readonly || M.findItem(trip, copy.id)) return;
+        trip.inbox.splice(Math.min(index, trip.inbox.length), 0, copy);
+        saved(commit(), t('되돌렸어요'));
+      });
+    }
+  }
 }
 
 /** 하루 타임라인 본문: 항공(출발) → 출발 숙소 → 장소들 → 귀가 숙소 → 항공(귀국) */
@@ -2233,10 +2246,14 @@ function renderDays() {
       new Sortable(ol, {
         group: 'plan',
         disabled: Boolean(ui.readonly),
-        handle: '.drag',
+        handle: ol.classList.contains('dock-chips') ? '.chip-btn' : '.drag', // P1-5: 칩은 칩 자체를 끈다 (터치는 길게 눌러서)
         animation: 150,
         ghostClass: 'ghost-item',
         emptyInsertThreshold: 24,
+        // P1-4: 터치는 길게 눌러야 끌기 시작 (스크롤과 겹치지 않게)
+        delay: 250,
+        delayOnTouchOnly: true,
+        touchStartThreshold: 6,
         onEnd: (e) => {
           if (M.moveItem(trip, e.item.dataset.id, e.to.dataset.list, e.newIndex)) commit();
         },
@@ -2273,6 +2290,10 @@ function renderDays() {
         group: { name: 'plan', pull: 'clone', put: false },
         sort: false,
         animation: 150,
+        // P1-4: 터치에서는 길게 눌러야(250ms) 끌기 시작 — 좌우로 밀면 늘 가로 스크롤
+        delay: 250,
+        delayOnTouchOnly: true,
+        touchStartThreshold: 6,
         filter: 'a, button',
         preventOnFilter: false,
         onEnd: (e) => {
@@ -2288,7 +2309,7 @@ function renderDays() {
 
 function openItem(id, { scroll = false } = {}) {
   const dayIdx = trip.days.findIndex((d) => d.id === listIdOf(id));
-  if (dayIdx !== -1 && dayIdx !== ui.day && prefs.view !== 'board') {
+  if (dayIdx !== -1 && dayIdx !== ui.day && curView() !== 'board') {
     ui.day = dayIdx;
     ui.focusList = trip.days[dayIdx].id;
     renderMap();
@@ -2409,6 +2430,10 @@ $('#days').addEventListener('click', (e) => {
     renderTarget();
     renderDays();
     renderMap({ fit: true });
+  } else if (action === 'trend-scroll') {
+    const list = $('.trend-list');
+    const card = list?.querySelector('.trend-card');
+    if (list && card) list.scrollBy({ left: Number(btn.dataset.dir) * (card.offsetWidth + 8), behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   } else if (action === 'trend-search') {
     const q = $('#search');
     q.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -2644,17 +2669,103 @@ $('#showAll').addEventListener('click', () => {
   renderMap({ fit: true });
 });
 
+/* ───────── P1-8: 맨 위로 / 맨 아래로 ─────────
+ * 600px 넘게 내리면 오른쪽 아래에 버튼 두 개. 하단 탭·보관함·지도 시트·알림처럼 아래에 고정된 것 위에 놓는다.
+ */
+const fab = $('#scrollFab');
+const FAB_BELOW = '.pagebar, .inbox-dock, .map-sheet, #toast.show';
+function placeFab() {
+  const scrolled = scrollY > 600;
+  fab.hidden = !scrolled || document.body.classList.contains('printing');
+  if (fab.hidden) return;
+  // 화면 아래쪽에 붙은 고정 요소 중 가장 높이 올라온 것 위로
+  let top = innerHeight;
+  for (const el of $$(FAB_BELOW)) {
+    const r = el.getBoundingClientRect();
+    if (r.height && /fixed|sticky/.test(getComputedStyle(el).position) && r.bottom > innerHeight / 2 && r.top > innerHeight / 2) top = Math.min(top, r.top);
+  }
+  fab.style.bottom = `${Math.round(innerHeight - top) + 12}px`;
+  fab.querySelector('[data-fab="bottom"]').disabled = innerHeight + scrollY >= document.documentElement.scrollHeight - 4;
+}
+fab.addEventListener('click', (e) => {
+  const where = e.target.closest('[data-fab]')?.dataset.fab;
+  if (!where) return;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  scrollTo({ top: where === 'top' ? 0 : document.documentElement.scrollHeight, behavior: reduce ? 'auto' : 'smooth' });
+});
+let fabFrame = 0;
+const placeFabSoon = () => {
+  cancelAnimationFrame(fabFrame);
+  fabFrame = requestAnimationFrame(placeFab);
+};
+addEventListener('scroll', placeFabSoon, { passive: true });
+addEventListener('resize', placeFabSoon);
+new MutationObserver(placeFabSoon).observe($('#toast'), { attributes: true, attributeFilter: ['class'] });
+new MutationObserver(placeFabSoon).observe($('#inboxDock'), { childList: true }); // 보관함을 펼치거나 접으면 다시 맞춘다
+
+/* ───────── P1-7: 검색창 고정 ─────────
+ * 검색 카드가 머리 바 아래로 지나가면 얇은 고정 바(44px, 검색칸 + 지도에서 찍기 + 모바일 일정/지도 · 데스크톱 지도 접기)로 바뀐다.
+ * 자리(.search-slot)는 원래 높이를 유지해 화면이 튀지 않고, 일차 탭은 그 아래(--search)에 붙는다.
+ */
+const searchCard = $('.search.card');
+const searchSlot = document.createElement('div');
+searchSlot.className = 'search-slot';
+searchCard.before(searchSlot);
+searchSlot.append(searchCard);
+function setSearchCompact(on) {
+  if (searchCard.classList.contains('compact') === on) return placeSearchBar();
+  if (on) searchSlot.style.minHeight = `${searchSlot.offsetHeight}px`;
+  else searchSlot.style.minHeight = '';
+  searchCard.classList.toggle('compact', on);
+  document.documentElement.style.setProperty('--search', on ? '52px' : '0px');
+  placeSearchBar();
+}
+function placeSearchBar() {
+  if (!searchCard.classList.contains('compact')) {
+    searchCard.style.left = searchCard.style.width = '';
+    return;
+  }
+  const r = searchSlot.getBoundingClientRect();
+  searchCard.style.left = `${Math.round(r.left)}px`;
+  searchCard.style.width = `${Math.round(r.width)}px`;
+}
+function checkSearchBar() {
+  const head = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--head')) || 56;
+  const onPlan = prefs.page === 'plan' && curView() === 'list' && $('.layout').dataset.tab !== 'map' && !ui.picking;
+  // 결과 목록이 열려 있거나 검색칸에 입력 중이면 바꾸지 않는다 (입력 중 화면이 튀지 않게)
+  if (searchCard.contains(document.activeElement) && !searchCard.classList.contains('compact')) return;
+  setSearchCompact(onPlan && searchSlot.getBoundingClientRect().bottom < head);
+}
+addEventListener('scroll', () => requestAnimationFrame(checkSearchBar), { passive: true });
+addEventListener('resize', () => requestAnimationFrame(checkSearchBar));
+searchCard.addEventListener('click', (e) => {
+  const tab = e.target.closest('[data-mini-tab]')?.dataset.miniTab;
+  if (tab) $(`.mtabs [data-tab="${tab}"]`)?.click();
+});
+$('#miniMapToggle').addEventListener('click', () => $('#mapToggle').click());
+
 /* ───────── 보기 방식 (기본형 / 보드형) ───────── */
+// P1-3: 767px 이하에서는 보드를 숨기고 늘 목록으로. 저장값(prefs.view)은 덮어쓰지 않아 데스크톱으로 돌아가면 보드가 유지된다
+narrowMq.addEventListener('change', () => {
+  if (prefs.view !== 'board') return;
+  if (trip) ui.focusList = curView() === 'list' ? trip.days[ui.day ?? 0]?.id ?? null : null;
+  applyView();
+  if (trip) {
+    renderDays();
+    renderMap();
+  }
+});
 function applyView() {
   const layout = $('.layout');
-  layout.dataset.view = prefs.view;
-  layout.classList.toggle('map-hidden', prefs.view === 'board' && prefs.mapHidden);
-  document.body.dataset.view = prefs.view;
+  layout.dataset.view = curView();
+  layout.classList.toggle('map-hidden', !narrowMq.matches && prefs.mapHidden); // P1-7: 목록 보기에서도 데스크톱은 지도를 접을 수 있다
+  document.body.dataset.view = curView();
   $$('.seg button').forEach((b) => {
-    b.classList.toggle('active', b.dataset.view === prefs.view);
-    b.setAttribute('aria-pressed', String(b.dataset.view === prefs.view));
+    b.classList.toggle('active', b.dataset.view === curView());
+    b.setAttribute('aria-pressed', String(b.dataset.view === curView()));
   });
   $('#mapToggle').textContent = prefs.mapHidden ? t('지도 보기') : t('지도 숨기기');
+  $('#miniMapToggle').textContent = prefs.mapHidden ? t('지도 보기') : t('지도 숨기기');
   setTimeout(() => map.invalidateSize(), 0);
 }
 $$('.seg button').forEach((b) =>
@@ -2662,7 +2773,7 @@ $$('.seg button').forEach((b) =>
     if (prefs.view === b.dataset.view) return;
     prefs.view = b.dataset.view;
     // 날짜별 보기는 고른 날만 강조, 보드는 전체
-    if (trip) ui.focusList = prefs.view === 'list' ? trip.days[ui.day ?? 0]?.id ?? null : null;
+    if (trip) ui.focusList = curView() === 'list' ? trip.days[ui.day ?? 0]?.id ?? null : null;
     savePrefs();
     applyView();
     if (trip) {
@@ -3212,7 +3323,7 @@ function openTrip(tr, { save = false } = {}) {
   ui.openItem = null;
   ui.routePlan = ui.routeUndo = null;
   ui.day = M.todayIndex(tr, TODAY);
-  ui.focusList = prefs.view === 'list' ? tr.days[ui.day]?.id ?? null : null;
+  ui.focusList = curView() === 'list' ? tr.days[ui.day]?.id ?? null : null;
   ui.target = null;
   ui.bf = null;
   const res = save ? saveNow() : (persistSoon(), null);
@@ -3819,7 +3930,7 @@ function selectDay(i, { scroll = true } = {}) {
   renderTarget();
   renderDays();
   renderMap({ fit: true });
-  if (scroll && prefs.view === 'list' && $('.layout').dataset.tab !== 'map') $(`#day-${ui.day}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (scroll && curView() === 'list' && $('.layout').dataset.tab !== 'map') $(`#day-${ui.day}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 /** 항공편 한 줄: 항공권 앱처럼 "ICN 08:40 ─── KIX 10:30" */
@@ -4008,7 +4119,7 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') setPicking(false, { cancelled: true });
     return;
   }
-  if (!trip || prefs.page !== 'plan' || prefs.view === 'board' || e.altKey || e.ctrlKey || e.metaKey) return;
+  if (!trip || prefs.page !== 'plan' || curView() === 'board' || e.altKey || e.ctrlKey || e.metaKey) return;
   if (e.defaultPrevented || e.target.closest('input, textarea, select, button, a, [role="tab"], [contenteditable], #datePicker, .leaflet-container') || document.querySelector('dialog[open]')) return;
   if (e.key === 'ArrowLeft') selectDay(ui.day - 1);
   else if (e.key === 'ArrowRight') selectDay(ui.day + 1);
@@ -5504,8 +5615,10 @@ $('#inboxDock').addEventListener('click', (e) => {
   const btn = e.target.closest('[data-action]');
   if (!btn) return;
   const id = btn.closest('.item')?.dataset.id;
-  if (btn.dataset.action === 'dock-toggle') {
-    prefs.dockOpen = prefs.dockOpen === false;
+  if (btn.dataset.action === 'chip-menu') {
+    openChipMenu(id);
+  } else if (btn.dataset.action === 'dock-toggle') {
+    prefs.dockOpen = !(prefs.dockOpen ?? !narrowMq.matches);
     savePrefs();
     renderDays();
     $('#inboxDock .dock-toggle')?.focus();
@@ -6176,7 +6289,6 @@ if (await openSharedFromAddress()) {
 } else route();
 renderSaveBar();
 $('#appShell').hidden = true;
-document.fonts?.ready.then(sizeDockCards); // 글꼴이 늦게 로드되면 다시 잰다
 const getJson = (u) => fetch(u).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))));
 Promise.all([getJson('data/trends.json'), getJson('data/trends-i18n.json').catch(() => null)])
   .then(([data, tr]) => {

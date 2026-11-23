@@ -140,5 +140,6 @@ test('보관함 "보낼 날" select: 포커스해도 보관함이 숨지 않고,
   const safe = /const OUTSIDE_SAFE = '([^']*)'/.exec(app)[1];
   assert.match(safe, /\.inbox-dock/);
   assert.match(safe, /\bselect\b/);
-  assert.match(app, /handle: '\.drag'/, '드래그는 ⋮⋮ 손잡이에서만 시작한다');
+  // P1-5 (QA 2026-11-23): 보관함은 칩 자체(터치는 길게 눌러), 일정 목록은 ⋮⋮ 손잡이에서만 끌기 시작한다
+  assert.match(app, /handle: ol\.classList\.contains\('dock-chips'\) \? '\.chip-btn' : '\.drag'/);
 });

@@ -1066,6 +1066,19 @@ export function daySummary(trip, dayIndex) {
   };
 }
 
+/** 일차 번호(0부터) 목록 → "Day 3–Day 19, Day 21" (이어진 날은 범위로) */
+export function dayRanges(indices) {
+  const sorted = [...new Set(indices)].sort((a, b) => a - b);
+  const parts = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const a = sorted[i];
+    while (sorted[i + 1] === sorted[i] + 1) i++;
+    const b = sorted[i];
+    parts.push(a === b ? dayName(a) : b === a + 1 ? `${dayName(a)}, ${dayName(b)}` : `${dayName(a)}–${dayName(b)}`);
+  }
+  return parts.join(', ');
+}
+
 /** 확인할 것 (상단 알림): 숙소가 빈 밤, 여행 기간 밖 항공편 */
 export function tripNotices(trip) {
   const out = [];
@@ -1075,7 +1088,8 @@ export function tripNotices(trip) {
   for (let i = 0; i < n - 1; i++) if (!nightStay(trip, i)) empty.push(i + 1);
   // 마지막 밤은 귀국편이 없을 때만 (당일 귀국이면 숙소가 필요 없다)
   if (n > 1 && !lastFlightIn && !nightStay(trip, n - 1) && (trip.flights ?? []).some((f) => f.kind === 'in')) empty.push(n);
-  if (empty.length && (trip.stays ?? []).length) out.push(t('{days} 밤 숙소가 아직 비어 있어요', { days: empty.map((d) => dayName(d - 1)).join(', ') }));
+  // P1-6: 하나씩 나열하지 않고 범위로 묶는다 — "Day 3–Day 19 밤 숙소 미정 (17박)"
+  if (empty.length && (trip.stays ?? []).length) out.push(t('{days} 밤 숙소 미정 ({n}박)', { days: dayRanges(empty.map((d) => d - 1)), n: empty.length }));
   else if (!(trip.stays ?? []).length && n > 1) out.push(t('숙소를 아직 정하지 않았어요. 검색할 때 "추가할 곳"을 숙소로 고르세요'));
   // 출국·귀국편은 기간 밖이어도 Day 1·마지막 날에 붙는다 (P0-2). 일정에 안 보이는 것은 기간 밖 이동편뿐
   const outside = (trip.flights ?? []).filter((f) => f.kind === 'move' && trip.startDate && (f.departAt.slice(0, 10) < trip.startDate || f.departAt.slice(0, 10) > trip.endDate));
