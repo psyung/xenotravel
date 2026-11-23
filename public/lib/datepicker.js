@@ -6,6 +6,7 @@
 //    data-dp-pair="여행 날짜"처럼 값에 제목을, data-dp-min-nights="1"로 최소 박 수를 줄 수 있다.
 //    고른 뒤 "적용"을 누르면 end input에 change(버블링)를 한 번만 보낸다.
 //  - 날짜+시간: input[type="datetime-local"] → 날짜 버튼 + 시간 칸.
+import { enhanceTime } from './timefield.js';
 import { parseDate, selectRangeDate } from './model.js';
 import { t, getLang, locale, longDateYear, shortDate, weekday, tripLength } from './i18n.js';
 
@@ -350,6 +351,7 @@ function enhanceDateTime(input) {
   time.className = 'dp-time';
   time.setAttribute('aria-label', t('시간'));
   wrap.append(time);
+  enhanceTime(time); // P1-1: 시간은 공용 TimeField (flatpickr)
   const parts = () => {
     const [d = '', t = ''] = VALUE.get.call(input).split('T');
     return { d, t };
@@ -360,7 +362,10 @@ function enhanceDateTime(input) {
     const { d, t } = parts();
     paint(btn, d, input.disabled, true);
     if (d) draftTime = '';
-    if (document.activeElement !== time) time.value = d ? t.slice(0, 5) : draftTime;
+    if (document.activeElement !== time) {
+      time.value = d ? t.slice(0, 5) : draftTime;
+      time._flatpickr?.setDate(time.value || null, false);
+    }
     time.disabled = input.disabled;
   };
   const write = (d, t) => {

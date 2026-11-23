@@ -2027,7 +2027,11 @@ dialog:modal { margin: auto; }
 /* P1-7: 검색창 고정 바 — 스크롤하면 머리 바 아래 얇은 바(44px)로. 일차 탭은 그 아래 (--search) */
 .mini-tabs, .mini-map-toggle { display: none; }
 .search.card.compact { position: fixed; top: calc(var(--head) + var(--offbar, 0px) + var(--savebar, 0px)); z-index: 25; padding: 6px 8px; border-radius: 0 0 12px 12px; box-shadow: var(--card-shadow); }
-.search.card.compact .target-row, .search.card.compact .stay-opts, .search.card.compact .results:not(:has(li)) { display: none !important; }
+.search.card.compact:not(:focus-within):not(:has(.results li)) .target-row,
+.search.card.compact:not(:focus-within):not(:has(.results li)) .stay-opts,
+.search.card.compact .results:not(:has(li)) { display: none !important; }
+/* 검색 중(입력·결과)에는 "추가할 곳"과 숙소 날짜를 다시 보여 준다 (보이지 않는 대상·날짜로 추가되지 않게) */
+.search.card.compact:is(:focus-within, :has(.results li)) { max-height: calc(100dvh - var(--head) - 16px); overflow-y: auto; }
 .search.card.compact .search-row { height: 40px; }
 .search.card.compact #search { height: 36px; }
 .search.card.compact .mini-map-toggle { display: inline-flex; }
@@ -2043,3 +2047,40 @@ dialog:modal { margin: auto; }
   .layout.map-hidden { grid-template-columns: minmax(0, 1fr); }
   .layout.map-hidden .side { display: none; }
 }
+/* P1-1: TimeField (flatpickr 시간 전용) — 라이트·다크 토큰에 맞춘다 */
+.time-field { font-variant-numeric: tabular-nums; }
+.time-field[aria-invalid="true"] { border-color: var(--hot); }
+.flatpickr-calendar { background: var(--paper); border: 1px solid var(--line); box-shadow: var(--shadow-pop); border-radius: 12px; color: var(--ink); width: 180px; }
+.flatpickr-calendar::before, .flatpickr-calendar::after { display: none; }
+.flatpickr-time { border-top: 0 !important; }
+.flatpickr-time input, .flatpickr-time .flatpickr-time-separator { color: var(--ink); font-weight: 700; font-size: 18px; }
+.flatpickr-time input:hover, .flatpickr-time input:focus, .flatpickr-time .flatpickr-am-pm:hover { background: var(--accent-soft); }
+.numInputWrapper span.arrowUp::after { border-bottom-color: var(--sub); }
+.numInputWrapper span.arrowDown::after { border-top-color: var(--sub); }
+.numInputWrapper:hover { background: var(--soft); }
+.flatpickr-wrapper { display: block; }
+.flatpickr-calendar.static { z-index: 5; width: 100% !important; min-width: 140px; left: auto; right: 0; }
+/* P1-2: 공용 Select — 원래 select는 숨기고(값·이벤트는 그대로) 버튼 + 팝오버(데스크톱) / 바텀시트(모바일) */
+.ui-select-native { position: absolute !important; width: 1px !important; height: 1px !important; opacity: 0 !important; pointer-events: none !important; overflow: hidden; }
+.ui-select { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; max-width: 100%; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: var(--ink); font: inherit; font-size: 13.5px; font-weight: 600; text-align: left; cursor: pointer; }
+.ui-select.inp { width: 100%; }
+.ui-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ui-select:disabled { opacity: .5; cursor: default; }
+.ui-select .uis-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-select .uis-chev { width: 14px; height: 14px; color: var(--sub); }
+.uis-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+.uis-pop { position: fixed; z-index: 3000; max-height: 360px; display: flex; flex-direction: column; background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-pop); overflow: hidden; max-width: calc(100vw - 16px); }
+.uis-pop.sheet { left: 0; right: 0; bottom: 0; top: auto; max-height: 70dvh; border-radius: 18px 18px 0 0; padding-bottom: env(safe-area-inset-bottom); }
+.uis-shade { position: fixed; inset: 0; z-index: 2999; background: rgba(0, 12, 30, .35); }
+.uis-head { padding: 14px 16px 6px; font-size: 14px; }
+.uis-search { margin: 8px; height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--soft); color: var(--ink); }
+.uis-list { list-style: none; margin: 0; padding: 4px; overflow-y: auto; outline: none; }
+.uis-list li { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 10px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+.uis-list li.active, .uis-list li:hover { background: var(--accent-soft); }
+.uis-list li.off { opacity: .45; cursor: default; }
+.uis-main { font-weight: 600; white-space: nowrap; }
+.uis-sub { flex: 1; min-width: 0; color: var(--sub); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.uis-badge { flex: none; padding: 0 6px; border-radius: 6px; background: var(--hot-soft); color: var(--hot); font-size: 11px; font-weight: 700; line-height: 18px; }
+.uis-check { flex: none; width: 16px; height: 16px; margin-left: auto; color: var(--accent); visibility: hidden; }
+.uis-list li[aria-selected="true"] .uis-check { visibility: visible; }
+.uis-empty { color: var(--mute); justify-content: center; }

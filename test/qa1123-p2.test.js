@@ -69,3 +69,49 @@ test('P1-7: 스크롤하면 검색창이 머리 바 아래 얇은 고정 바로,
   assert.match(css, /\.daytabs \{ top: calc\(var\(--head\) \+ var\(--offbar, 0px\) \+ var\(--savebar, 0px\) \+ var\(--search, 0px\)\); \}/);
   assert.match(read('index.html'), /data-mini-tab="map"/);
 });
+
+import { normalizeTime } from '../public/lib/timefield.js';
+
+test('P1-1: TimeField — 직접 입력 "2045"·"20:45"·"9:5", 빈 값, 잘못된 값', () => {
+  assert.equal(normalizeTime('2045'), '20:45');
+  assert.equal(normalizeTime('20:45'), '20:45');
+  assert.equal(normalizeTime('9:5'), '09:05');
+  assert.equal(normalizeTime('905'), '09:05');
+  assert.equal(normalizeTime(''), '');
+  assert.equal(normalizeTime('24:00'), null);
+  assert.equal(normalizeTime('abc'), null);
+  const tf = read('lib/timefield.js');
+  for (const opt of ['noCalendar: true', 'time_24hr: true', 'minuteIncrement: 5', 'disableMobile: true', 'allowInput: true']) assert.ok(tf.includes(opt), opt);
+  assert.match(read('lib/datepicker.js'), /enhanceTime\(time\);/, '항공편 시각');
+  assert.match(read('app.js'), /enhanceTimes\(daysEl\);/, '장소 시간');
+  assert.match(read('index.html'), /<script src="vendor\/flatpickr\/flatpickr\.min\.js"><\/script>/);
+});
+
+test('P1-2: 공용 Select — 팝오버/바텀시트, 10개 넘으면 검색, 키보드, 일차 항목 색 점·날짜·장소 수·오늘 배지', () => {
+  const sel = read('lib/select.js');
+  assert.match(sel, /const SEARCH_FROM = 10;/);
+  assert.match(sel, /role="listbox"/);
+  assert.match(sel, /role="option"/);
+  for (const key of ['ArrowDown', 'ArrowUp', 'Enter', 'Escape', 'Home', 'End']) assert.ok(sel.includes(`'${key}'`), key);
+  assert.match(sel, /button\.focus\(\{ preventScroll: true \}\)/, '닫으면 버튼으로 포커스');
+  assert.match(sel, /matchMedia\('\(max-width: 599px\)'\)/, '모바일은 바텀시트');
+  const app = read('app.js');
+  assert.match(app, /watchSelects\(document\.body\);/);
+  assert.match(app, /data-color="\$\{dayColor\(i\)\}" data-label="\$\{esc\(dayName\(i\)\)\}" data-sub=/);
+  for (const id of ['#target', 'move-to', 'chipMoveTo', 'bCurrency', 'bDay', 'bBase']) {
+    const src = id === '#target' ? read('index.html') : app;
+    assert.match(src, new RegExp(`${id.replace('#', 'id="')}[^>]*data-ui-select|data-ui-select[^>]*${id.replace('#', '')}`), id);
+  }
+});
+
+test('Phase 2 교차 리뷰: 시간 초안 미저장 · Tab 이동 · 공유 칩 지도 · 숨긴 지도 펼치기 · 검색 중 추가 대상 표시 · 포커스 · flatpickr 정리', () => {
+  const app = read('app.js');
+  assert.ok(app.includes(String.raw`if (field === 'time' && e.target.classList.contains('time-field') && !/^(\d{2}:\d{2})?$/.test(e.target.value)) return;`));
+  assert.match(read('lib/select.js'), /\} else if \(e\.key === 'Tab'\) \{\n\s+close\(\);[^\n]*\n\s+return;/);
+  assert.match(app, /if \(ui\.readonly\) return locateMapPlace\(found\.item\);/);
+  assert.match(app, /if \(prefs\.mapHidden && !narrowMq\.matches\) \{/);
+  assert.match(read('styles.css'), /\.search\.card\.compact:not\(:focus-within\):not\(:has\(\.results li\)\) \.target-row/);
+  assert.match(app, /focusSelect\(\$\('#bConfirmCur'\)\);/);
+  assert.match(app, /destroyTimes\(daysEl\);/);
+  assert.match(app, /if \(keep\) \$\(/, 'Tab으로 옮긴 포커스를 빼앗지 않는다');
+});

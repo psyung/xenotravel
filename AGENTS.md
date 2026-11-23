@@ -17,7 +17,9 @@
 작업을 시작하기 전에 아래 문서를 순서대로 확인하세요.
 
 0. **`docs/qa-2026-11-23.md` *(현재 최우선 활성 지시서 — 2026-11-23 QA, Phase 0~6)***
-   * 진행: Phase 0(보안 S-1~S-5) · Phase 1(P0-1~P0-9, F-1) 완료. 회귀 테스트: `test/security.test.js`, `test/qa1123.test.js`.
+   * 진행: Phase 0(보안 S-1~S-5) · Phase 1(P0-1~P0-9, F-1) · Phase 2(P1-1~P1-8) 완료. 회귀 테스트: `test/security.test.js`, `test/qa1123.test.js`, `test/qa1123-p2.test.js`.
+   * 공용 UI: `lib/select.js`(`<select data-ui-select>` → 팝오버/바텀시트), `lib/timefield.js`(flatpickr 시간 입력). 새 select·시간 칸은 이것을 쓴다.
+   * 패치 주의: Node 스크립트로 소스를 고칠 때 `String.replace(a, b)`의 b에 `$$`가 있으면 `$`로 바뀐다 → `replace(a, () => b)`를 쓴다.
    * 결정: P0-5 막대 폭 축소+라벨 간격(Codex 협의), P0-7 그 밖의 언어는 영어, P0-8 데이터 없으면 접힌 한 줄 안내.
 0-1. **`docs/phase4_qa_fixes_and_core_features.md` *(직전 완료 작업 — Phase 4 QA 잔여 결함 + 핵심 기능 4종)***
    * 회귀 테스트: `test/phase4.test.js`. 배포 식별자는 `scripts/build-version.mjs`(Vercel buildCommand)가 넣습니다.

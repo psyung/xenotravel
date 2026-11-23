@@ -9,9 +9,11 @@ import * as C from './lib/checklist.js';
 import * as S from './lib/settle.js';
 import { encodeShare, decodeShare, shareUrl, shareCodeFromHash, shareSummary, shareMessage, sharedCopy } from './lib/share.js';
 import { enhanceDates, refreshDates } from './lib/datepicker.js';
+import { enhanceTimes, destroyTimes } from './lib/timefield.js';
+import { watchSelects, focusSelect } from './lib/select.js';
 import { enhanceSuggestions } from './lib/suggestions.js';
 import { loadWeather, weatherSignature } from './lib/weather.js';
-import { t, k, missing as i18nMissing, LANGS, LANG_KEY, getLang, setLang, loadLang, saveLang, locale, num, dayName, shortDate, dateTime, normalizeLang, tripLength, allVersions } from './lib/i18n.js';
+import { t, k, missing as i18nMissing, LANGS, LANG_KEY, getLang, setLang, loadLang, saveLang, locale, num, dayName, shortDate, weekday, dateTime, normalizeLang, tripLength, allVersions } from './lib/i18n.js';
 import { privacySections } from './lib/privacy.js';
 import { createUndoStack } from './lib/undo.js';
 import * as D from './lib/dayops.js';
@@ -19,6 +21,7 @@ import { summaryModel, drawSummary, summaryFileName } from './lib/summary.js';
 import { DESTINATIONS, resolveDestination, repairTripCenter } from './lib/destinations.js';
 import { backupReason, backupReasonText, lastBackupLabel } from './lib/backup.js';
 
+watchSelects(document.body); // P1-2: [data-ui-select]는 공용 Select로
 const undoStack = createUndoStack(); // 실행 취소 스택 (toast·pushUndo가 쓴다, 시작 중 알림도 안전하게 맨 위에 둔다)
 // 일차 색: 색상환에서 고르게 벌려 지도 동선이 바로 구분되고, 흰 숫자 대비 5:1 이상 (시안 A)
 const COLORS = ['#0A6FC2', '#C2410C', '#0F7B5F', '#6D4AE8', '#C7254E', '#0E7490', '#92400E', '#475569'];
@@ -748,6 +751,13 @@ $('#mapPlace').addEventListener('click', (e) => {
 
 function locateMapPlace(item) {
   ui.keepView = $('.layout').dataset.tab !== 'map';
+  if (prefs.mapHidden && !narrowMq.matches) {
+    // 데스크톱에서 지도를 접어 두었으면 펼친 뒤 보여 준다
+    prefs.mapHidden = false;
+    savePrefs();
+    applyView();
+    map.invalidateSize();
+  }
   showTab('map');
   map.setView([item.lat, item.lng], Math.max(map.getZoom(), 16));
   setTimeout(() => markers.get(item.id)?.fire('click'), 0);
@@ -1452,7 +1462,7 @@ function renderTarget() {
     lists
       .map((l, i) => {
         const label = l.isDay ? M.dayTitle(trip.days[i], i) : t('장소 보관함 (날짜 미정)');
-        return `<option value="${l.id}"${l.id === ui.target ? ' selected' : ''}>${esc(label)}</option>`;
+        return `<option value="${l.id}"${l.id === ui.target ? ' selected' : ''}${l.isDay ? dayOptionAttrs(i) : ''}>${esc(label)}</option>`;
       })
       .join('') + `<option value="${STAY_TARGET}"${ui.target === STAY_TARGET ? ' selected' : ''}>${esc(t('숙소로 추가'))}</option>`;
   renderStayOpts();
@@ -1673,7 +1683,7 @@ function itemHtml(it, i, isDay, leg = null, listItems = null, overlap = '') {
         ${isDay ? `<button type="button" data-action="item-prev-day"${dayPos > 0 ? '' : ' disabled'} aria-label="${esc(t('{name} 전날로 옮기기', { name: it.name }))}">← ${esc(t('전날'))}</button>
         <button type="button" data-action="item-next-day"${dayPos >= 0 && dayPos < trip.days.length - 1 ? '' : ' disabled'} aria-label="${esc(t('{name} 다음 날로 옮기기', { name: it.name }))}">${esc(t('다음 날'))} →</button>` : ''}
       </div>
-      <label>${esc(t('다른 날로 옮기기'))}<select class="move-to">${moveOptions(listIdOf(it.id), t('옮길 날 고르기'))}</select></label>
+      <label>${esc(t('다른 날로 옮기기'))}<select class="move-to" data-ui-select>${moveOptions(listIdOf(it.id), t('옮길 날 고르기'))}</select></label>
       ${it.address ? `<p class="addr">${esc(it.address)}</p>` : ''}
       ${directionsHtml(it)}
       <div class="editor-actions">
@@ -1884,9 +1894,19 @@ function listIdOf(itemId) {
 }
 
 /** "보낼 날" 선택지. 지금 있는 목록은 뺀다. */
+/**
+ * P1-2: 공용 Select의 일차 항목 표시 — "● Day 3 · 11/25 (수) · 2곳", 오늘이면 배지
+ * <option>에 data-color · data-label · data-sub · data-badge를 붙인다 (기본 select로 보여도 글자는 그대로)
+ */
+function dayOptionAttrs(i) {
+  const d = trip.days[i];
+  const sub = [d.date ? `${shortDate(d.date)} (${weekday(d.date)})` : '', t('{n}곳', { n: d.items.length })].filter(Boolean).join(' · ');
+  return ` data-color="${dayColor(i)}" data-label="${esc(dayName(i))}" data-sub="${esc(sub)}"${d.date === TODAY ? ` data-badge="${esc(t('오늘'))}"` : ''}`;
+}
+
 function moveOptions(currentListId, placeholder) {
   const days = trip.days
-    .map((d, i) => (d.id === currentListId ? '' : `<option value="${d.id}">${esc(M.dayTitle(d, i))}</option>`))
+    .map((d, i) => (d.id === currentListId ? '' : `<option value="${d.id}"${dayOptionAttrs(i)}>${esc(M.dayTitle(d, i))}</option>`))
     .join('');
   const inbox = currentListId === M.INBOX ? '' : `<option value="${M.INBOX}">${esc(t('장소 보관함'))}</option>`;
   return `<option value="">${esc(placeholder)}</option>${days}${inbox}`;
@@ -1911,7 +1931,7 @@ function renderDock() {
   const chips = items
     .map(
       (it) => `<li class="item dock-card dock-chip" data-id="${it.id}" style="--c:${INBOX_COLOR}">
-        <button type="button" class="chip-btn" data-action="chip-menu" title="${esc(it.name)}" aria-label="${esc(t('{name} — 보낼 날·지도·삭제', { name: it.name }))}"><span class="nm">${esc(it.name)}</span></button>
+        <button type="button" class="chip-btn" data-action="chip-menu" title="${esc(it.name)}" aria-label="${esc(ui.readonly ? t('{name} 지도에서 보기', { name: it.name }) : t('{name} — 보낼 날·지도·삭제', { name: it.name }))}"><span class="nm">${esc(it.name)}</span></button>
       </li>`,
     )
     .join('');
@@ -1931,10 +1951,11 @@ function renderDock() {
 /** P1-5: 보관함 칩을 누르면 — 보낼 날 / 지도에서 보기 / 삭제 */
 async function openChipMenu(id) {
   const found = M.findItem(trip, id);
-  if (!found || ui.readonly) return;
+  if (!found) return;
+  if (ui.readonly) return locateMapPlace(found.item); // 공유받은 일정: 지도에서 보기만
   const choice = await ask({
     title: found.item.name,
-    html: `<label class="chip-send">${esc(t('보낼 날'))}<select id="chipMoveTo" class="inp">${moveOptions(M.INBOX, t('보낼 날 →'))}</select></label>`,
+    html: `<label class="chip-send">${esc(t('보낼 날'))}<select id="chipMoveTo" class="inp" data-ui-select>${moveOptions(M.INBOX, t('보낼 날 →'))}</select></label>`,
     actions: [
       { value: 'delete', label: t('삭제'), danger: true },
       { value: 'locate', label: t('지도에서 보기') },
@@ -2237,9 +2258,11 @@ function renderDays() {
   ui.day = Math.max(0, Math.min(ui.day ?? 0, lists.length - 1));
   renderDock();
   renderDayTabs();
+  destroyTimes(daysEl); // P1-1: 다시 그리기 전에 시간 선택기(flatpickr)를 정리한다
   daysEl.innerHTML =
     (ui.readonly ? '' : trendSectionHtml()) + lists.map(dayCardHtml).join('');
   enhanceDates(daysEl);
+  enhanceTimes(daysEl); // P1-1: 장소 시간도 같은 TimeField
 
   for (const ol of [...$$('ol.items', daysEl), ...$$('ol.items', $('#inboxDock'))]) {
     ui.sortables.push(
@@ -2353,7 +2376,7 @@ document.addEventListener('pointerup', (e) => {
   if (!card || card.contains(target)) return;
   // 입력 중인 칸이 카드 안에 있으면 (키보드가 떠 있는 상태 등) 닫지 않는다
   const active = document.activeElement;
-  if (active && card.contains(active) && active.matches('select, input[type="time"], input[type="date"]') && target === document.documentElement) return;
+  if (active && card.contains(active) && active.matches('select, input[type="time"], input.time-field, input[type="date"]') && target === document.documentElement) return;
   const item = ui.openItem;
   const stay = ui.openStay;
   // 다른 카드 열기 등 클릭 처리가 먼저 끝나게 한 박자 늦게 접는다
@@ -2568,6 +2591,8 @@ $('#days').addEventListener('input', (e) => {
   const id = e.target.closest('.item')?.dataset.id;
   const found = id && M.findItem(trip, id);
   if (!field || !found) return;
+  // P1-1: 시간 칸은 입력 중인 글자를 저장하지 않는다 — TimeField가 'HH:MM'(또는 빈 값)으로 확정할 때만
+  if (field === 'time' && e.target.classList.contains('time-field') && !/^(\d{2}:\d{2})?$/.test(e.target.value)) return;
   found.item[field] = field === 'name' ? e.target.value || t('이름 없는 장소') : e.target.value;
   markEdited();
   M.touch(trip);
@@ -2585,10 +2610,24 @@ $('#days').addEventListener('input', (e) => {
 $('#days').addEventListener('change', (e) => {
   if (e.target.dataset.field !== 'time') return;
   const id = e.target.closest('.item')?.dataset.id;
+  const field = e.target;
   setTimeout(() => {
     if (!trip || ui.openItem !== id) return;
+    const li = field.closest('.item');
+    const focus = document.activeElement;
+    // Tab으로 같은 장소의 다른 칸으로 옮겼으면 그 칸을 떠날 때 다시 그린다 (포커스를 빼앗지 않게)
+    if (li && focus !== field && li.contains(focus)) {
+      const later = (ev) => {
+        if (li.contains(ev.relatedTarget)) return;
+        li.removeEventListener('focusout', later);
+        setTimeout(() => trip && ui.openItem === id && renderDays());
+      };
+      li.addEventListener('focusout', later);
+      return;
+    }
+    const keep = focus === field;
     renderDays();
-    $(`.item[data-id="${CSS.escape(id)}"] [data-field="time"]`)?.focus({ preventScroll: true });
+    if (keep) $(`.item[data-id="${CSS.escape(id)}"] [data-field="time"]`)?.focus({ preventScroll: true });
   });
 });
 
@@ -4390,7 +4429,7 @@ function drawBudget(el) {
         ? `<div class="cur-confirm" role="group" aria-labelledby="curConfirmTitle">
             <b id="curConfirmTitle">${esc(t('현지 통화를 확인해 주세요'))}</b>
             <p>${esc(t('여행지 "{dest}"만으로는 어느 나라 돈을 쓰는지 알 수 없어요. 첫 기록 전에 통화를 골라 주세요. 지금은 임시로 {code}예요.', { dest: trip.destination || t('여행'), code: b.currency }))}</p>
-            <div class="cur-confirm-row"><select id="bConfirmCur" aria-label="${esc(t('현지 통화'))}">${currencyOptions(b.currency)}</select>
+            <div class="cur-confirm-row"><select id="bConfirmCur" data-ui-select aria-label="${esc(t('현지 통화'))}">${currencyOptions(b.currency)}</select>
             <button class="btn primary" data-b="cur-ok">${esc(t('이 통화로 쓰기'))}</button></div>
           </div>`
         : ''
@@ -4414,7 +4453,7 @@ function drawBudget(el) {
         <button class="btn primary" data-b="add">${esc(t('기록'))}</button>
       </div>
       <div class="rate-row">
-        <select id="bCurrency" class="inp" aria-label="${esc(t('현지 통화'))}">${currencyOptions(b.currency)}</select>
+        <select id="bCurrency" class="inp" data-ui-select aria-label="${esc(t('현지 통화'))}">${currencyOptions(b.currency)}</select>
         ${
           local
             ? `<span>${cur.unit === 1 ? '1' : cur.unit} ${esc(t(cur.name))} =</span>
@@ -4434,7 +4473,7 @@ function drawBudget(el) {
         .join('')}</div>
       <div class="memo-row">
         <input id="bMemo" data-draft="memo" placeholder="${esc(t('메모 (선택) · 예: 이치란 라멘'))}" aria-label="${esc(t('메모'))}" maxlength="80">
-        <select id="bDay" class="inp" aria-label="${esc(t('언제'))}">${[-1, ...trip.days.map((_, i) => i)]
+        <select id="bDay" class="inp" data-ui-select aria-label="${esc(t('언제'))}">${[-1, ...trip.days.map((_, i) => i)]
           .map((k) => `<option value="${k}"${k === f.day ? ' selected' : ''}>${esc(dayLabel(k))}</option>`)
           .join('')}</select>
       </div>
@@ -4527,7 +4566,7 @@ function baseRowHtml(b) {
     : rate
       ? `<span class="fine">${B.CURRENCIES[code].unit} ${esc(code)} = ${B.won(rate * B.CURRENCIES[code].unit)}</span>`
       : `<span class="pend">${esc(t('기준 통화 환율 미정 · 원화로 표시 중'))}</span> ${ui.readonly ? '' : `<button class="pill" data-b="rate">${esc(t('환율 받기'))}</button>`}`;
-  return `<div class="base-row"><label><span>${esc(t('기준 통화'))}</span><select id="bBase" class="inp" aria-label="${esc(t('기준 통화'))}">${choices
+  return `<div class="base-row"><label><span>${esc(t('기준 통화'))}</span><select id="bBase" class="inp" data-ui-select aria-label="${esc(t('기준 통화'))}">${choices
     .map((c) => `<option value="${c}"${c === code ? ' selected' : ''}>${c} ${esc(t(B.CURRENCIES[c].name))}</option>`)
     .join('')}</select></label>${note}<small class="fine">${esc(t('합계·예산·정산을 이 통화로 보여 줘요'))}</small></div>`;
 }
@@ -4551,7 +4590,7 @@ function shareFormHtml(f) {
   if (!list.some((m) => m.id === f.payer)) f.payer = list[0].id;
   const split = new Set(f.split ?? list.map((m) => m.id));
   return `<div class="share-row">
-      <label class="payer"><span>${esc(t('낸 사람'))}</span><select id="bPayer" class="inp">${list.map((m) => `<option value="${esc(m.id)}"${m.id === f.payer ? ' selected' : ''}>${esc(m.name)}</option>`).join('')}</select></label>
+      <label class="payer"><span>${esc(t('낸 사람'))}</span><select id="bPayer" class="inp" data-ui-select>${list.map((m) => `<option value="${esc(m.id)}"${m.id === f.payer ? ' selected' : ''}>${esc(m.name)}</option>`).join('')}</select></label>
       <div class="chipset split" role="group" aria-label="${esc(t('나눠 낼 사람'))}"><span class="split-lbl">${esc(t('나눠 낼 사람'))}</span>${list
         .map((m) => `<button class="${split.has(m.id) ? 'on' : ''}" aria-pressed="${split.has(m.id)}" data-b="split" data-v="${esc(m.id)}">${esc(m.name)}</button>`)
         .join('')}</div>
@@ -4625,13 +4664,13 @@ function expenseEditHtml(e) {
   return `<li class="rec-edit"><form class="exp-form" data-exp="${e.id}" aria-label="${esc(t('지출 수정'))}">
       <div class="exp-row">
         <label class="exp-amt"><span>${esc(t('금액'))}</span><input name="amount" data-draft="exp-amount-${e.id}" inputmode="decimal" value="${e.amount}" autocomplete="off"></label>
-        ${local ? `<label><span>${esc(t('통화'))}</span><select name="cur">${opt('local', `${B.CURRENCIES[recCode].symbol.trim()} ${recCode}`, e.cur !== 'KRW')}${opt('KRW', '₩ KRW', e.cur === 'KRW')}</select></label>` : ''}
+        ${local ? `<label><span>${esc(t('통화'))}</span><select name="cur" data-ui-select>${opt('local', `${B.CURRENCIES[recCode].symbol.trim()} ${recCode}`, e.cur !== 'KRW')}${opt('KRW', '₩ KRW', e.cur === 'KRW')}</select></label>` : ''}
       </div>
       <label><span>${esc(t('메모'))}</span><input name="memo" data-draft="exp-memo-${e.id}" value="${esc(e.memo)}" maxlength="80"></label>
       <div class="exp-row">
-        <label><span>${esc(t('언제'))}</span><select name="day">${dk === 'out' ? opt('out', B.expenseDayLabel(trip, e), true) : ''}${days.map((d) => opt(d, d < 0 ? t('출발 전') : dayName(d), d === dk)).join('')}</select></label>
-        <label><span>${esc(t('분류'))}</span><select name="cat">${Object.entries(B.EXPENSE_CATS).map(([key, c]) => opt(key, t(c.label), key === e.cat)).join('')}</select></label>
-        <label><span>${esc(t('결제 수단'))}</span><select name="pay">${Object.entries(B.PAYMENTS).map(([key, c]) => opt(key, t(c.label), key === e.pay)).join('')}</select></label>
+        <label><span>${esc(t('언제'))}</span><select name="day" data-ui-select>${dk === 'out' ? opt('out', B.expenseDayLabel(trip, e), true) : ''}${days.map((d) => opt(d, d < 0 ? t('출발 전') : dayName(d), d === dk)).join('')}</select></label>
+        <label><span>${esc(t('분류'))}</span><select name="cat" data-ui-select>${Object.entries(B.EXPENSE_CATS).map(([key, c]) => opt(key, t(c.label), key === e.cat)).join('')}</select></label>
+        <label><span>${esc(t('결제 수단'))}</span><select name="pay" data-ui-select>${Object.entries(B.PAYMENTS).map(([key, c]) => opt(key, t(c.label), key === e.pay)).join('')}</select></label>
       </div>
       ${shareEditHtml(e)}
       <p class="exp-krw" role="status">${esc(expensePreviewText(e, e.amount, e.cur))}</p>
@@ -4720,7 +4759,7 @@ function addExpenseFromForm() {
   if (B.needsCurrency(trip)) {
     err.textContent = t('먼저 위에서 현지 통화를 확인해 주세요');
     err.hidden = false;
-    $('#bConfirmCur')?.focus();
+    focusSelect($('#bConfirmCur'));
     return;
   }
   const data = { amount: $('#bAmount').value, cur: ui.bf.cur === 'local' && b.currency !== 'KRW' ? 'local' : 'KRW', cat: ui.bf.cat, pay: ui.bf.pay, day: ui.bf.day, memo: $('#bMemo').value };
@@ -4927,7 +4966,7 @@ $('#page-budget').addEventListener('change', (e) => {
     const b2 = trip.budget;
     saved(commit(), t('기준 통화를 {code}(으)로 바꿨어요', { code: B.baseCode(b2) }));
     if (!B.krwPerBase(b2)) fetchRate({ quiet: true });
-    $('#bBase')?.focus();
+    focusSelect($('#bBase'));
   } else if (e.target.id === 'bPayer') {
     budgetForm().payer = e.target.value;
   }
