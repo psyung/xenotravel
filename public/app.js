@@ -1,6 +1,8 @@
 import * as M from './lib/model.js';
 import { parseLocationInput, parseLocationList } from './lib/links.js';
-import { searchPlaces, searchPlacesKo, HANGUL, reversePlace, geocodeDestination } from './lib/geo.js';
+import { searchPlaces, searchPlacesKo, HANGUL, reversePlace, geocodeDestination, nearbyTourism } from './lib/geo.js';
+import { checkDay, estimateMinutes, staySuggestions } from './lib/route-check.js';
+import { reminderTodos } from './lib/flight-reminders.js';
 import { openStore, appStorageKeys, KEY as STORE_KEY } from './lib/store.js';
 import { exportXlsx, downloadJson, downloadAllTrips, downloadCalendar } from './lib/export.js';
 import * as T from './lib/trends.js';
@@ -47,7 +49,7 @@ loadLang();
 
 // 화면 설정(보기 방식 등)은 이 브라우저에만 기억한다. 저장소를 못 써도 기본값으로 동작.
 const PREF_KEY = 'xenotravel:prefs';
-const PREF_DEFAULTS = { view: 'list', mapHidden: false, pinColor: 'day', page: 'plan', theme: 'system' };
+const PREF_DEFAULTS = { view: 'list', mapHidden: false, pinColor: 'day', page: 'plan', theme: 'system', staySuggestions: true };
 const prefs = (() => {
   try {
     return { ...PREF_DEFAULTS, ...JSON.parse(localStorage.getItem(PREF_KEY) || '{}') };
@@ -436,6 +438,7 @@ function renderPinLegend(empty = '') {
   el.innerHTML = `<div class="pin-seg" role="group" aria-label="${esc(t('핀 색 기준'))}">
       <button type="button" data-pin="day" aria-pressed="${!byCategory()}" class="${byCategory() ? '' : 'active'}">${esc(t('일차별'))}</button>
       <button type="button" data-pin="category" aria-pressed="${byCategory()}" class="${byCategory() ? 'active' : ''}">${esc(t('종류별'))}</button>
+      ${trip && staySuggestions(trip).length ? `<button type="button" data-stay-suggestions aria-pressed="${Boolean(prefs.staySuggestions)}" class="${prefs.staySuggestions ? 'active' : ''}">${esc(t('숙소 추천 위치'))}</button>` : ''}
     </div>${
       byCategory()
         ? `<div class="legend${legendOpen() ? '' : ' folded'}" role="group" aria-label="${esc(t('종류별'))}">${[...Object.entries(M.CATEGORIES), ['stay', { label: '숙소', color: M.STAY_COLOR }]]
@@ -524,6 +527,17 @@ function renderMap({ fit = false } = {}) {
   });
   const focusIdx = trip.days.findIndex((d) => d.id === ui.focusList);
   const focusStays = focusIdx >= 0 ? new Set(Object.values(M.dayStays(trip, focusIdx)).filter((x) => x?.id).map((x) => x.id)) : null;
+  if (prefs.staySuggestions && (!byCategory() || !ui.catFilter || ui.catFilter === 'stay')) {
+    for (const { start, end, lat, lng } of staySuggestions(trip)) {
+      if (focusIdx >= 0 && (focusIdx < start || focusIdx > end)) continue;
+      const marker = L.marker([lat, lng], {
+        icon: L.divIcon({ className: 'stay-suggestion-marker', iconSize: [40, 40], iconAnchor: [20, 20] }),
+      }).addTo(layer);
+      const label = `${t('숙소 추천 위치')} · ${M.dayRanges(Array.from({ length: end - start + 1 }, (_, i) => start + i))}`;
+      labelMarker(marker, label);
+      marker.bindPopup(esc(label));
+    }
+  }
   for (const s of trip.stays) {
     const { checkIn, checkOut } = M.stayDates(trip, s);
     const m = L.marker([s.lat, s.lng], {
@@ -710,8 +724,7 @@ function prevPointOf(item) {
   return i > 0 ? route[i - 1] : null;
 }
 function directionsHtml(item, { from = prevPointOf(item), cls = 'dir-links' } = {}) {
-  const china = M.tripInMainlandChina(trip) || M.inMainlandChina(item);
-  const links = M.directionsLinks(item, from, { china });
+  const links = M.tripDirectionsLinks(trip, item, from, prefs.directionsApp);
   if (!links.length) return '';
   const label = from ? t('{name}에서 출발', { name: from.name || t('직전 장소') }) : t('현재 위치에서 출발');
   return `<span class="${cls}" role="group" aria-label="${esc(t('길찾기'))} · ${esc(label)}" title="${esc(label)}"><span class="dir-label">${esc(t('길찾기'))}</span>${links
@@ -830,6 +843,58 @@ function currentCity() {
 }
 
 const trendCollection = () => ui.trendCollection ?? 'trending';
+let nearby = null;
+let lastNearbyRequest = -Infinity;
+const nearbyContext = () => trip?.center ? JSON.stringify([trip.id, trip.center.lat, trip.center.lng]) : '';
+
+function resetNearby() {
+  nearby?.controller?.abort();
+  nearby = null;
+}
+
+async function loadNearby() {
+  const context = nearbyContext();
+  if (!context || ui.readonly || currentCity() || nearby?.controller ||
+      (nearby?.context === context && nearby.places) || Date.now() - lastNearbyRequest < 1000) return;
+  lastNearbyRequest = Date.now();
+  const controller = new AbortController();
+  const request = nearby = { context, controller };
+  renderDays();
+  $('#nearby-status')?.focus({ preventScroll: true });
+  try {
+    request.places = await nearbyTourism(trip.center, controller.signal);
+  } catch (error) {
+    if (error.name === 'AbortError') return;
+    request.error = error.kind === 'busy' ? 'busy' : 'failed';
+  } finally {
+    request.controller = null;
+    if (nearby === request && context === nearbyContext() && prefs.page === 'plan') {
+      const restoreFocus = document.activeElement?.id === 'nearby-status';
+      renderDays();
+      if (restoreFocus) ($('#nearby-status') ?? $('[data-action="nearby-load"]'))?.focus({ preventScroll: true });
+    }
+  }
+}
+
+function nearbyHtml() {
+  const places = nearby?.places;
+  const status = nearby?.controller ? t('주변 명소를 찾는 중이에요')
+    : nearby?.error === 'busy' ? t('장소 검색 서버 오류 ({status})', { status: 429 })
+    : nearby?.error ? t('검색 서버에 연결하지 못했어요')
+    : places?.length === 0 ? t('주변 명소를 찾지 못했어요') : '';
+  return `<section class="trend-col card nearby-trends" style="--c:${TREND_COLOR}">
+    <div class="trend-empty">
+      <span class="dot" aria-hidden="true"></span><span>${esc(t('이 도시 추천은 준비 중이에요'))}</span>
+      <button type="button" class="link" data-action="trend-search">${esc(t('장소 검색하기'))}</button>
+      ${nearbyContext() && !places && !nearby?.controller ? `<button type="button" class="btn" data-action="nearby-load">${esc(t('지도 데이터 기반 주변 명소'))}</button>` : ''}
+    </div>
+    ${status ? `<p id="nearby-status" class="trend-note" role="status" tabindex="-1">${esc(status)}</p>` : ''}
+    ${places?.length ? `<ul class="trend-list">${places.map((place, index) => trendCardHtml({
+      name: place.name, area: place.address, source: esc(t('지도 데이터 기반')), action: 'nearby-add', attributes: ` data-index="${index}"`,
+    })).join('')}</ul>` : ''}
+  </section>`;
+}
+
 const trendLabel = (collection) => collection === 'popular' ? t('많이 가는 곳') : t('요즘 뜨는 곳');
 
 $('#days').addEventListener('keydown', (e) => {
@@ -875,6 +940,17 @@ function renderTrendMarkers() {
   }
 }
 
+function trendCardHtml({ name, area, source, action, attributes = '', badge = '', summary = '', approximate = false }) {
+  return `<li class="trend-card"${attributes}>
+    ${badge}<div class="tc-name">${esc(name)}</div>
+    ${area ? `<div class="tc-area">${esc(area)}${approximate ? ` · ${esc(t('대략 위치'))}` : ''}</div>` : ''}
+    ${summary}
+    <div class="tc-foot"><span class="tc-src">${source}</span>
+      <button type="button" class="tc-add" data-action="${action}" aria-label="${esc(t('{name} 일정에 담기', { name }))}">${esc(t('+ 담기'))}</button>
+    </div>
+  </li>`;
+}
+
 function trendSectionHtml() {
   const city = currentCity();
   const board = curView() === 'board';
@@ -883,26 +959,18 @@ function trendSectionHtml() {
   const places = T.activePlaces(city, TODAY, collection);
   // P0-8: 여행지 트렌드 데이터가 없으면 접힌 한 줄 안내 + 장소 검색 바로가기만
   if (!city) {
-    return `<section class="trend-col trend-empty card" style="--c:${TREND_COLOR}">
-      <span class="dot" aria-hidden="true"></span><span>${esc(t('이 도시 추천은 준비 중이에요'))}</span>
-      <button type="button" class="link" data-action="trend-search">${esc(t('장소 검색하기'))}</button>
-    </section>`;
+    return nearbyHtml();
   }
-  const cards = places
-    .map((p) => [p, tp(p)])
-    .map(
-      ([p, loc]) => `<li class="trend-card" data-trend="${esc(p.id)}">
-        ${p.status ? `<div class="tc-top"><span class="tc-badge s-${esc(p.status)}">${esc(T.statusLabel(p, TODAY))}</span><span class="tc-cat">${esc(loc.category)}</span></div>` : ''}
-        <div class="tc-name">${esc(loc.name)}</div>
-        ${loc.area ? `<div class="tc-area">${esc(loc.area)}${p.approx ? ` · ${esc(t('대략 위치'))}` : ''}</div>` : ''}
-        ${loc.summary ? `<p class="tc-sum"${origAttr(loc)}>${esc(loc.summary)}${origTag(loc)}</p>` : ''}
-        <div class="tc-foot">
-          <span class="tc-src">${p.source === '편집 선정' ? esc(t('편집 선정')) : `${esc(t('출처'))} ${(p.sources ?? []).map((s, i) => `<a href="${href(s.url)}" target="_blank" rel="noopener" title="${esc(s.title)}" aria-label="${esc(t('출처 {n}: {title}', { n: i + 1, title: s.title }))}">${i + 1}</a>`).join(' ')}`}</span>
-          <button class="tc-add" data-action="add-trend" aria-label="${esc(t('{name} 일정에 담기', { name: loc.name }))}">${esc(t('+ 담기'))}</button>
-        </div>
-      </li>`,
-    )
-    .join('');
+  const cards = places.map((p) => {
+    const loc = tp(p);
+    const source = p.source === '편집 선정' ? esc(t('편집 선정'))
+      : `${esc(t('출처'))} ${(p.sources ?? []).map((s, i) => `<a href="${href(s.url)}" target="_blank" rel="noopener" title="${esc(s.title)}" aria-label="${esc(t('출처 {n}: {title}', { n: i + 1, title: s.title }))}">${i + 1}</a>`).join(' ')}`;
+    return trendCardHtml({
+      name: loc.name, area: loc.area, approximate: p.approx, source, action: 'add-trend', attributes: ` data-trend="${esc(p.id)}"`,
+      badge: p.status ? `<div class="tc-top"><span class="tc-badge s-${esc(p.status)}">${esc(T.statusLabel(p, TODAY))}</span><span class="tc-cat">${esc(loc.category)}</span></div>` : '',
+      summary: loc.summary ? `<p class="tc-sum"${origAttr(loc)}>${esc(loc.summary)}${origTag(loc)}</p>` : '',
+    });
+  }).join('');
   const criterion = collection === 'popular' ? t('대표 명소 · 편집 선정') :
     t('{date} 조사 · 최근 SNS·뉴스 언급', { date: city.researchedAt ?? trends.researchedAt });
   const tabs = ['trending', 'popular'].map((type) => `<button type="button" class="btn" id="trend-tab-${type}" role="tab" aria-controls="trend-panel" aria-selected="${collection === type}" tabindex="${collection === type ? 0 : -1}" data-action="trend-collection" data-collection="${type}">${esc(trendLabel(type))}</button>`).join('');
@@ -1566,15 +1634,30 @@ function stayRowHtml(stay, dayIndex, pos, flags, leg = null) {
 }
 
 /** 앞 장소에서 여기까지: "도보 약 12분 · 850m  길찾기" (직선거리 기준 어림값) */
+function travelEstimate(minutes) {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h && m ? t('예상 이동 약 {h}시간 {m}분', { h, m })
+    : h ? t('예상 이동 약 {h}시간', { h }) : t('예상 이동 약 {m}분', { m });
+}
+
 function legHtml(leg) {
   if (!leg) return '';
-  const how = leg.mode === 'walking'
-    ? t('도보 약 {min}분 · {km}', { min: leg.walkMin, km: M.formatKm(leg.km) })
-    : t('{km} · 대중교통', { km: M.formatKm(leg.km) });
-  const mode = leg.mode === 'walking' ? t('도보') : t('대중교통');
-  return `<a class="leg" href="${href(leg.url)}" target="_blank" rel="noopener"
-      title="${esc(t('직선거리 기준 어림값이에요. 누르면 구글맵 길찾기({mode})가 열려요', { mode }))}">
-      <span class="leg-how">${esc(how)}</span><span class="leg-go">${esc(t('길찾기'))}</span></a>`;
+  const link = M.tripDirectionsLinks(trip, leg.to, leg.from, prefs.directionsApp, leg.mode)[0];
+  const mode = leg.mode === 'walking' ? t('도보') : leg.mode === 'driving' ? t('택시') : t('대중교통');
+  const distance = t('직선 {km}', { km: M.formatKm(leg.km) });
+  return `<a class="leg" href="${href(link.url)}" target="_blank" rel="noopener" title="${esc(link.label)}">
+      <span class="leg-how">${esc(distance)} · ${esc(mode)} · ${esc(travelEstimate(estimateMinutes(leg.km, leg.mode)))}</span><span class="leg-go">${esc(t('길찾기'))}</span></a>`;
+}
+
+function hoursEditorHtml(it) {
+  // 7 January 2024 was a Sunday.
+  const days = Array.from({ length: 7 }, (_, n) => `<label><input type="checkbox" data-closed-day="${n}"${it.closedWeekdays?.includes(n) ? ' checked' : ''}> ${esc(weekday(`2024-01-${String(n + 7).padStart(2, '0')}`))}</label>`);
+  return `<fieldset class="place-hours"><legend>${esc(t('휴무 요일'))}</legend><div class="closed-days">${days.join('')}</div></fieldset>
+    <fieldset class="place-hours"><legend>${esc(t('영업시간'))}</legend><div class="hours-inputs">
+      <label>${esc(t('영업 시작'))}<input type="time" data-hours="opensAt" value="${esc(it.opensAt ?? '')}"></label>
+      <label>${esc(t('영업 종료'))}<input type="time" data-hours="closesAt" value="${esc(it.closesAt ?? '')}"></label>
+    </div></fieldset>`;
 }
 
 /** 보기 전용(공유받은 일정)에서 편집 창 대신 보여주는 상세 */
@@ -1663,6 +1746,7 @@ function itemHtml(it, i, isDay, leg = null, listItems = null, overlap = '') {
         .map(([k, c]) => `<button type="button" data-action="set-cat" data-cat="${k}" aria-pressed="${it.category === k}" class="${it.category === k ? 'on' : ''}" style="--c:${c.color}">${esc(t(c.label))}</button>`)
         .join('')}</div>
       <label>${esc(t('시간'))}<input type="time" data-field="time" value="${esc(it.time)}"></label>
+      ${hoursEditorHtml(it)}
       ${isDay ? `<label class="pin-toggle"><input type="checkbox" data-pin${it.pinned ? ' checked' : ''}> ${esc(t('동선 정리할 때 이 순서 그대로 두기'))} <small>(${esc(t('시간을 정한 곳은 늘 그대로'))})</small></label>` : ''}
       ${isDay ? costEditorHtml(it) : ''}
       ${dayPos >= 0 && trip.days[dayPos].date && trip.days[dayPos].date <= TODAY ? `<label class="pin-toggle retro-visit"><input type="checkbox" data-visited${it.visited ? ' checked' : ''}> ${esc(t('다녀왔어요'))}</label>` : ''}
@@ -2123,9 +2207,35 @@ flightForm.addEventListener('submit', async (e) => {
   const savedFlight = ui.editFlight ? M.updateFlight(trip, ui.editFlight, data) : M.addFlight(trip, data);
   const r = commit();
   const hidden = flightOutside(savedFlight) && savedFlight.kind === 'move';
-  saved(r, hidden ? t('저장했어요. 출발일이 여행 기간 밖이라 일정에는 보이지 않아요') : t('{name} 저장했어요', { name: M.flightSummary(savedFlight) }), hidden ? 4000 : 2200);
+  const message = hidden ? t('저장했어요. 출발일이 여행 기간 밖이라 일정에는 보이지 않아요') : t('{name} 저장했어요', { name: M.flightSummary(savedFlight) });
   fillFlightForm(null);
+  if (r.ok) offerFlightReminders(savedFlight, message);
 });
+
+function offerFlightReminders(savedFlight, message) {
+  const ownerId = trip.id;
+  const flightId = savedFlight.id;
+  if (!reminderTodos(savedFlight, trip.checks).length) {
+    toast(message);
+    return;
+  }
+  flightDialog.close();
+  toast(`${message} · ${t('출발 전 항공편 알림을 추가할까요?')}`, 10000, {
+    label: t('할 일로 추가'),
+    run: () => {
+      if (ui.readonly || trip?.id !== ownerId) return;
+      const flight = trip.flights.find((f) => f.id === flightId);
+      if (!flight) return;
+      const suggestions = reminderTodos(flight, trip.checks);
+      for (const { id, textI18n } of suggestions) {
+        const text = textI18n[getLang()];
+        const check = trip.checks?.find((c) => c.flightReminder === id) ?? C.addCheck(trip, 'todo', text);
+        Object.assign(check, { flightReminder: id, textI18n, text });
+      }
+      if (suggestions.length) saved(commit(), t('출발 전 할 일을 저장했어요'));
+    },
+  });
+}
 $('#flightList').addEventListener('click', async (e) => {
   const editId = e.target.closest('[data-fedit]')?.dataset.fedit;
   const delId = e.target.closest('[data-fdel]')?.dataset.fdel;
@@ -2237,7 +2347,10 @@ function dayBodyHtml(l) {
   // 구간 거리: route[k-1] → route[k]. 출발 숙소가 있으면 장소 j는 route[j+1].
   const route = M.dayRoute(trip, l.dayIndex);
   const off = st.start ? 1 : 0;
-  const legTo = (k) => (k > 0 && route[k] ? M.routeLeg(route[k - 1], route[k]) : null);
+  const legTo = (k) => {
+    const leg = k > 0 && route[k] ? M.routeLeg(route[k - 1], route[k]) : null;
+    return leg && { ...leg, from: route[k - 1], to: route[k], mode: dayTravelMode(l.dayIndex) || leg.mode };
+  };
   const overlaps = dayTimeConflicts(l.dayIndex);
   return `<div class="timeline" style="--c:${l.color}">
       ${flightRowsHtml(l.dayIndex, 'top')}
@@ -2249,8 +2362,13 @@ function dayBodyHtml(l) {
 }
 
 function dayToolsHtml(l) {
-  const url = M.routeDirectionsUrl(M.dayRoute(trip, l.dayIndex));
-  const link = url ? `<a class="route-link" href="${href(url)}" target="_blank" rel="noopener" title="${esc(t('이 날 동선 전체를 구글맵 길찾기로 열기'))}">${esc(t('길찾기'))}</a>` : '';
+  const points = M.dayRoute(trip, l.dayIndex);
+  const next = points.slice(1).find((point) => M.routeLeg(points[0], point));
+  const primary = next && M.tripDirectionsLinks(trip, next, points[0], prefs.directionsApp, dayTravelMode(l.dayIndex) || undefined)[0];
+  const fullRoute = primary?.id === 'google' ? M.routeDirectionsUrl(points) : null;
+  const url = fullRoute || primary?.url;
+  const label = fullRoute ? t('길찾기') : t('첫 구간 길찾기');
+  const link = url ? `<a class="route-link" href="${href(url)}" target="_blank" rel="noopener" title="${esc(primary.label)}">${esc(label)}</a>` : '';
   const copy = `<button data-action="day-copy" data-day="${l.dayIndex}" title="${esc(t('이 날 일정을 카톡에 붙일 글로 복사해요'))}">${esc(t('카톡용 복사'))}</button>`;
   const route = link + copy;
   if (ui.readonly) return route;
@@ -2478,8 +2596,32 @@ function routePlanHtml(l) {
 }
 
 /** 하루 카드: 머리(날짜·장소 이름·요약) + 타임라인. 목록형은 위아래로, 보드형은 칸으로 늘어놓는다. */
+const dayTravelMode = (index) => {
+  const mode = trip.days[index].travelMode;
+  return ['walking', 'transit', 'driving'].includes(mode) ? mode : '';
+};
+
+function dayWarningHtml(warnings, items) {
+  const labels = {
+    order: t('시간 겹침 확인'), flight: t('항공편 시간 확인'), movement: t('예상 이동 3시간 초과'),
+    count: t('장소 8곳 이상'), closed: t('휴무 요일에 방문'), hours: t('영업시간 밖 방문'),
+  };
+  return warnings.map(({ id, kind }) => {
+    const name = items.find((item) => item.id === id)?.name;
+    return `<button type="button" class="chip day-warning" data-action="day-warning" data-place="${esc(id)}" aria-label="${esc([labels[kind], name].join(' · '))}">${esc(labels[kind])}</button>`;
+  }).join('');
+}
+
+function dayTravelSelect(index) {
+  const modes = { '': t('자동'), walking: t('도보'), transit: t('대중교통'), driving: t('택시') };
+  const selected = dayTravelMode(index);
+  return `<select class="day-travel-select" data-ui-select data-day-travel="${index}" aria-label="${esc(t('예상 이동 수단'))}">${Object.entries(modes)
+    .map(([value, label]) => `<option value="${value}"${value === selected ? ' selected' : ''}>${esc(label)}</option>`).join('')}</select>`;
+}
+
 function dayCardHtml(l) {
   const sum = M.daySummary(trip, l.dayIndex);
+  const check = checkDay(trip, l.dayIndex, dayTravelMode(l.dayIndex));
   const night = M.nightStay(trip, l.dayIndex);
   const date = M.formatDate(trip.days[l.dayIndex].date);
   const dayId = trip.days[l.dayIndex].id;
@@ -2487,6 +2629,9 @@ function dayCardHtml(l) {
     `<span class="wx-slot" data-wx="${dayId}">${wxChipHtml(ui.weather.data[dayId], dayId)}</span>`,
     sum.places ? `<span class="chip">${esc(t('{n}곳', { n: sum.places }))}</span>` : '',
     sum.km >= 0.05 ? `<span class="chip">${esc(t('이동 {km}', { km: M.formatKm(sum.km) }))}</span>` : '',
+    check.minutes ? `<span class="chip">${esc(travelEstimate(check.minutes))}</span>` : '',
+    sum.km >= 0.05 && !ui.readonly ? dayTravelSelect(l.dayIndex) : '',
+    check.firstKm != null ? `<span class="chip">${esc(t('숙소에서 첫 장소까지 {km}', { km: M.formatKm(check.firstKm) }))}</span>` : '',
     sum.from ? `<span class="chip">${esc(sum.from)}${sum.to !== sum.from ? ` – ${esc(sum.to)}` : ''}</span>` : '',
     night ? `<span class="chip stay">${esc(t('오늘 밤 숙소'))} · ${esc(night.name)}</span>` : '',
   ].join('');
@@ -2499,6 +2644,7 @@ function dayCardHtml(l) {
         <div class="day-tools">${dayToolsHtml(l)}</div>
       </div>
       <div class="chips">${chips}</div>
+      ${check.warnings.length ? `<div class="chips day-warnings">${dayWarningHtml(check.warnings, l.items)}</div>` : ''}
       <div class="wx-hint-slot" data-wx-hint="${dayId}">${wxHintHtml(ui.weather.data[dayId], dayId)}</div>
       ${ui.readonly ? '' : routePlanHtml(l)}
       ${dayBodyHtml(l)}
@@ -2506,6 +2652,7 @@ function dayCardHtml(l) {
 }
 
 function renderDays() {
+  if (nearby && (nearby.context !== nearbyContext() || currentCity() || ui.readonly)) resetNearby();
   ui.sortables.forEach((s) => s.destroy());
   ui.sortables = [];
   const daysEl = $('#days');
@@ -2651,7 +2798,14 @@ $('#days').addEventListener('click', (e) => {
   if (!btn) return;
   const id = btn.closest('.item')?.dataset.id;
   const action = btn.dataset.action;
-  if (action === 'toggle') {
+  if (action === 'day-warning') {
+    ui.openItem = btn.dataset.place;
+    ui.openStay = null;
+    renderDays();
+    const target = $(`.item[data-id="${CSS.escape(ui.openItem)}"] .item-main`);
+    target?.scrollIntoView({ block: 'center' });
+    target?.focus({ preventScroll: true });
+  } else if (action === 'toggle') {
     ui.openItem = ui.openItem === id ? null : id;
     ui.openStay = null;
     renderDays();
@@ -2717,6 +2871,11 @@ $('#days').addEventListener('click', (e) => {
     const q = $('#search');
     q.scrollIntoView({ block: 'center', behavior: 'smooth' });
     q.focus({ preventScroll: true });
+  } else if (action === 'nearby-load') {
+    void loadNearby();
+  } else if (action === 'nearby-add') {
+    const index = Number(btn.closest('.trend-card')?.dataset.index);
+    if (!ui.readonly && nearby?.context === nearbyContext()) addPlace(nearby.places?.[index]);
   } else if (action === 'trend-collection') {
     if (btn.dataset.collection === trendCollection() && trendsOpen()) return;
     ui.trendCollection = btn.dataset.collection;
@@ -2846,7 +3005,7 @@ $('#days').addEventListener('input', (e) => {
 
 // 시간을 확정하면 그날 시간 겹침을 다시 계산한다 (입력 칸 포커스는 유지)
 $('#days').addEventListener('change', (e) => {
-  if (e.target.dataset.field !== 'time') return;
+  if (e.target.dataset.field !== 'time' && !e.target.dataset.hours) return;
   const id = e.target.closest('.item')?.dataset.id;
   const field = e.target;
   setTimeout(() => {
@@ -2865,7 +3024,8 @@ $('#days').addEventListener('change', (e) => {
     }
     const keep = focus === field;
     renderDays();
-    if (keep) $(`.item[data-id="${CSS.escape(id)}"] [data-field="time"]`)?.focus({ preventScroll: true });
+    const selector = field.dataset.hours ? `[data-hours="${field.dataset.hours}"]` : '[data-field="time"]';
+    if (keep) $(`.item[data-id="${CSS.escape(id)}"] ${selector}`)?.focus({ preventScroll: true });
   });
 });
 
@@ -2878,6 +3038,38 @@ $('#days').addEventListener('change', (e) => {
   else delete found.item.pinned;
   commit();
 });
+$('#days').addEventListener('change', (e) => {
+  if (ui.readonly) return;
+  const field = e.target;
+  if (field.matches('[data-day-travel]')) {
+    const index = Number(field.dataset.dayTravel);
+    const day = trip.days[index];
+    if (field.value) day.travelMode = field.value;
+    else delete day.travelMode;
+    commit();
+    const select = $(`[data-day-travel="${index}"]`);
+    enhanceSelect(select);
+    focusSelect(select);
+    return;
+  }
+  if (!field.matches('[data-hours], [data-closed-day]')) return;
+  const li = field.closest('.item');
+  const found = M.findItem(trip, li.dataset.id);
+  if (!found) return;
+  if (field.dataset.hours) {
+    const time = normalizeTime(field.value);
+    if (time == null) return;
+    found.item[field.dataset.hours] = time;
+    markEdited();
+    persistSoon();
+  } else {
+    found.item.closedWeekdays = $$('[data-closed-day]:checked', li).map((input) => Number(input.dataset.closedDay));
+    const weekday = field.dataset.closedDay;
+    commit();
+    $(`.item[data-id="${CSS.escape(found.item.id)}"] [data-closed-day="${weekday}"]`)?.focus({ preventScroll: true });
+  }
+});
+
 // 다른 날과 통째로 바꾸기 (다시 바꾸면 돌아간다)
 $('#days').addEventListener('change', (e) => {
   if (!e.target.matches('.day-swap') || e.target.value === '') return;
@@ -2907,6 +3099,13 @@ $('#days').addEventListener('change', (e) => {
 
 
 $('#pinLegend').addEventListener('click', (e) => {
+  if (e.target.closest('[data-stay-suggestions]')) {
+    prefs.staySuggestions = !prefs.staySuggestions;
+    savePrefs();
+    renderMap();
+    $('#pinLegend [data-stay-suggestions]')?.focus({ preventScroll: true });
+    return;
+  }
   if (e.target.closest('[data-legend-toggle]')) {
     prefs.legendOpen = !legendOpen();
     savePrefs();
@@ -3358,6 +3557,21 @@ $('#exportXlsx').addEventListener('click', async () => {
 });
 $('#exportPdf').addEventListener('click', openPrint);
 
+async function chooseDirectionsApp() {
+  const active = prefs.directionsApp ?? '';
+  const options = { '': t('국가별 기본값'), ...M.DIRECTIONS_APPS };
+  const result = await ask({
+    title: t('길찾기 앱'),
+    html: `<select id="directionsPreference" data-ui-select aria-label="${esc(t('길찾기 앱'))}">${Object.entries(options)
+      .map(([value, label]) => `<option value="${value}"${value === active ? ' selected' : ''}>${esc(label)}</option>`).join('')}</select>`,
+    actions: [{ value: 'save', label: t('저장'), primary: true }],
+  });
+  if (result !== 'save') return;
+  prefs.directionsApp = $('#directionsPreference').value;
+  savePrefs();
+  render();
+}
+
 $('.menu .menu-pop').addEventListener('click', (e) => {
   const action = e.target.closest('[data-menu]')?.dataset.menu;
   $('.menu').open = false;
@@ -3370,6 +3584,10 @@ $('.menu .menu-pop').addEventListener('click', (e) => {
     void wipeDevice();
   }
   else if (action === 'flights') openFlights();
+  else if (action === 'directions') {
+    $('.menu summary').focus();
+    void chooseDirectionsApp();
+  }
   else if (action === 'stays') openStays();
   else if (action === 'share') {
     $('.menu summary').focus();
@@ -3628,6 +3846,7 @@ function route() {
 
 /** 여행 열기 (화면 이동 없이 상태만) */
 function openTrip(tr, { save = false } = {}) {
+  resetNearby();
   leaveShared();
   setPicking(false);
   map.closePopup();
@@ -4291,6 +4510,13 @@ $$('.mtabs button').forEach((b) => b.addEventListener('click', () => showTab(b.d
 
 /* 토스트: 사라지면 글자도 지운다 (다른 화면의 접근성 트리·읽기 순서에 지난 안내가 남지 않게) */
 let toastTimer;
+function clearToast() {
+  clearTimeout(toastTimer);
+  const el = $('#toast');
+  el.classList.remove('show', 'has-action');
+  el.textContent = '';
+}
+
 function toast(text, ms = 2200, action = null) {
   if (!text) return;
   // 실행 취소가 아직 유효하면 일반 알림이 버튼을 지우지 않게 함께 둔다 (5초 안 되돌리기 보장)
@@ -4614,6 +4840,7 @@ const PAGES = ['home', 'plan', 'budget', 'check'];
 function showPage(page, { scroll = true } = {}) {
   prefs.page = PAGES.includes(page) && (page === 'home' || trip) ? page : 'home';
   if (prefs.page !== 'plan') {
+    if (nearby?.controller) resetNearby();
     setPicking(false);
     cancelMapHold();
     if (locationChoice) map.closePopup(locationChoice.popup);
@@ -4700,6 +4927,7 @@ $('#themeBtn').addEventListener('click', () => {
 
 /** 언어 바꾸기: 화면 글자·문서 언어를 바로 바꾸고 이 브라우저에 기억한다 (기록한 통화·금액은 그대로). */
 function applyLanguage() {
+  clearToast();
   const lang = getLang();
   document.documentElement.lang = LANGS[lang].html;
   // 샘플 일정 같은 내장 프리셋 이름도 이 언어로 (사용자가 고친 이름은 그대로)

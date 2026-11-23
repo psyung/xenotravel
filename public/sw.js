@@ -55,6 +55,8 @@ const APP_FILES = [
   'lib/stays.js',
   'lib/export.js',
   'lib/geo.js',
+  'lib/flight-reminders.js',
+  'lib/route-check.js',
   'lib/i18n.js',
   'lib/limits.js',
   'lib/links.js',

@@ -37,17 +37,20 @@ const FORMAT = '1'; // 압축 형식이 바뀌면 올린다
 
 /** 받는 화면에서 사용하는 일정 필드만 링크에 넣는다. */
 function shareSnapshot(trip, { includePrivate = false } = {}) {
-  const { version, title, destination, startDate, endDate, center, trendCity } = trip;
+  const { version, title, destination, startDate, endDate, center, country, trendCity } = trip;
   const place = ({ name, address, lat, lng, url, memo }) => ({
     name, address, lat, lng, url, ...(includePrivate ? { memo } : {}),
   });
+  const stop = (it) => ({
+    ...place(it), time: it.time, category: it.category,
+    closedWeekdays: it.closedWeekdays?.length ? it.closedWeekdays : undefined,
+    opensAt: it.opensAt || undefined, closesAt: it.closesAt || undefined,
+  });
   return {
-    version, title, destination, startDate, endDate, center, trendCity,
+    version, title, destination, startDate, endDate, center, country, trendCity,
     sharedAt: new Date().toISOString(),
-    days: trip.days.map(({ date, items }) => ({ date, items: items.map((it) => ({
-      ...place(it), time: it.time, category: it.category,
-    })) })),
-    inbox: (trip.inbox ?? []).map((it) => ({ ...place(it), time: it.time, category: it.category })),
+    days: trip.days.map(({ date, items, travelMode }) => ({ date, travelMode, items: items.map(stop) })),
+    inbox: (trip.inbox ?? []).map(stop),
     stays: (trip.stays ?? []).map((stay) => ({
       ...place(stay), startIndex: stay.startIndex, nights: stay.nights,
       checkInTime: stay.checkInTime || undefined, checkOutTime: stay.checkOutTime || undefined,
@@ -182,6 +185,9 @@ function fromSnapshot(raw) {
     url: str(it.url),
     category: str(it.category),
   });
+  const stop = (it) => ({
+    ...item(it), closedWeekdays: it.closedWeekdays, opensAt: it.opensAt, closesAt: it.closesAt,
+  });
   const now = new Date().toISOString();
   return {
     version: 1,
@@ -191,9 +197,13 @@ function fromSnapshot(raw) {
     startDate: str(v.startDate),
     endDate: str(v.endDate),
     center: Number.isFinite(v.center?.lat) && Number.isFinite(v.center?.lng) ? { lat: v.center.lat, lng: v.center.lng } : null,
+    country: typeof v.country === 'string' && /^[a-z]{2}$/.test(v.country) ? v.country : undefined,
     trendCity: typeof v.trendCity === 'string' ? v.trendCity : null,
-    days: v.days.map((d) => ({ id: uid(), date: str(d.date), items: d.items.map(item) })),
-    inbox: v.inbox.map(item),
+    days: v.days.map((d) => ({
+      id: uid(), date: str(d.date), items: d.items.map(stop),
+      ...(['walking', 'transit', 'driving'].includes(d.travelMode) ? { travelMode: d.travelMode } : {}),
+    })),
+    inbox: v.inbox.map(stop),
     stays: v.stays.map((s) => {
       const { id, time, category, ...rest } = item(s);
       return { ...rest, id, startIndex: s.startIndex, nights: s.nights,

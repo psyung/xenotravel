@@ -281,6 +281,34 @@ export function summarize(trip) {
   };
 }
 
+/** Use the assigned expense date, or the local record date for undated entries. */
+function localDay(date) {
+  return Number.isFinite(date.getTime())
+    ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+    : '';
+}
+
+export function budgetPace(trip, today = localDay(new Date())) {
+  const dates = trip.days.map((day) => day.date).filter(Boolean);
+  const remainingDays = dates.filter((date) => date >= today).length;
+  const total = trip.budget?.total ?? 0;
+  let spent = 0;
+  let todaySpent = 0;
+  let pending = false;
+  for (const expense of trip.expenses ?? []) {
+    const date = expense.date || trip.days[expense.day]?.date || localDay(new Date(expense.at ?? NaN));
+    spent += expense.krw ?? 0;
+    if (date === today) todaySpent += expense.krw ?? 0;
+    if (expense.krw == null) pending = true;
+  }
+  return {
+    todaySpent, remainingDays, pending,
+    recommended: total > 0 && dates.length ? Math.floor(total / dates.length) : null,
+    remainingPerDay: total > 0 && remainingDays ? Math.floor(Math.max(0, total - spent) / remainingDays) : null,
+    status: !dates.length ? 'undated' : today < dates[0] ? 'before' : remainingDays ? 'during' : 'after',
+  };
+}
+
 /**
  * 통화별 합계: 현지 돈으로 적은 것과 원화로 적은 것을 따로 더한다 (기록한 통화 그대로).
  * → { local: 현지 통화 합계, krw: 원화로 적은 합계, localCount, krwCount }

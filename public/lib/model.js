@@ -249,6 +249,9 @@ export function createItem(place) {
     lat: Number(place.lat),
     lng: Number(place.lng),
     time: place.time ?? '',
+    closedWeekdays: [...(place.closedWeekdays ?? [])],
+    opensAt: place.opensAt ?? '',
+    closesAt: place.closesAt ?? '',
     memo: place.memo ?? '',
     url: place.url ?? '',
     category: itemCategory(place),
@@ -971,6 +974,11 @@ export function validateTrip(obj) {
     for (const it of items) {
       if (typeof it?.id !== 'string' || typeof it.name !== 'string') fail('장소');
       if (!Number.isFinite(it.lat) || !Number.isFinite(it.lng)) fail('좌표');
+      if (it.closedWeekdays != null && (!Array.isArray(it.closedWeekdays) ||
+        it.closedWeekdays.length > 7 || it.closedWeekdays.some((n) => !Number.isInteger(n) || n < 0 || n > 6))) fail('장소');
+      for (const time of [it.opensAt, it.closesAt]) {
+        if (time != null && time !== '' && (typeof time !== 'string' || toMinutes(time) == null)) fail('장소');
+      }
     }
   };
   for (const d of obj.days) {
@@ -1001,7 +1009,10 @@ export function validateTrip(obj) {
   checkTripLimits(obj); // S-5: 개수·글자 수 제한 (넘으면 저장 전에 멈춘다)
   // 예전 버전 백업은 메모·주소 같은 칸이 없을 수 있다: 빈 글자로 채워 화면이 깨지지 않게
   const str = (v) => (typeof v === 'string' ? v : '');
-  const fillItem = (it) => ({ ...it, address: str(it.address), time: str(it.time), memo: str(it.memo), url: str(it.url), category: str(it.category) });
+  const fillItem = (it) => ({
+    ...it, address: str(it.address), time: str(it.time), memo: str(it.memo), url: str(it.url), category: str(it.category),
+    closedWeekdays: [...new Set(it.closedWeekdays ?? [])], opensAt: str(it.opensAt), closesAt: str(it.closesAt),
+  });
   const out = {
     ...obj,
     days: obj.days.map((d) => ({ ...d, date: str(d.date), items: d.items.map(fillItem) })),
@@ -1177,12 +1188,12 @@ const fix6 = (n) => Number(n.toFixed(6));
  * 장소까지 외부 지도 길찾기 링크. from(직전 장소)이 있으면 출발지로 넣는다.
  * → [{ id: 'google'|'apple'|'amap'|'baidu', label, url }]
  */
-export function directionsLinks(to, from = null, { china = false } = {}) {
+export function directionsLinks(to, from = null, { china = false, korea = false, mode = 'transit' } = {}) {
   const has = (p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lng);
   if (!has(to)) return [];
   const origin = has(from) && routeLeg(from, to) ? from : null;
   const out = [
-    { id: 'google', label: 'Google Maps', url: `https://www.google.com/maps/dir/?api=1${origin ? `&origin=${ll(origin)}` : ''}&destination=${ll(to)}&travelmode=transit` },
+    { id: 'google', label: 'Google Maps', url: origin ? directionsUrl(origin, to, mode) : `https://www.google.com/maps/dir/?api=1&destination=${ll(to)}&travelmode=${mode}` },
     { id: 'apple', label: 'Apple Maps', url: `https://maps.apple.com/?${origin ? `saddr=${ll(origin)}&` : ''}daddr=${ll(to)}&dirflg=r` },
   ];
   if (china) {
@@ -1191,7 +1202,8 @@ export function directionsLinks(to, from = null, { china = false } = {}) {
       const c = wgsToGcj(p);
       return `${fix6(c.lng)},${fix6(c.lat)},${name(p)}`;
     };
-    out.push({ id: 'amap', label: '高德地图', url: `https://uri.amap.com/navigation?${origin ? `from=${g(origin)}&` : ''}to=${g(to)}&mode=bus&src=xenotravel&callnative=1` });
+    const amapMode = mode === 'walking' ? 'walk' : mode === 'driving' ? 'car' : 'bus';
+    out.push({ id: 'amap', label: '高德地图', url: `https://uri.amap.com/navigation?${origin ? `from=${g(origin)}&` : ''}to=${g(to)}&mode=${amapMode}&src=xenotravel&callnative=1` });
     const b = (p) => `latlng:${p.lat},${p.lng}|name:${name(p)}`;
     out.push({
       id: 'baidu',
@@ -1201,7 +1213,40 @@ export function directionsLinks(to, from = null, { china = false } = {}) {
         : `https://api.map.baidu.com/marker?location=${to.lat},${to.lng}&title=${name(to)}&content=${name(to)}&coord_type=wgs84&output=html&src=xenotravel`,
     });
   }
+  if (korea) {
+    const name = (p) => encodeURIComponent(String(p.name ?? '').replace(/[,/]/g, ' '));
+    const naverPoint = (p) => `${p.lng},${p.lat},${name(p)},,PLACE_POI`;
+    const naverMode = mode === 'walking' ? 'walk' : mode === 'driving' ? 'car' : 'transit';
+    out.push({ id: 'naver', label: 'Naver Map', url: origin
+      ? `https://map.naver.com/p/directions/${naverPoint(origin)}/${naverPoint(to)}/-/${naverMode}`
+      : `https://map.naver.com/p/search/${name(to) || encodeURIComponent(ll(to))}` });
+    const kakaoPoint = (p) => `${name(p)},${ll(p)}`;
+    const kakaoMode = mode === 'walking' ? 'foot' : 'car';
+    out.push({ id: 'kakao', label: 'Kakao Map', url: origin
+      ? mode === 'transit'
+        ? `https://map.kakao.com/link/from/${kakaoPoint(origin)}/to/${kakaoPoint(to)}`
+        : `https://map.kakao.com/link/by/${kakaoMode}/${kakaoPoint(origin)}/${kakaoPoint(to)}`
+      : `https://map.kakao.com/link/to/${kakaoPoint(to)}` });
+  }
   return out;
+}
+
+export const DIRECTIONS_APPS = Object.freeze({
+  google: 'Google Maps', apple: 'Apple Maps', amap: '高德地图', baidu: '百度地图',
+  naver: 'Naver Map', kakao: 'Kakao Map',
+});
+
+export function tripDirectionsLinks(trip, to, from, preference, mode) {
+  const china = tripInMainlandChina(trip);
+  const korea = trip?.country === 'kr';
+  const primary = Object.hasOwn(DIRECTIONS_APPS, preference) ? preference : china ? 'amap' : korea ? 'naver' : 'google';
+  const links = directionsLinks(to, from, {
+    china: china || primary === 'amap' || primary === 'baidu',
+    korea: korea || primary === 'naver' || primary === 'kakao',
+    mode,
+  });
+  const order = [primary, ...(korea ? ['naver', 'kakao'] : china ? ['amap', 'baidu'] : []), 'google', 'apple'];
+  return [...new Set(order)].map((id) => links.find((link) => link.id === id)).filter(Boolean);
 }
 
 /* ───────── 시간 겹침 ───────── */

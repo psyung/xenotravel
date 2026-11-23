@@ -2,6 +2,7 @@
 import { EXPORT_HEADER, tripToRows, safeFileName, stayDates, flightKind, flightSummary } from './model.js';
 import { t } from './i18n.js';
 import { expenseRows } from './budget.js';
+import { flightReminders } from './flight-reminders.js';
 
 const COL_WIDTHS = { 일차: 8, 날짜: 11, 순서: 5, 시간: 7, 종류: 6, 장소: 28, 주소: 40, 메모: 40, 링크: 30, 구글맵: 22, 위도: 11, 경도: 11 };
 const LINK_COLS = ['링크', '구글맵'];
@@ -129,6 +130,10 @@ function flightEvents(trip, stamp) {
       `SUMMARY:${calendarEscape(`${flightKind(f.kind)} · ${flightSummary(f)}`)}`,
       ...(f.from || f.to ? [`LOCATION:${calendarEscape([f.from, f.to].filter(Boolean).join(' → '))}`] : []),
       ...(desc ? [`DESCRIPTION:${calendarEscape(desc)}`] : []),
+      ...flightReminders(f).flatMap(({ hours, label }) => [
+        'BEGIN:VALARM', `TRIGGER:-PT${hours}H`, 'ACTION:DISPLAY',
+        `DESCRIPTION:${calendarEscape(label)}`, 'END:VALARM',
+      ]),
       'END:VEVENT',
     ]];
   });

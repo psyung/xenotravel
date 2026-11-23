@@ -3,6 +3,7 @@
 import { t, getLang } from './i18n.js';
 
 const PHOTON = 'https://photon.komoot.io';
+const TOURISM = new Set(['attraction', 'museum', 'gallery', 'viewpoint', 'zoo', 'aquarium', 'theme_park', 'artwork']);
 
 function unique(parts) {
   const seen = new Set();
@@ -26,7 +27,7 @@ async function getJSON(url, signal) {
     res = await fetch(url, { signal });
   } catch (err) {
     if (err.name === 'AbortError') throw err;
-    throw Object.assign(new Error(t('검색 서버에 연결하지 못했어요')), { kind: navigator?.onLine === false ? 'offline' : 'network' });
+    throw Object.assign(new Error(t('검색 서버에 연결하지 못했어요')), { kind: globalThis.navigator?.onLine === false ? 'offline' : 'network' });
   }
   if (!res.ok) throw Object.assign(new Error(t('장소 검색 서버 오류 ({status})', { status: res.status })), { kind: res.status === 429 ? 'busy' : 'provider' });
   return res.json();
@@ -48,6 +49,24 @@ export async function reversePlace(lat, lng, signal) {
   const data = await getJSON(`${PHOTON}/reverse?${params}`, signal);
   const f = data.features?.[0];
   return f ? featureToPlace(f) : null;
+}
+
+export function tourismPlaces(features) {
+  const seen = new Set();
+  return features.filter(({ properties: p }) => p?.name && p.osm_key === 'tourism' && TOURISM.has(p.osm_value))
+    .map(featureToPlace).filter((place) => {
+      if (!Number.isFinite(place.lat) || !Number.isFinite(place.lng)) return false;
+      const key = `${place.name}:${place.lat.toFixed(3)}:${place.lng.toFixed(3)}`;
+      return !seen.has(key) && seen.add(key);
+    }).slice(0, 10);
+}
+
+/** One bounded reverse search per explicit user request, ordered by proximity. */
+export async function nearbyTourism({ lat, lng }, signal) {
+  const params = new URLSearchParams({ lat: String(lat), lon: String(lng), radius: '15', limit: '30' });
+  for (const kind of TOURISM) params.append('osm_tag', 'tourism:' + kind);
+  const data = await getJSON(`${PHOTON}/reverse?${params}`, signal);
+  return tourismPlaces(data.features ?? []);
 }
 
 // 여행지(도시) 좌표: Nominatim (OpenStreetMap). Photon은 "오사카" 같은 한국어 도시 이름을 못 찾고

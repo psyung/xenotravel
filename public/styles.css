@@ -506,6 +506,32 @@ body[data-view="board"] .board-only { display: inline-flex; }
 .trend-empty { display: flex; align-items: center; gap: 8px; padding: 10px 14px; font-size: 13px; color: var(--sub); }
 .trend-empty .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
 .trend-empty .link { margin-left: auto; flex: none; border: 0; background: none; padding: 4px 0; color: var(--accent); font-weight: 600; font-size: 13px; }
+.nearby-trends { min-width: 0; }
+.nearby-trends .trend-empty { flex-wrap: wrap; }
+.nearby-trends .trend-empty .link { margin-left: 0; flex: 0 1 auto; }
+.nearby-trends .trend-card { background: var(--soft); border-style: dashed; }
+.nearby-trends .trend-note { margin-inline: 14px; }
+.nearby-trends :is(.btn, .link, .tc-add) { min-height: 40px; white-space: normal; }
+.nearby-trends :is(.tc-name, .tc-area, .tc-src) { overflow-wrap: anywhere; }
+.day-warnings .day-warning { min-height: 40px; color: var(--ink); background: var(--warn-soft); white-space: normal; text-align: start; }
+.chips .day-travel-select { min-width: 0; min-height: 40px; max-width: 100%; }
+.place-hours { margin: 0; min-width: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--r); }
+.place-hours legend { color: var(--sub); }
+.closed-days, .hours-inputs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.editor .closed-days label { display: inline-flex; flex-direction: row; align-items: center; min-width: 40px; min-height: 40px; }
+.hours-inputs label { flex: 1 1 90px; min-width: 0; }
+.hours-inputs input { width: 100%; min-width: 0; min-height: 40px; }
+.pin-seg:has([data-stay-suggestions]) { flex-wrap: wrap; max-width: 100%; }
+.pin-seg [data-stay-suggestions] { min-height: 40px; white-space: normal; }
+.stay-suggestion-marker { display: grid; place-items: center; }
+.stay-suggestion-marker::before {
+  content: ""; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--stay-soft); border: 2px dashed var(--stay);
+}
+.budget-pace { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-block: 12px; overflow-wrap: anywhere; }
+.timeline .leg { min-height: 40px; max-width: 100%; }
+.timeline .leg-how { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.toast .toast-act, .menu-pop [data-menu="directions"] { min-height: 40px; }
 .trend-col .day-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .trend-col .day-title { display: flex; align-items: center; gap: 6px; flex: 1; border: 0; background: none; padding: 0; text-align: left; min-width: 0; }
 .trend-col .day-title strong { font-size: 15px; font-weight: 700; }
@@ -2163,3 +2189,5 @@ dialog.p3-dialog { width: min(520px, calc(100vw - 32px)); overflow-wrap: anywher
 #askActions { flex-wrap: wrap; }
 .ms-day-picker { padding: 0 12px 6px; flex: none; }
 .ms-day-picker .ui-select { width: 100%; min-height: 40px; }
+/* 오프라인 미니맵의 북쪽(N) 표시와 [기본/회색] 버튼이 겹치지 않게 */
+.mapwrap:has(#miniMap:not([hidden])) .leaflet-control.map-style-control { margin-top: 34px; }

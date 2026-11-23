@@ -232,13 +232,13 @@ test('P0-7: 언어는 언어 버튼을 누를 때만 저장한다', () => {
   assert.match(app, /setLang\(button\.dataset\.lang\);\n  saveLang\(\);/);
 });
 
-test('P0-8: 여행 페이지 "요즘 뜨는 곳"은 여행지 도시만 — 도시 선택 칸 없음, 데이터가 없으면 접힌 한 줄 안내', () => {
+test('P0-8: 여행 페이지 "요즘 뜨는 곳"은 여행지 도시만 — 데이터가 없으면 장소 검색 안내', () => {
   const app = appSource();
   assert.doesNotMatch(app, /class="trend-city"/);
   assert.doesNotMatch(app, /trip\.trendCity = /);
   const fn = app.slice(app.indexOf('function currentCity()'), app.indexOf('function findTrend('));
   assert.doesNotMatch(fn, /trendCity/);
-  assert.match(app, /trend-empty card/);
+  assert.match(app, /class="trend-empty"/);
   assert.match(app, /data-action="trend-search"/);
 });
 

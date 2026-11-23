@@ -81,6 +81,19 @@ export function init(ctx) {
       .join('');
   }
 
+  function paceHtml() {
+    const p = B.budgetPace(ctx.trip);
+    const available = p.remainingPerDay != null
+      ? t('남은 {n}일 동안 하루 {amount}까지 가능', { n: num(p.remainingDays), amount: B.won(p.remainingPerDay) })
+      : p.status === 'after' ? t('여행 끝') : p.status === 'undated' ? t('날짜 미정') : t('예산을 넣으면 계산해요');
+    return `<div class="box budget-pace">
+      <b>${esc(t('오늘 쓴 돈 / 하루 권장액'))}</b>
+      <span>${esc(B.won(p.todaySpent))} / ${p.recommended == null || p.status === 'after' ? '—' : esc(B.won(p.recommended))}</span>
+      <span>${p.status === 'before' ? `${esc(t('출발 전'))} · ` : ''}${esc(available)}</span>
+      ${p.pending ? `<small>${esc(t('환율 미정'))}</small>` : ''}
+    </div>`;
+  }
+
   function renderBudget() {
     const el = $('#page-budget');
     keepDrafts(el, () => drawBudget(el));
@@ -111,6 +124,7 @@ export function init(ctx) {
     el.innerHTML = `<div class="wrap">
     <h1 class="page-h">${esc(t('예산 · 가계부'))}</h1>
     <p class="page-sub">${esc(t('금액만 넣고 기록하면 돼요. 현지 돈으로 적으면 그때 환율로 원화도 같이 저장돼요.'))}</p>
+    ${paceHtml()}
     ${
         confirmCur && !ctx.ui.readonly
           ? `<div class="cur-confirm" role="group" aria-labelledby="curConfirmTitle">
@@ -196,7 +210,7 @@ export function init(ctx) {
                   if (ctx.ui.editExpense === e.id && !ctx.ui.readonly) return expenseEditHtml(e);
                   const c = B.EXPENSE_CATS[e.cat] ?? B.EXPENSE_CATS.etc;
                   const pay = B.PAYMENTS[e.pay] ?? B.PAYMENTS.card;
-                  // 적은 통화가 지금 보여 주는 기준 통화와 다르면 원래 금액과 그때 적용한 환율을 함께
+                  // 원래 금액이 기준 통화와 다르면 함께 표시하고, 적용 환율은 기준 통화와 관계없이 표시
                   const origCode = e.ccy ?? (e.cur === 'KRW' ? 'KRW' : b.currency);
                   const orig = origCode === shownBase(b) ? '' : origCode === 'KRW' ? B.won(e.amount) : B.moneyCode(e.amount, origCode);
                   const rate = origCode !== 'KRW' && e.rate > 0 ? expenseRateLabel(origCode, e.rate) : '';
@@ -205,7 +219,7 @@ export function init(ctx) {
                   const who = payerLabel(e);
                   return `<li>
                   <span class="rec-main"><b>${esc(e.memo || t(c.label))}</b><small>${esc(B.expenseDayLabel(ctx.trip, e))} · ${esc(t(c.label))} · <span class="pay-tag" data-pay="${esc(e.pay)}">${esc(t(pay.label))}</span>${link ? ` · <span class="src-tag">${e.checkId ? '<svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>' : '<svg class="ic" aria-hidden="true"><use href="#i-pin"/></svg>'}${esc(link)}</span>` : ''}${who ? ` · ${esc(who)}` : ''}</small></span>
-                  <span class="rec-amt">${units == null ? `<span class="pend">${esc(t('환율 미정'))}</span>` : bu(units)}${orig ? `<small>${esc(orig)}${rate ? ` · ${esc(rate)}` : ''}</small>` : ''}</span>
+                  <span class="rec-amt">${units == null ? `<span class="pend">${esc(t('환율 미정'))}</span>` : bu(units)}${orig || rate ? `<small>${esc([orig, rate].filter(Boolean).join(' · '))}</small>` : ''}</span>
                   <span class="rec-acts"><button class="icon" data-b="edit" data-id="${e.id}" title="${esc(t('수정'))}" aria-label="${esc(t('{name} 수정', { name: e.memo || t(c.label) }))}">✎</button><button class="icon" data-b="del" data-id="${e.id}" title="${esc(t('삭제'))}" aria-label="${esc(t('{name} 삭제', { name: e.memo || t(c.label) }))}">✕</button></span></li>`;
                 })
                 .join('')}</ul>`
