@@ -2212,3 +2212,30 @@ html, body { overflow-x: clip; }
 .editor input:not([type="checkbox"]):not([type="radio"]), .editor textarea, .editor select { border-color: transparent; background: var(--soft); border-radius: 10px; }
 .editor .ui-select { border-color: transparent; background: var(--soft); }
 .editor input:focus, .editor textarea:focus { background: var(--paper); }
+
+/* ═════════ 선택 표시 규칙 (앱 전체 하나로) ═════════
+ * 1) 세그먼트: 2~3개 중 하나를 고르는 전환·보기 방식 → 회색 트랙 + 흰 선택 칸
+ *    일정/지도 · 목록/보드 · 요즘 뜨는 곳/많이 가는 곳 · 일정/가계부/체크(데스크톱) · 일차별/종류별 · 기본/회색 · 체크리스트 탭 · 출국/이동/귀국
+ * 2) 칩: 여러 개 중 하나 고르기, 켜고 끄는 토글 → 검은 칩
+ *    일차 탭 · 가계부 분류 · 추천 도시 · 전체 동선 · 숙소 추천 위치 · 지도에서 찍기
+ * 예외: 장소 종류(색이 뜻을 가짐), 언어 글자 버튼, 목록·메뉴의 강조 줄 */
+.seg, .mtabs, .trend-tabs, .pnav, .pin-seg, .check-tabs, .search.card.compact .mini-tabs { background: var(--line); }
+.seg button.active, .mtabs button.active, .trend-tabs [aria-selected="true"], .trend-tabs [aria-selected="true"]:hover,
+.pnav .pg.on, .pin-seg button.active[data-pin], .map-style-control button[aria-pressed="true"],
+.check-tabs button[aria-pressed="true"], .search.card.compact .mini-tabs button[data-mini-tab="plan"] {
+  background: var(--paper); color: var(--ink); border-color: transparent; box-shadow: 0 1px 2px rgba(15, 30, 46, .12);
+}
+/* 지도 위 컨트롤도 같은 세그먼트 (트랙만 지도 위에서 보이게 테두리·그림자) */
+.pin-seg { border: 1px solid var(--line); box-shadow: var(--shadow); }
+.mapwrap .leaflet-control.map-style-control { padding: 3px; gap: 2px; background: var(--line); }
+.map-style-control button { border-radius: 7px; color: var(--sub); }
+/* 숙소 추천 위치는 켜고 끄는 토글 → 검은 칩 (세그먼트 안에 있어도) */
+.pin-seg [data-stay-suggestions] { margin-left: 2px; }
+.pin-seg [data-stay-suggestions].active { background: var(--ink); color: var(--paper); box-shadow: none; }
+/* 체크리스트 탭: 세그먼트 트랙 안의 칸 */
+@media (max-width: 767px) {
+  .check-tabs { gap: 2px; padding: 3px; border-radius: 10px; }
+  .check-tabs button { border: 0; background: none; color: var(--sub); border-radius: 8px; min-height: 38px; }
+}
+/* 켜고 끄는 모드 버튼(지도에서 찍기 등)도 칩 규칙 */
+.pill.active { background: var(--ink); border-color: var(--ink); color: var(--paper); }

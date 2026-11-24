@@ -379,3 +379,14 @@ test('design consistency: primary add is blue, two-way switches are segmented, f
   assert.match(css, /\.base-row label > span \{ white-space: nowrap;/);
   assert.match(css, /\.editor input:not\(\[type="checkbox"\]\):not\(\[type="radio"\]\), \.editor textarea, \.editor select \{ border-color: transparent; background: var\(--soft\);/);
 });
+
+test('one selection rule: segmented switches are white on a grey track, toggles and pick-one chips are dark chips', () => {
+  const css = source('public/styles.css');
+  const rule = css.slice(css.indexOf('선택 표시 규칙'));
+  for (const sel of ['.seg button.active', '.mtabs button.active', '.trend-tabs [aria-selected="true"]', '.pnav .pg.on', '.pin-seg button.active[data-pin]', '.map-style-control button[aria-pressed="true"]', '.check-tabs button[aria-pressed="true"]']) {
+    assert.ok(rule.includes(sel), sel);
+  }
+  assert.match(rule, /background: var\(--paper\); color: var\(--ink\); border-color: transparent;/);
+  assert.match(rule, /\.pin-seg \[data-stay-suggestions\]\.active \{ background: var\(--ink\);/);
+  assert.match(rule, /\.pill\.active \{ background: var\(--ink\);/);
+});
