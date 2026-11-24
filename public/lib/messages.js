@@ -260,7 +260,7 @@ export const MESSAGES = {
   "날짜를 바꿨어요": ["Dates changed", "已更改日期", "日程を変更しました"],
   "캘린더에 내보낼 일정이 없어요. 날짜가 있는 일차에 장소를 넣으면 내보낼 수 있어요": ["Nothing to export to a calendar. Add places to dated days to export them.", "没有可导出到日历的行程。在有日期的那天添加地点后即可导出", "カレンダーに書き出す予定がありません。日付のある日に場所を入れると書き出せます"],
   "더보기 · 백업 파일을 저장할 때예요": ["More · Time to save a backup", "更多 · 该保存备份了", "その他 · バックアップを保存する時期です"],
-  "더보기": ["More", "更多", "その他"],
+  "더보기": ["More", "更多", "もっと見る"],
   "파일이 너무 커요 (10MB 이하)": ["The file is too large (max 10 MB)", "文件过大（不超过 10MB）", "ファイルが大きすぎます（10MB 以下）"],
   "백업 파일을 불러오지 못했어요": ["Couldn't import the backup file", "无法导入备份文件", "バックアップファイルを読み込めませんでした"],
   "JSON 파일을 읽을 수 없어요. 파일이 잘렸거나 다른 형식이에요.": ["Can't read the JSON file. It may be truncated or in a different format.", "无法读取 JSON 文件。文件可能不完整或格式不同。", "JSON ファイルを読み込めません。ファイルが途中で切れているか、別の形式です。"],

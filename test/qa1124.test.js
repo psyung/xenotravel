@@ -7,6 +7,93 @@ import { join } from 'node:path';
 import { buildFiles, dropLeadingTitle, siteStage, withSiteMeta } from '../scripts/build-site.mjs';
 
 const source = (path) => readFileSync(new URL('../' + path, import.meta.url), 'utf8');
+
+test('editable place card keeps primary fields visible and puts secondary controls under More', () => {
+  const plan = source('public/pages/plan.js');
+  const item = plan.match(/function itemHtml\([\s\S]*?\n  \}/)?.[0];
+  assert.ok(item);
+  assert.match(item, /\$\{overlap \? timeWarnHtml\([\s\S]*?\? detailHtml\(it\)/);
+  assert.equal([...item.matchAll(/<details\b/g)].length, 1);
+  const layout = item.match(/<div class="editor">([\s\S]*?)<details class="editor-more"([^\n]*)\n([\s\S]*?)<\/details>/);
+  assert.ok(layout);
+  const [, visible, openAttribute, more] = layout;
+  assert.match(openAttribute, /^\$\{editorMore === it\.id \? ' open' : ''\}>$/);
+  assert.match(plan, /editorMore = \$\('\.editor-more\[open\]', daysEl\)\?\.closest\('\.item'\)\?\.dataset\.id \?\? null;/);
+
+  function assertInOrder(html, fields) {
+    let previous = -1;
+    for (const field of fields) {
+      const position = html.indexOf(field);
+      assert.ok(position > previous, field);
+      previous = position;
+    }
+  }
+  const primary = ['data-field="time"', 'data-visited', 'data-field="memo"', 'class="addr"', 'directionsHtml(it)', 'googleMapsUrl(it)'];
+  const secondary = [
+    "<summary>${esc(t('더보기'))}</summary>", 'data-field="name"', 'class="cat-pick"', 'data-field="url"',
+    'hoursEditorHtml(it)', 'costEditorHtml(it)', 'data-pin', 'data-action="item-up"', 'data-action="item-down"',
+    'data-action="item-prev-day"', 'data-action="item-next-day"', 'class="move-to" data-ui-select',
+    'data-action="place-move"', 'data-action="place-copy"', 'data-action="duplicate"', 'data-action="delete"',
+  ];
+  assertInOrder(visible, primary);
+  assertInOrder(more, secondary);
+  for (const field of primary) assert.ok(!more.includes(field), field);
+  for (const field of secondary) assert.ok(!visible.includes(field), field);
+});
+
+test('type scale defines the mobile and desktop sizes in tokens.css', () => {
+  const css = source('public/tokens.css');
+  const definitions = (block) => Object.fromEntries(
+    [...block.matchAll(/--fs-([\w-]+):\s*(\d+px);/g)].map(([, name, size]) => [name, size]),
+  );
+  const root = css.match(/^:root\s*\{([^}]+)\}/m)?.[1];
+  const desktop = css.match(/@media \(min-width: 768px\)\s*\{\s*:root\s*\{([^}]+)\}/)?.[1];
+  assert.ok(root && desktop);
+  assert.deepEqual(definitions(root), { xs: '11px', sm: '12px', base: '13px', md: '14px', lg: '17px', xl: '20px', display: '24px' });
+  assert.deepEqual(definitions(desktop), { base: '14px', md: '16px', lg: '18px', xl: '22px', display: '30px' });
+});
+
+test('app font sizes use tokens outside the fixed glyph, mobile input, hero, and print rules', () => {
+  const exceptions = {
+    // Fixed glyph sizes.
+    '.icon': '14px',
+    '.map-day-switcher button': '22px',
+    '.map-locate': '18px',
+    '.stay-pin': '11px',
+    '.trend-pin': '11px',
+    '.rp-drag': '12px',
+    '.rp-move button': '15px',
+    '.drag': '12px',
+    '.dock-toggle .chev': '12px',
+    '.tc-plus': '28px',
+    '.dp-dismiss': '23px',
+    'button.td-num': '11px',
+    '.members li .icon': '11px',
+    '.trend-arrows .icon': '18px',
+    '.ms-chev': '15px',
+    '.toast-close': '20px',
+    // iOS zoom prevention and fluid hero heading.
+    'input, select, textarea': '16px !important',
+    '.home-hero h1': 'clamp(26px, 4.4vw, 44px)',
+    // Print and print preview.
+    '.print-page h1': '22px',
+    '.print-day h2': '16px',
+    '.print-day table': '12px',
+    '.hb-overview h2': '16px',
+    '.hb-overview h3': '13px',
+    '.hb-facts div': '12.5px',
+    '.hb-table': '12px',
+  };
+  const css = source('public/styles.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  const actual = [];
+  for (const [, selector, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    for (const [, value] of body.matchAll(/\bfont(?:-size)?:\s*([^;}]*\dpx\b[^;}]*)/g)) {
+      actual.push([selector.trim(), value.trim()]);
+    }
+  }
+  assert.deepEqual(actual.sort(), Object.entries(exceptions).sort());
+});
+
 const guide = ({ slug = 'tokyo', lang = 'ko', draft = false, body = '# Tokyo\n\nHello' } = {}) =>
   ['---', 'title: Tokyo guide', 'slug: ' + slug, 'city: Tokyo', 'country: Japan', 'lang: ' + lang,
     'draft: ' + draft, 'updated: 2026-11-24', 'description: A test guide', 'sources: []', '---', body].join('\n');
@@ -266,7 +353,7 @@ test('toast ✕, cover picker without the native file button, timeline spacing, 
   const css = source('public/styles.css');
   assert.match(css, /\.cover-file \{ position: absolute; width: 1px; height: 1px; opacity: 0;/);
   assert.match(css, /\.p3-form label:not\(\.p3-check\):not\(\.cover-drop\) \{ display: grid;/);
-  assert.match(css, /\.tl-time \{ font-size: 11px; padding-right: 8px; \}/);
+  assert.match(css, /\.tl-time \{ font-size: var\(--fs-xs\); padding-right: 8px; \}/);
   assert.match(css, /\.day-tools \{ display: flex; gap: 2px; flex-wrap: wrap; align-items: center;/);
   assert.match(css, /\.timeline\.no-times \.tl-row/);
 });
@@ -283,4 +370,12 @@ test('large text (Samsung Internet) cannot push the place editor or page sideway
   assert.match(css, /html, body \{ overflow-x: clip; \}/);
   assert.match(css, /width: max-content; max-width: min\(440px, calc\(100vw - 32px\)\);/);
   assert.match(source('public/ui/toast.js'), /msg\.className = 'toast-text';/);
+});
+
+test('design consistency: primary add is blue, two-way switches are segmented, filled inputs, one-line base currency', () => {
+  const css = source('public/styles.css');
+  assert.match(css, /\.addrow button \{ flex: none; border: 0; background: var\(--cta\); color: var\(--cta-text\);/);
+  assert.match(css, /\.trend-tabs \{ display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: var\(--soft\); \}/);
+  assert.match(css, /\.base-row label > span \{ white-space: nowrap;/);
+  assert.match(css, /\.editor input:not\(\[type="checkbox"\]\):not\(\[type="radio"\]\), \.editor textarea, \.editor select \{ border-color: transparent; background: var\(--soft\);/);
 });

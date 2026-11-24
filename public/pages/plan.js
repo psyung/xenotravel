@@ -406,6 +406,8 @@ export function init(ctx) {
     </div>`;
   }
 
+  let editorMore = null;
+
   function itemHtml(it, i, isDay, leg = null, listItems = null, overlap = '') {
     const open = ui.openItem === it.id;
     const sub = esc(it.memo || it.address); // 접힌 카드는 메모를 2줄까지만 (CSS line-clamp). 시간은 타임라인 왼쪽에 따로 보인다
@@ -435,31 +437,38 @@ export function init(ctx) {
           ? detailHtml(it)
           : open
           ? `<div class="editor">
-      <label>${esc(t('이름'))}<input data-field="name" value="${esc(it.name)}"></label>
-      <div class="cat-pick" role="group" aria-label="${esc(t('종류'))}">${Object.entries(M.CATEGORIES)
-          .map(([k, c]) => `<button type="button" data-action="set-cat" data-cat="${k}" aria-pressed="${it.category === k}" class="${it.category === k ? 'on' : ''}" style="--c:${c.color}">${esc(t(c.label))}</button>`)
-          .join('')}</div>
       <label>${esc(t('시간'))}<input type="time" data-field="time" value="${esc(it.time)}"></label>
-      ${hoursEditorHtml(it)}
-      ${isDay ? `<label class="pin-toggle"><input type="checkbox" data-pin${it.pinned ? ' checked' : ''}> ${esc(t('동선 정리할 때 이 순서 그대로 두기'))} <small>(${esc(t('시간을 정한 곳은 늘 그대로'))})</small></label>` : ''}
-      ${isDay ? costEditorHtml(it) : ''}
       ${dayPos >= 0 && ctx.trip.days[dayPos].date && ctx.trip.days[dayPos].date <= TODAY ? `<label class="pin-toggle retro-visit"><input type="checkbox" data-visited${it.visited ? ' checked' : ''}> ${esc(t('다녀왔어요'))}</label>` : ''}
       <label>${esc(t('메모'))}<textarea data-field="memo" placeholder="${esc(t('영업시간, 예약번호, 꼭 먹을 것…'))}">${esc(it.memo)}</textarea></label>
-      <label>${esc(t('링크'))}<input type="url" data-field="url" value="${esc(it.url)}" placeholder="${esc(t('예약 페이지, 블로그 등'))}"></label>
-      <div class="order-row" role="group" aria-label="${esc(t('순서 바꾸기'))}">
-        <span>${esc(t('순서'))}</span>
-        <button type="button" data-action="item-up"${canUp ? '' : ' disabled'} aria-label="${esc(t('{name} 한 칸 위로', { name: it.name }))}">↑ ${esc(t('위로'))}</button>
-        <button type="button" data-action="item-down"${canDown ? '' : ' disabled'} aria-label="${esc(t('{name} 한 칸 아래로', { name: it.name }))}">↓ ${esc(t('아래로'))}</button>
-        ${isDay ? `<button type="button" data-action="item-prev-day"${dayPos > 0 ? '' : ' disabled'} aria-label="${esc(t('{name} 전날로 옮기기', { name: it.name }))}">← ${esc(t('전날'))}</button>
-        <button type="button" data-action="item-next-day"${dayPos >= 0 && dayPos < ctx.trip.days.length - 1 ? '' : ' disabled'} aria-label="${esc(t('{name} 다음 날로 옮기기', { name: it.name }))}">${esc(t('다음 날'))} →</button>` : ''}
-      </div>
-      <label>${esc(t('다른 날로 옮기기'))}<select class="move-to" data-ui-select>${moveOptions(listIdOf(it.id), t('옮길 날 고르기'))}</select></label>
       ${it.address ? `<p class="addr">${esc(it.address)}</p>` : ''}
       ${directionsHtml(it)}
       <div class="editor-actions">
         <a href="${href(M.googleMapsUrl(it))}" target="_blank" rel="noopener">${esc(t('구글맵에서 열기 ↗'))}</a>
-        <span class="ea-buttons"><button data-action="place-move" aria-haspopup="dialog">${esc(t('다른 일차로 이동'))}</button> <button data-action="place-copy" aria-haspopup="dialog">${esc(t('다른 일차로 복제'))}</button> <button data-action="duplicate">${esc(t('같은 날 복제'))}</button> <button data-action="delete" class="danger">${esc(t('삭제'))}</button></span>
       </div>
+      <details class="editor-more"${editorMore === it.id ? ' open' : ''}>
+        <summary>${esc(t('더보기'))}</summary>
+        <div class="editor-more-fields">
+          <label>${esc(t('이름'))}<input data-field="name" value="${esc(it.name)}"></label>
+          <div class="cat-pick" role="group" aria-label="${esc(t('종류'))}">${Object.entries(M.CATEGORIES)
+              .map(([k, c]) => `<button type="button" data-action="set-cat" data-cat="${k}" aria-pressed="${it.category === k}" class="${it.category === k ? 'on' : ''}" style="--c:${c.color}">${esc(t(c.label))}</button>`)
+              .join('')}</div>
+          <label>${esc(t('링크'))}<input type="url" data-field="url" value="${esc(it.url)}" placeholder="${esc(t('예약 페이지, 블로그 등'))}"></label>
+          ${hoursEditorHtml(it)}
+          ${isDay ? costEditorHtml(it) : ''}
+          ${isDay ? `<label class="pin-toggle"><input type="checkbox" data-pin${it.pinned ? ' checked' : ''}> ${esc(t('동선 정리할 때 이 순서 그대로 두기'))} <small>(${esc(t('시간을 정한 곳은 늘 그대로'))})</small></label>` : ''}
+          <div class="order-row" role="group" aria-label="${esc(t('순서 바꾸기'))}">
+            <span>${esc(t('순서'))}</span>
+            <button type="button" data-action="item-up"${canUp ? '' : ' disabled'} aria-label="${esc(t('{name} 한 칸 위로', { name: it.name }))}">↑ ${esc(t('위로'))}</button>
+            <button type="button" data-action="item-down"${canDown ? '' : ' disabled'} aria-label="${esc(t('{name} 한 칸 아래로', { name: it.name }))}">↓ ${esc(t('아래로'))}</button>
+            ${isDay ? `<button type="button" data-action="item-prev-day"${dayPos > 0 ? '' : ' disabled'} aria-label="${esc(t('{name} 전날로 옮기기', { name: it.name }))}">← ${esc(t('전날'))}</button>
+            <button type="button" data-action="item-next-day"${dayPos >= 0 && dayPos < ctx.trip.days.length - 1 ? '' : ' disabled'} aria-label="${esc(t('{name} 다음 날로 옮기기', { name: it.name }))}">${esc(t('다음 날'))} →</button>` : ''}
+          </div>
+          <label>${esc(t('다른 날로 옮기기'))}<select class="move-to" data-ui-select>${moveOptions(listIdOf(it.id), t('옮길 날 고르기'))}</select></label>
+          <div class="editor-actions">
+            <span class="ea-buttons"><button data-action="place-move" aria-haspopup="dialog">${esc(t('다른 일차로 이동'))}</button> <button data-action="place-copy" aria-haspopup="dialog">${esc(t('다른 일차로 복제'))}</button> <button data-action="duplicate">${esc(t('같은 날 복제'))}</button> <button data-action="delete" class="danger">${esc(t('삭제'))}</button></span>
+          </div>
+        </div>
+      </details>
     </div>`
           : ''
       }
@@ -845,6 +854,7 @@ export function init(ctx) {
     ui.sortables.forEach((s) => s.destroy());
     ui.sortables = [];
     const daysEl = $('#days');
+    editorMore = $('.editor-more[open]', daysEl)?.closest('.item')?.dataset.id ?? null;
     const lists = allLists()
       .filter((l) => l.isDay)
       .map((l, i) => ({ ...l, dayIndex: i, title: M.dayTitle(ctx.trip.days[i], i) }));

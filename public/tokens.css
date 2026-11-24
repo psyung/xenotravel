@@ -1,5 +1,12 @@
 /* XenoTravel design tokens: shared by the app (styles.css) and static pages (site.css). */
 :root {
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-base: 13px;
+  --fs-md: 14px;
+  --fs-lg: 17px;
+  --fs-xl: 20px;
+  --fs-display: 24px;
   --bg-app: #F5F8FC; --bg-surface: #FFFFFF; --border-subtle: #DFE7F0; --text-primary: #0F1E2E; --text-secondary: #475569;
   --btn-primary-bg: #0A6FC2; --btn-primary-text: #FFFFFF; --accent-primary: #0A6FC2; --accent-hover: #095CA1; --accent-soft-bg: #E8F3FD; --accent-soft-border: #BBDCF8;
   --lang-off: #64748B;
@@ -59,4 +66,14 @@
   --card-shadow: none;
   --aura-1: rgba(74, 168, 245, .22); --aura-2: rgba(56, 189, 248, .16); --aura-3: rgba(251, 191, 36, .08);
   color-scheme: dark;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --fs-base: 14px;
+    --fs-md: 16px;
+    --fs-lg: 18px;
+    --fs-xl: 22px;
+    --fs-display: 30px;
+  }
 }
