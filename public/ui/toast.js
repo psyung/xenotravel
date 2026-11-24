@@ -31,7 +31,11 @@ export function init(ctx) {
       ms = Math.max(ms, undoStack.left());
     }
     const el = $('#toast');
-    el.textContent = text;
+    el.textContent = '';
+    const msg = document.createElement('span');
+    msg.className = 'toast-text';
+    msg.textContent = text;
+    el.append(msg);
     el.classList.toggle('has-action', Boolean(action));
     const hide = () => {
       clearTimeout(toastTimer);
@@ -47,7 +51,7 @@ export function init(ctx) {
         hide();
         action.run();
       }, { once: true });
-      el.append(' ', b);
+      el.append(b);
       // 바로 닫을 수 있게 ✕ (백업 권유처럼 오래 떠 있는 알림)
       const x = document.createElement('button');
       x.type = 'button';

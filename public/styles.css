@@ -369,7 +369,7 @@ body[data-view="board"] .board-only { display: inline-flex; }
 .timeline { position: relative; display: flex; flex-direction: column; margin-top: 4px; }
 .timeline::before { content: ""; position: absolute; left: 47px; top: 14px; bottom: 14px; width: 1.5px; background: var(--line); }
 .items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; min-height: 10px; }
-.tl-row, .item:not(.dock-card) { position: relative; display: grid; grid-template-columns: 40px 1fr; column-gap: 16px; }
+.tl-row, .item:not(.dock-card) { position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: 16px; }
 .tl-time { position: relative; grid-column: 1; grid-row: 2; padding-top: 12px; text-align: right; font-size: 12px; font-weight: 600; color: var(--sub); font-variant-numeric: tabular-nums; }
 .tl-time::after {
   content: ""; position: absolute; left: 43px; top: 15px; width: 10px; height: 10px; border-radius: 50%;
@@ -403,8 +403,11 @@ body[data-view="board"] .board-only { display: inline-flex; }
 .leg-go { color: var(--accent); font-weight: 600; padding: 0 4px; white-space: nowrap; }
 
 /* 편집 창 */
-.editor { padding: 2px 12px 12px 34px; display: grid; gap: 10px; }
-.editor label { display: grid; gap: 3px; font-size: 12px; color: var(--sub); font-weight: 500; }
+/* 칸은 입력칸의 기본 폭(약 20글자)보다 좁아질 수 있어야 한다 — 큰 글자(삼성 인터넷 등)에서 카드 밖으로 넘치던 것 */
+.editor { padding: 2px 12px 12px 34px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; }
+.editor > * { min-width: 0; }
+.editor label { display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; min-width: 0; font-size: 12px; color: var(--sub); font-weight: 500; }
+.editor input:not([type="checkbox"]):not([type="radio"]), .editor textarea, .editor select { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
 .editor input, .editor textarea, .editor select { border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; background: var(--paper); color: var(--ink); font-size: 13px; }
 .editor input:focus, .editor textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
 .editor textarea { min-height: 64px; resize: vertical; }
@@ -693,8 +696,9 @@ dialog#flightDialog { width: min(520px, calc(100vw - 32px)); }
 #toast {
   position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(12px); z-index: 3000;
   background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 12px; font-weight: 500; font-size: 13px;
-  opacity: 0; pointer-events: none; transition: .2s; max-width: calc(100vw - 32px);
+  opacity: 0; pointer-events: none; transition: .2s; width: max-content; max-width: min(440px, calc(100vw - 32px));
 }
+#toast .toast-text { flex: 1 1 auto; min-width: 0; line-height: 1.45; overflow-wrap: anywhere; word-break: keep-all; }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* 언어 선택: KO EN 中 日 인라인 텍스트 버튼 (활성 = 코랄 800, 비활성 = 보조색 500) */
@@ -819,7 +823,7 @@ body.readonly .trip-title { pointer-events: none; }
   .item-name { font-size: 13.5px; }
   /* 시간 글자와 점 사이 8px: 시간 칸 38px(오른쪽 여백 8px) + 간격 12px */
   .timeline::before { left: 43px; }
-  .tl-row, .item:not(.dock-card) { grid-template-columns: 38px 1fr; column-gap: 12px; }
+  .tl-row, .item:not(.dock-card) { grid-template-columns: 38px minmax(0, 1fr); column-gap: 12px; }
   .tl-time { font-size: 11px; padding-right: 8px; }
   .tl-time::after { left: 39px; }
   .empty-list, .days .items:empty { margin-left: 48px; }
@@ -2169,7 +2173,7 @@ dialog.p3-dialog { width: min(520px, calc(100vw - 32px)); overflow-wrap: anywher
 
 /* 시간이 없는 날: 시간 칸을 접어 왼쪽 여백을 줄인다 (점·세로선만 남김) */
 .timeline.no-times::before { left: 5px; }
-.timeline.no-times .tl-row, .timeline.no-times .item:not(.dock-card) { grid-template-columns: 0 1fr; column-gap: 14px; }
+.timeline.no-times .tl-row, .timeline.no-times .item:not(.dock-card) { grid-template-columns: 0 minmax(0, 1fr); column-gap: 14px; }
 .timeline.no-times .tl-time::after { left: 1px; }
 .timeline.no-times .empty-list { margin-left: 14px; }
 
@@ -2189,3 +2193,6 @@ dialog.p3-dialog { width: min(520px, calc(100vw - 32px)); overflow-wrap: anywher
 /* 토스트 닫기(✕) */
 .toast-close { flex: none; width: 32px; height: 32px; margin: -6px -8px -6px -2px; border: 0; border-radius: 8px; background: none; color: inherit; font-size: 20px; line-height: 1; opacity: .75; cursor: pointer; }
 .toast-close:hover { opacity: 1; background: rgba(255, 255, 255, .12); }
+
+/* 마지막 안전장치: 어떤 요소가 넘쳐도 페이지 전체가 옆으로 밀리지 않게 (clip은 sticky를 깨지 않는다) */
+html, body { overflow-x: clip; }

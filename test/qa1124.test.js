@@ -274,3 +274,13 @@ test('toast ✕, cover picker without the native file button, timeline spacing, 
 test('mobile Select sheet spans the full width (it was capped at 100vw - 16px and hugged the left edge)', () => {
   assert.match(source('public/styles.css'), /\.uis-pop\.sheet \{ left: 0; right: 0; bottom: 0; top: auto; width: 100%; max-width: none; min-width: 0 !important;/);
 });
+
+test('large text (Samsung Internet) cannot push the place editor or page sideways; toast text is one block', () => {
+  const css = source('public/styles.css');
+  assert.match(css, /\.editor \{ padding: 2px 12px 12px 34px; display: grid; grid-template-columns: minmax\(0, 1fr\);/);
+  assert.match(css, /\.editor input:not\(\[type="checkbox"\]\):not\(\[type="radio"\]\), \.editor textarea, \.editor select \{ width: 100%; min-width: 0;/);
+  assert.doesNotMatch(css, /grid-template-columns: (40px|38px|0) 1fr/);
+  assert.match(css, /html, body \{ overflow-x: clip; \}/);
+  assert.match(css, /width: max-content; max-width: min\(440px, calc\(100vw - 32px\)\);/);
+  assert.match(source('public/ui/toast.js'), /msg\.className = 'toast-text';/);
+});
