@@ -612,10 +612,13 @@ export function init(ctx) {
     const points = M.dayRoute(ctx.trip, l.dayIndex);
     const next = points.slice(1).find((point) => M.routeLeg(points[0], point));
     const primary = next && M.tripDirectionsLinks(ctx.trip, next, points[0], prefs.directionsApp, dayTravelMode(l.dayIndex) || undefined)[0];
-    const fullRoute = primary?.id === 'google' ? M.routeDirectionsUrl(points) : null;
+    // 그날 전체(숙소 → 장소들 → 숙소)를 경유지로 넣은 구글맵 길찾기. 구간별 길찾기(고덕·네이버 등)는 각 이동 구간에 그대로 있다.
+    // 경유지가 구글맵 한도(9곳)를 넘으면 첫 구간만 연다.
+    const fullRoute = M.routeDirectionsUrl(points);
     const url = fullRoute || primary?.url;
     const label = fullRoute ? t('길찾기') : t('첫 구간 길찾기');
-    const link = url ? `<a class="route-link" href="${href(url)}" target="_blank" rel="noopener" title="${esc(primary.label)}">${esc(label)}</a>` : '';
+    const title = fullRoute ? t('이 날 동선 전체를 경유지로 넣어 구글맵에서 열어요') : primary?.label ?? '';
+    const link = url ? `<a class="route-link" href="${href(url)}" target="_blank" rel="noopener" title="${esc(title)}">${esc(label)}</a>` : '';
     const copy = `<button data-action="day-copy" data-day="${l.dayIndex}" title="${esc(t('이 날 일정을 카톡에 붙일 글로 복사해요'))}">${esc(t('카톡용 복사'))}</button>`;
     const route = link + copy;
     if (ui.readonly) return route;

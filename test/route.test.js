@@ -91,15 +91,17 @@ test('dayShareText: 카톡용 하루 일정 (항공·숙소·시간·메모·동
   const lunch = M.addItem(t, t.days[0].id, { ...DOTON, time: '12:00', memo: '예약 2명\n두 번째 줄' });
   lunch.time = '12:00';
   const text = M.dayShareText(t, 0);
-  assert.equal(text.split('\n')[0], '[오사카] Day 1 · 12월 1일 (화)');
+  assert.equal(text.split('\n')[0], '오사카 · Day 1 · 12월 1일 (화)');
+  assert.equal(text.split('\n')[1], '━━━━━━━━━━━━');
   assert.match(text, /^09:00 출국 KE723 ICN 09:00 → KIX 11:10$/m);
   assert.doesNotMatch(text, /^출발/m); // 첫날은 비행기로 도착해서 공항에서 시작한다
   assert.match(M.dayShareText(t, 1), /^출발  호텔$/m);
-  assert.match(text, /^1\. 난바$/m);
-  assert.match(text, /^12:00  2\. 도톤보리 · 예약 2명$/m);
+  assert.match(text, /^1\.  난바$/m);
+  assert.match(text, /^12:00  도톤보리$/m);
+  assert.doesNotMatch(text, /예약 2명/); // 짧은 형식: 메모는 넣지 않는다
   assert.doesNotMatch(text, /두 번째 줄/);
   assert.match(text, /^귀가  호텔$/m);
-  assert.match(text, /^동선 지도 https:\/\/www\.google\.com\/maps\/dir\//m);
+  assert.match(text, /^▸ 동선 지도 https:\/\/www\.google\.com\/maps\/dir\//m);
   assert.match(M.dayShareText(t, 2), /아직 정한 곳이 없어요/);
   assert.equal(M.dayShareText(t, 9), '');
 });

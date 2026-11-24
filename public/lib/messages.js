@@ -919,6 +919,7 @@ export const MESSAGES = {
   "누르거나 사진을 끌어다 놓으면 바로 커버로 바뀌어요": ["Tap or drop a photo to use it as the cover right away", "点击或拖入照片，立即设为封面", "タップするか写真をドロップすると、すぐにカバーになります"],
   "{name} 시간을 {from} → {to}로 바꿨어요": ["Changed {name} from {from} to {to}", "已将{name}的时间从{from}改为{to}", "{name}の時間を{from}→{to}に変更しました"],
   "{name}의 {from} 시간이 새 자리와 맞지 않아 비웠어요": ["Cleared {name}’s {from} time because it no longer fits", "{name}的{from}与新位置不符，已清空时间", "{name}の{from}が新しい位置に合わないため時間を空にしました"],
+  "이 날 동선 전체를 경유지로 넣어 구글맵에서 열어요": ["Opens the whole day in Google Maps with every stop as a waypoint", "把当天全部路线作为途经点在 Google 地图中打开", "この日のルート全体を経由地として Google マップで開きます"],
   "실행 취소": ["Undo", "撤销", "元に戻す"],
   "삭제를 되돌렸어요": ["Restored the deleted items", "已恢复删除的项目", "削除を元に戻しました"],
   "[정산] {title}": ["[Settle up] {title}", "[结算] {title}", "[精算] {title}"],

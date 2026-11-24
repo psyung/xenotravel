@@ -904,7 +904,8 @@ export function dayShareText(trip, dayIndex) {
   const day = trip.days[dayIndex];
   if (!day) return '';
   const date = formatDate(day.date);
-  const lines = [`[${trip.title}] ${dayName(dayIndex)}${date ? ` · ${date}` : ''}`];
+  // 카톡 붙여넣기용 짧은 형식: 제목 줄 → 구분선 → "시간  장소" 한 줄씩(메모 없음) → 동선 지도
+  const lines = [[trip.title, trip.days.length > 1 ? dayName(dayIndex) : '', date].filter(Boolean).join(' · '), '━━━━━━━━━━━━'];
   const { start, end } = dayStays(trip, dayIndex);
   const flights = flightsForDay(trip, dayIndex);
   const flightLine = (x) => {
@@ -914,16 +915,13 @@ export function dayShareText(trip, dayIndex) {
   };
   lines.push(...flights.filter((x) => x.flight.kind !== 'in').map(flightLine));
   if (start) lines.push(`${t('출발')}  ${start.name}`);
-  day.items.forEach((it, i) => {
-    const memo = String(it.memo ?? '').split('\n')[0].trim();
-    lines.push(`${it.time ? `${it.time}  ` : ''}${i + 1}. ${it.name}${memo ? ` · ${memo}` : ''}`);
-  });
+  day.items.forEach((it, i) => lines.push(`${it.time || `${i + 1}.`}  ${it.name}`));
   if (!day.items.length) lines.push(`(${t('아직 정한 곳이 없어요')})`);
   if (end) lines.push(`${t('귀가')}  ${end.name}`);
   lines.push(...flights.filter((x) => x.flight.kind === 'in').map(flightLine));
   const url = routeDirectionsUrl(dayRoute(trip, dayIndex));
-  if (url) lines.push(`${t('동선 지도')} ${url}`);
-  else if (day.items[0]) lines.push(`${t('지도')} ${googleMapsUrl(day.items[0])}`);
+  if (url) lines.push(`▸ ${t('동선 지도')} ${url}`);
+  else if (day.items[0]) lines.push(`▸ ${t('지도')} ${googleMapsUrl(day.items[0])}`);
   return lines.join('\n');
 }
 
