@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { LANGS } from '../public/lib/i18n.js';
 import { destinationById } from '../public/lib/destinations.js';
 import { escapeHtml as esc, privacySections, renderPrivacySections } from '../public/lib/privacy.js';
-import { SITE_ORIGIN, ADSENSE_PUBLISHER, CONTACT_EMAIL, ISSUES_URL, validPublisher } from '../public/lib/site-config.js';
+import { SITE_ORIGIN, ADSENSE_PUBLISHER, CONTACT_EMAIL, validPublisher } from '../public/lib/site-config.js';
 import { adSlot } from '../public/lib/ads.js';
 import { jpegSize, renderMarkdown, safeHref, stripComments } from './guide-markdown.mjs';
 import { chrome, usage } from './site-copy.mjs';
@@ -17,6 +17,25 @@ const slugPattern = /^[a-z0-9-]+$/;
 const byLatest = (a, b) => b.updated.localeCompare(a.updated) || Number(b.experience) - Number(a.experience) || a.slug.localeCompare(b.slug);
 const guidePath = (lang, slug = '') => `/${lang}/guides/${slug ? slug + '/' : ''}`;
 const absolute = (path) => new URL(path, SITE_ORIGIN).href;
+const LANG_MARK = { ko: 'KO', en: 'EN', zh: '中', ja: '日' };
+const FONT = '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" integrity="sha384-/uC/GIvKJ/9RN6i1izHoBY9ubYo60OAsQRNQ3NRFiNsN+N/MVQJHD5OYcZz6wvwn" crossorigin="anonymous">';
+const STYLES = FONT + '<link rel="stylesheet" href="/tokens.css"><link rel="stylesheet" href="/site.css"><script src="/site.js"></script>';
+/** 배포 단계 (I-0): preview = 정식 오픈 전(전체 noindex, robots Disallow, 빈 sitemap), production = 정식 도메인 */
+export const siteStage = (env = process.env) => (env.SITE_STAGE === 'production' ? 'production' : 'preview');
+/** 본문 첫 H1은 frontmatter title과 겹치므로 지운다 (I-0b). 줄 번호를 유지하려고 빈 줄로 바꾼다. */
+export function dropLeadingTitle(body) {
+  const lines = body.split('\n');
+  let inComment = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (inComment) { if (line.includes('-->')) inComment = false; continue; }
+    if (line.startsWith('<!--')) { if (!line.includes('-->')) inComment = true; continue; }
+    if (!line) continue;
+    if (/^#\s+/.test(line)) lines[i] = '';
+    break;
+  }
+  return lines.join('\n');
+}
 
 export function parseGuide(raw, file) {
   const lines = raw.split(/\r?\n/);
@@ -82,18 +101,21 @@ function alternates(variants) {
   return [...ordered.map((lang) => [LANGS[lang].html, variants[lang]]), ['x-default', fallback]];
 }
 
-function page({ lang, path, title, description, variants, body, draft, ads, article }, indexVariants) {
+function page({ lang, path, title, description, variants, body, draft, ads, article, current, wide, noindex }, indexVariants) {
   const c = chrome[lang];
   const guides = indexVariants[lang] ?? indexVariants.ko ?? indexVariants.en ?? Object.values(indexVariants)[0];
-  const links = ['home', 'guides', ...info].map((key) =>
-    key === 'guides' && !guides ? '' :
-      `<a href="${key === 'home' ? '/' : key === 'guides' ? guides : `/${lang}/${key}/`}">${c[key]}</a>`).join('');
-  const nav = `<nav aria-label="${c.nav}">${links}</nav>`;
+  const here = (key) => (key === current ? ' aria-current="page"' : '');
+  const links = [['guides', guides], ['about', `/${lang}/about/`], ['contact', `/${lang}/contact/`]]
+    .filter(([, href]) => href).map(([key, href]) => `<a href="${href}"${here(key)}>${c[key]}</a>`).join('');
+  const langs = languages.filter((l) => variants[l]).map((l) =>
+    `<a href="${esc(variants[l])}" lang="${LANGS[l].html}" hreflang="${LANGS[l].html}" data-set-lang="${l}" aria-label="${LANGS[l].label}"${l === lang ? ' aria-current="true"' : ''}>${LANG_MARK[l]}</a>`).join('');
+  const footLinks = ['privacy', 'terms'].map((key) => `<a href="/${lang}/${key}/"${here(key)}>${c[key]}</a>`).join('');
+  const mail = CONTACT_EMAIL ? ` · <a href="mailto:${esc(CONTACT_EMAIL)}">${esc(CONTACT_EMAIL)}</a>` : '';
   return `<!doctype html>
 <html lang="${LANGS[lang].html}">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(description)}">
 <link rel="canonical" href="${esc(absolute(path))}">
@@ -104,21 +126,28 @@ ${alternates(variants).map(([code, href]) => `<link rel="alternate" hreflang="${
 <meta property="og:description" content="${esc(description)}">
 <meta property="og:url" content="${esc(absolute(path))}">
 <meta property="og:image" content="${esc(absolute('/og.png'))}">
-${draft ? '<meta name="robots" content="noindex">' : ''}
+${draft || noindex ? '<meta name="robots" content="noindex">' : ''}
 <link rel="icon" href="/icons/logo-xeno-route.svg">
-<link rel="stylesheet" href="/styles.css">
-<link rel="stylesheet" href="/site.css">
+${STYLES}
 ${ads ? '<script type="module" src="/guide-ads.js"></script>' : ''}
 </head>
-<body class="static-site"><header><div class="site-shell"><a class="site-brand" href="/"><img src="/icons/logo-xeno-route.svg" width="32" height="32" alt=""> XenoTravel</a>${nav}</div></header>
-<main>${body}</main>
-<footer><div class="site-shell">${nav}</div></footer></body>
+<body class="static-site">
+<header class="site-head"><div class="site-shell">
+<a class="site-brand" href="/"><img src="/icons/logo-xeno-route.svg" width="32" height="32" alt=""> XenoTravel</a>
+<nav id="site-menu" class="site-nav" aria-label="${c.nav}">${links}</nav>
+<div class="site-tools"><div class="site-langs" role="group" aria-label="${c.lang}">${langs}</div>
+<button type="button" class="site-menu-btn" aria-expanded="false" aria-controls="site-menu" aria-label="${c.menu}">☰</button></div>
+<a class="cta site-open" href="/">${c.openApp}</a>
+</div></header>
+<main${wide ? ' class="wide"' : ''}>${body}</main>
+<footer class="site-foot"><div class="site-shell"><span>© 2026 XenoTravel${mail}</span><nav aria-label="${c.nav}">${footLinks}</nav></div></footer>
+</body>
 </html>\n`;
 }
 
 function redirect(variants) {
   return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex"><title>XenoTravel</title><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/site.css">
+<meta name="robots" content="noindex"><title>XenoTravel</title>${STYLES}
 <script type="module" src="/site-redirect.js"></script><body class="static-site"><main><ul>${Object.entries(variants)
     .map(([lang, href]) => `<li><a data-lang="${lang}" lang="${LANGS[lang].html}" hreflang="${LANGS[lang].html}" href="${esc(href)}">${LANGS[lang].label}</a></li>`).join('')}</ul></main></html>\n`;
 }
@@ -146,10 +175,10 @@ function imageAssets(directory, slug, output, warn) {
   };
 }
 
-function renderGuide(g, variants, directory, output, warn, indexVariants) {
+function renderGuide(g, variants, directory, output, warn, indexVariants, noindex) {
   const c = chrome[g.lang];
   const note = (line, message) => warn(`${g.file}:${g.bodyStart + line - 1}: ${message}`);
-  const blocks = renderMarkdown(g.body, { imageInfo: imageAssets(directory, g.slug, output, note), warn: note });
+  const blocks = renderMarkdown(dropLeadingTitle(g.body), { imageInfo: imageAssets(directory, g.slug, output, note), warn: note });
   const middle = !g.draft && adSlot('guideMiddle');
   const bottom = !g.draft && adSlot('guideBottom');
   if (middle) blocks.splice(Math.ceil(blocks.length / 2), 0, middle);
@@ -165,15 +194,18 @@ function renderGuide(g, variants, directory, output, warn, indexVariants) {
 ${blocks.join('\n')}
 ${sources ? `<section><h2>${c.sources}</h2><ul>${sources}</ul></section>` : ''}
 <div class="guide-actions"><a class="cta" href="${dest}">${c.plan}</a>${course}</div>${bottom}</article>`;
-  return page({ ...g, path: guidePath(g.lang, g.slug), variants, body, ads: middle || bottom, article: true }, indexVariants);
+  return page({ ...g, path: guidePath(g.lang, g.slug), variants, body, ads: middle || bottom, article: true, current: 'guides', noindex }, indexVariants);
 }
 
 function setPage(output, path, html) {
   output.set(path + 'index.html', html);
 }
 
-export function buildFiles({ directory = guideDir, preview = false, warn = console.warn, log = console.log } = {}) {
+export function buildFiles({ directory = guideDir, preview = false, stage = 'preview', warn = console.warn, log = console.log } = {}) {
+  const production = stage === 'production';
+  const noindex = !production;
   const output = new Map();
+  const blocked = [];
   const summaries = [];
   const guides = readdirSync(directory).filter((file) => /\.[a-z]{2}\.md$/.test(file)).sort().map((file) =>
     parseGuide(readFileSync(join(directory, file), 'utf8'), file));
@@ -197,11 +229,14 @@ export function buildFiles({ directory = guideDir, preview = false, warn = conso
     stripComments(g.body).split('\n').forEach((line, i) => {
       for (const _ of line.matchAll(/TODO\(확인 필요\)/g)) {
         warn(`${g.file}:${g.bodyStart + i}: TODO(확인 필요)`);
+        if (production && !g.draft) blocked.push(`${g.file}:${g.bodyStart + i}`);
         total++;
       }
     });
     summaries.push(`${g.file}: ${total}`);
   }
+  // H-3: 정식 오픈(production)에서는 확인 안 된 정보가 공개되지 않게, 공개 글에 TODO가 남아 있으면 빌드를 멈춘다
+  if (blocked.length) throw new Error('Published guides still contain TODO(확인 필요):\n  ' + blocked.join('\n  '));
 
   const sitemaps = [];
   for (const key of info) {
@@ -212,11 +247,12 @@ export function buildFiles({ directory = guideDir, preview = false, warn = conso
       const c = chrome[lang];
       const descriptions = { about: c.operator, contact: c.contactIntro, privacy: c.privacyIntro, terms: c.termsIntro };
       const description = descriptions[key];
-      const contact = CONTACT_EMAIL ? `<a href="mailto:${esc(CONTACT_EMAIL)}">${esc(CONTACT_EMAIL)}</a>`
-        : `<a href="${ISSUES_URL}">${c.issues}</a>`;
+      const contact = `<p>${esc(c.contactHelp)}</p><p class="contact-mail"><a href="mailto:${esc(CONTACT_EMAIL)}">${esc(CONTACT_EMAIL)}</a>`
+        + `<button type="button" class="site-copy" data-copy="${esc(CONTACT_EMAIL)}" data-copied="${esc(c.copied)}">${esc(c.copy)}</button></p>`
+        + '<div class="site-toast" role="status" aria-live="polite" hidden></div>';
       const body = `<h1>${c[key]}</h1><p>${esc(description)}</p>` + (key === 'privacy'
-        ? renderPrivacySections(privacySections(lang)) : key === 'contact' ? `<p>${contact}</p>` : '');
-      setPage(output, path, page({ lang, path, title: c[key] + ' | XenoTravel', description, variants, body }, indexVariants));
+        ? renderPrivacySections(privacySections(lang)) : key === 'contact' ? contact : '');
+      setPage(output, path, page({ lang, path, title: c[key] + ' | XenoTravel', description, variants, body, current: key, noindex }, indexVariants));
     }
   }
   if (Object.keys(indexVariants).length) {
@@ -230,13 +266,13 @@ export function buildFiles({ directory = guideDir, preview = false, warn = conso
       `<li><a href="/ko/guides/how-to/${item.slug}/">${item.title}</a></li>`).join('')}</ul>` : '';
     const body = `<h1>${c.guides}</h1><p>${c.index}</p><ul class="guide-list">${cards.map((g) =>
       `<li><h2><a href="${guidePath(lang, g.slug)}">${esc(g.title)}</a></h2><p>${esc(g.description)}</p><time datetime="${esc(g.updated)}">${esc(g.updated)}</time></li>`).join('')}</ul>${howTo}`;
-    setPage(output, path, page({ lang, path, title: c.guides + ' | XenoTravel', description: c.index, variants: indexVariants, body }, indexVariants));
+    setPage(output, path, page({ lang, path, title: c.guides + ' | XenoTravel', description: c.index, variants: indexVariants, body, current: 'guides', wide: true, noindex }, indexVariants));
   }
   if (indexVariants.ko) for (const item of usage) {
     const path = '/ko/guides/how-to/' + item.slug + '/';
     const variants = { ko: path };
     sitemaps.push(variants);
-    setPage(output, path, page({ ...item, lang: 'ko', path, variants, article: true,
+    setPage(output, path, page({ ...item, lang: 'ko', path, variants, article: true, current: 'guides', noindex,
       body: `<article><h1>${item.title}</h1><p>${item.description}</p><p>${item.body}</p><a class="cta" href="/">XenoTravel 열기</a></article>` }, indexVariants));
   }
   for (const [slug, group] of groups) {
@@ -247,30 +283,35 @@ export function buildFiles({ directory = guideDir, preview = false, warn = conso
     for (const g of group.values()) {
       if (!preview && g.draft) continue;
       const paths = g.draft ? { ...variants, [g.lang]: visible[g.lang] } : variants;
-      setPage(output, visible[g.lang], renderGuide(g, paths, directory, output, warn, indexVariants));
+      setPage(output, visible[g.lang], renderGuide(g, paths, directory, output, warn, indexVariants, noindex));
     }
   }
   const xml = sitemaps.flatMap((variants) => Object.values(variants).map((path) =>
     `  <url><loc>${esc(absolute(path))}</loc>${alternates(variants).map(([lang, href]) =>
       `<xhtml:link rel="alternate" hreflang="${lang}" href="${esc(absolute(href))}"/>`).join('')}</url>`));
+  // I-0: 정식 오픈 전(preview)에는 검색 노출을 막는다 — 빈 sitemap, robots Disallow: /
   output.set('/sitemap.xml', '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n'
-    + `  <url><loc>${esc(absolute('/'))}</loc></url>\n` + xml.join('\n') + '\n</urlset>\n');
-  output.set('/robots.txt', 'User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /s/\nSitemap: ' + absolute('/sitemap.xml') + '\n');
+    + (production ? `  <url><loc>${esc(absolute('/'))}</loc></url>\n` + xml.join('\n') + '\n' : '') + '</urlset>\n');
+  output.set('/robots.txt', production
+    ? 'User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /s/\nSitemap: ' + absolute('/sitemap.xml') + '\n'
+    : 'User-agent: *\nDisallow: /\n');
   output.set('/ads.txt', adsText(ADSENSE_PUBLISHER, warn));
   const coursePath = join(directory, 'shanghai-course.json');
-  const course = existsSync(coursePath) ? JSON.parse(readFileSync(coursePath, 'utf8')) : [];
+  const course = existsSync(coursePath) ? JSON.parse(readFileSync(coursePath, 'utf8')) : null; // I-5: { id, title, days[{ items }], checklist }
   output.set('/guide-catalog.json', JSON.stringify({ guides: catalog, courses: { shanghai: course } }) + '\n');
   log('WebP conversion skipped (no bundled image converter). JPGs are preserved; existing WebP variants are reused.');
   return { output, summaries };
 }
 
-export function withSiteMeta(html) {
+export function withSiteMeta(html, stage = 'production') {
   return html.replace(/<!-- site-origin-meta:start -->[\s\S]*?<!-- site-origin-meta:end -->/, () =>
-    `<!-- site-origin-meta:start -->\n  <link rel="canonical" href="${esc(absolute('/'))}">\n  <meta property="og:url" content="${esc(absolute('/'))}">\n  <meta property="og:image" content="${esc(absolute('/og.png'))}">\n  <!-- site-origin-meta:end -->`);
+    `<!-- site-origin-meta:start -->\n${stage === 'production' ? '' : '  <meta name="robots" content="noindex">\n'}  <link rel="canonical" href="${esc(absolute('/'))}">\n  <meta property="og:url" content="${esc(absolute('/'))}">\n  <meta property="og:image" content="${esc(absolute('/og.png'))}">\n  <!-- site-origin-meta:end -->`);
 }
 
 if (resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
-  const { output, summaries } = buildFiles({ preview: process.env.VERCEL_ENV === 'preview' });
+  const stage = siteStage();
+  console.log('SITE_STAGE=' + stage + (stage === 'production' ? '' : ' (noindex, robots Disallow: /, empty sitemap)'));
+  const { output, summaries } = buildFiles({ preview: process.env.VERCEL_ENV === 'preview', stage });
   // These explicit directories are owned by this build. Clear stale preview
   // pages when switching build modes or removing a translation.
   for (const name of [...languages, ...info, 'guides', 'guide-images']) {
@@ -286,6 +327,6 @@ if (resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
     else copyFileSync(value.copy, path);
   }
   const home = join(publicDir, 'index.html');
-  writeFileSync(home, withSiteMeta(readFileSync(home, 'utf8')));
+  writeFileSync(home, withSiteMeta(readFileSync(home, 'utf8'), stage));
   console.log('Visible guide TODO counts:\n' + summaries.map((summary) => '  ' + summary).join('\n'));
 }

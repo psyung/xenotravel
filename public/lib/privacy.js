@@ -1,5 +1,5 @@
-// 개인정보처리방침 원본 (앱 모달과 정적 페이지 공용).
-import { CONTACT_EMAIL, ISSUES_URL, SITE_ORIGIN } from './site-config.js';
+// 개인정보처리방침 원본 (정적 페이지 /{lang}/privacy/ 한 곳에서 쓴다. 앱은 이 페이지로 링크한다, I-1).
+import { CONTACT_EMAIL, SITE_ORIGIN } from './site-config.js';
 
 const siteHost = new URL(SITE_ORIGIN).hostname;
 // 바꿀 때 확인할 것: 외부 요청(지도 타일·검색·날씨·환율·CDN), 공유 링크에 담기는 필드(share.js shareSnapshot),
@@ -49,7 +49,7 @@ const DOC = {
       ],
       '지운 데이터는 되돌릴 수 없으니 필요하면 먼저 백업 파일을 저장하세요. 이미 보낸 공유 링크·백업 파일과 외부 서비스에 전달된 요청 기록은 이 방법으로 지워지지 않아요.',
     ] },
-    { title: '7. 문의', body: [`개인정보 관련 문의: ${c}`, `시행일: ${UPDATED}`] },
+    { title: '7. 문의', body: [`개인정보 관련 문의: ${c}`, `개인정보 보호책임자: XenoTravel 운영자 (${c})`, `시행일: ${UPDATED}`] },
     { title: '8. 별도 설치본 (운영 서비스와 다름)', body: [`이 항목은 ${siteHost}이 아니라 코드를 받아 직접 운영하는 설치본에만 해당해요.`, '짧은 링크 서버(server.js)를 함께 운영하면 공유 링크를 만들 때 사본이 그 서버에 파일로 저장될 수 있고, 생성일로부터 180일 뒤 만료되어 삭제돼요. 운영자가 서버 접속 기록을 남길 수 있어요.'] },
   ],
   en: (c) => [
@@ -92,7 +92,7 @@ const DOC = {
       ],
       'Deleted data cannot be recovered, so save a backup first if you need it. Share links or backup files you already sent, and request logs held by external services, are not removed this way.',
     ] },
-    { title: '7. Contact', body: [`Privacy inquiries: ${c}`, `Effective date: ${UPDATED}`] },
+    { title: '7. Contact', body: [`Privacy inquiries: ${c}`, `Privacy officer: XenoTravel operator (${c})`, `Effective date: ${UPDATED}`] },
     { title: '8. Self-hosted installations (not the official service)', body: [`This section applies only to installations someone runs from the source code—not to ${siteHost}.`, 'If the short-link server (server.js) is also run, creating a share link may store the copy as a file on that server, and it expires 180 days after creation and is deleted. Whoever runs it may keep server access logs.'] },
   ],
   zh: (c) => [
@@ -135,7 +135,7 @@ const DOC = {
       ],
       '删除后无法恢复，如有需要请先保存备份文件。已发送的分享链接、备份文件以及外部服务的请求记录不会因此删除。',
     ] },
-    { title: '7. 联系方式', body: [`个人信息相关咨询：${c}`, `生效日期：${UPDATED}`] },
+    { title: '7. 联系方式', body: [`个人信息相关咨询：${c}`, `个人信息保护负责人：XenoTravel 运营者（${c}）`, `生效日期：${UPDATED}`] },
     { title: '8. 自行部署的版本（不同于官方服务）', body: [`本节仅适用于他人用源代码自行部署运行的版本，不适用于 ${siteHost}。`, '如果同时运行短链接服务器（server.js），生成分享链接时副本可能以文件形式保存在该服务器上，副本在创建 180 天后过期并删除。部署者可能会保留服务器访问记录。'] },
   ],
   ja: (c) => [
@@ -178,7 +178,7 @@ const DOC = {
       ],
       '削除したデータは元に戻せないため、必要なら先にバックアップを保存してください。送信済みの共有リンク・バックアップファイルや、外部サービスに残るリクエスト記録はこの方法では削除されません。',
     ] },
-    { title: '7. お問い合わせ', body: [`個人情報に関するお問い合わせ：${c}`, `施行日：${UPDATED}`] },
+    { title: '7. お問い合わせ', body: [`個人情報に関するお問い合わせ：${c}`, `個人情報保護責任者：XenoTravel 運営者（${c}）`, `施行日：${UPDATED}`] },
     { title: '8. 独自に設置した環境（公式サービスとは別）', body: [`この項目は ${siteHost} ではなく、ソースコードから独自に運用している環境にのみ当てはまります。`, '短縮リンクのサーバー（server.js）も運用している場合、共有リンクを作るとコピーがそのサーバーにファイルとして保存されることがあり、作成から180日後に有効期限が切れ、削除されます。運用者がサーバーのアクセス記録を残す場合があります。'] },
   ],
 };
@@ -192,7 +192,7 @@ const ADS = {
   ja: ['9. 広告と Cookie', '広告が有効な場合、Google AdSense と第三者広告配信事業者が広告の配信や測定に Cookie を使うことがあります。パーソナライズは適用される同意設定に従い、Google の広告設定で無効にできます。', 'Google の広告設定'],
 };
 
-export function privacySections(lang, { contact = CONTACT_EMAIL || ISSUES_URL } = {}) {
+export function privacySections(lang, { contact = CONTACT_EMAIL } = {}) {
   const key = Object.hasOwn(DOC, lang) ? lang : 'ko';
   const [title, description, label] = ADS[key];
   return [...DOC[key](contact), { title, body: [description], link: { href: AD_SETTINGS, label } }];

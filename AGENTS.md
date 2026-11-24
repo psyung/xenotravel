@@ -17,8 +17,11 @@
 작업을 시작하기 전에 아래 문서를 순서대로 확인하세요.
 
 0. **`docs/qa-2026-11-23.md` *(현재 최우선 활성 지시서 — 2026-11-23 QA, Phase 0~6)***
-   * 진행(2026-11-24): Phase 0~6과 PART F(F-1~F-10, F-5는 측정 메모만) 완료. **남은 것: A-1 도메인 xenoday.com 연결 + A-1b 앱 이름 XenoDay 변경(같은 배포로).**
-   * 회귀 테스트: `test/security.test.js`, `test/qa1123*.test.js`(p2·p3·p3b·p3c·p4·p4-server·p5·p6). 앱 소스 정규식 검사는 `test/helpers/app-source.js`(app.js + pages/ + ui/ + map/)를 쓴다.
+   * 진행(2026-11-24): Phase 0~6, PART F(F-1~F-10, F-5는 측정 메모만), PART I(I-0 noindex 단계, I-0b, I-1~I-5) 완료. **남은 것: A-1 도메인 xenoday.com 연결 + A-1b 앱 이름 XenoDay 변경(같은 배포로).**
+   * 배포 단계(I-0): `SITE_STAGE` 환경 변수. 없으면 preview = 전체 noindex·robots `Disallow: /`·빈 sitemap(+ vercel.json이 *.vercel.app에 `X-Robots-Tag: noindex`). 정식 오픈 배포에서 Vercel에 `SITE_STAGE=production`을 넣는다 — 이때 공개 가이드(draft: false)에 `TODO(확인 필요)`가 남아 있으면 빌드가 멈춘다(지금 13곳).
+   * 정적 페이지(I-2): `tokens.css`(색 토큰, 앱과 공용) + `site.css` + `site.js`(밝기·메뉴·복사). `styles.css`는 앱 전용. 개인정보 모달은 없앴고 앱은 `/{lang}/privacy/`로 링크한다. 문의 메일은 site-config의 CONTACT_EMAIL.
+   * 코스(I-5): `content/guides/<id>-course.json` = `{ id, destination, title, days[{ items[{ name, lat, lng, time, memo }] }], checklist }`(4개 국어 맵), 넣는 로직은 `lib/courses.js`. 회귀 테스트 `test/qa1124.test.js`.
+   * 회귀 테스트: `test/security.test.js`, `test/qa1123*.test.js`(p2·p3·p3b·p3c·p4·p4-server·p5·p6), `test/qa1124.test.js`. 앱 소스 정규식 검사는 `test/helpers/app-source.js`(app.js + pages/ + ui/ + map/)를 쓴다.
    * 구조(F-4): `app.js`는 진입점·화면 전환. `pages/`(plan·budget·check), `map/`(지도·찍기), `ui/`(고정 검색 바·맨 위로)는 `init(ctx)` + getter로 살아 있는 상태를 읽는다.
    * 사이트: `scripts/build-site.mjs`가 `content/guides/*.md` → 정적 가이드·개인정보·소개·문의·약관·robots·sitemap·ads.txt를 만든다(생성물은 .gitignore). 사이트 주소·게시자 ID·광고 스위치(ADS_ENABLED=false)·문의 메일은 `public/lib/site-config.js` 한 곳.
    * 도메인 작업 체크리스트(A-1/A-1b): ① site-config의 SITE_ORIGIN을 https://xenoday.com 으로 ② vercel.json에 xenotravel.vercel.app·www → xenoday.com 301(해시·/s/<id> 보존) ③ 화면·메타·manifest·OG·공유 문구의 앱 이름을 XenoDay로(4개 국어, 로마자 그대로) ④ **localStorage 키 `xenotravel:*`와 SW 캐시 접두어는 바꾸지 않는다** ⑤ 첫 방문 1회 "XenoTravel이 XenoDay로 이름을 바꿨어요" 토스트 ⑥ og.png·로고 글자 확인 ⑦ Search Console 주소 변경은 사용자가 직접.

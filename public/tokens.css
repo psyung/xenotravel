@@ -1,0 +1,62 @@
+/* XenoTravel design tokens: shared by the app (styles.css) and static pages (site.css). */
+:root {
+  --bg-app: #F5F8FC; --bg-surface: #FFFFFF; --border-subtle: #DFE7F0; --text-primary: #0F1E2E; --text-secondary: #475569;
+  --btn-primary-bg: #0A6FC2; --btn-primary-text: #FFFFFF; --accent-primary: #0A6FC2; --accent-hover: #095CA1; --accent-soft-bg: #E8F3FD; --accent-soft-border: #BBDCF8;
+  --lang-off: #64748B;
+  --bg: #F5F8FC; --paper: #FFFFFF; --ink: #0F1E2E; --sub: #475569; --mute: #64748B;
+  --line: #DFE7F0; --soft: #EEF3F9; --hover: #EEF3F9;
+  --accent: #0A6FC2; --accent-ink: #095CA1; --accent-soft: #E8F3FD;
+  --brand-text: #0A65B3; --cta: var(--btn-primary-bg); --cta-text: var(--btn-primary-text); --cta-hover: #095CA1;
+  --control: #0F1E2E; --control-text: #FFFFFF; --pin-text: #0F1E2E;
+  --hot: #E5303F; --hot-soft: #FFEEEE;
+  --ok: #03A462; --ok-soft: #E5F8EE;
+  --warn: #D97000; --warn-soft: #FFF4E5;
+  --stay: #0B9494; --stay-soft: #E3F6F6;
+  --fly: #C2410C; --fly-soft: #FFF1E8;
+  --on-solid: #FFFFFF; --stay-solid: #0A7C7C; --ok-solid: #037A49; --hot-solid: #D12A38; --fly-solid: #C2410C; /* 상태색 바탕 + 글자 (4.5:1+) */
+  --shadow: 0 8px 24px rgba(15, 30, 46, .08);
+  --shadow-pop: 0 12px 32px rgba(15, 30, 46, .14);
+  --card-shadow: 0 1px 3px rgba(15, 30, 46, .05);
+  --r: 16px;
+  --head: 56px;
+  --aura-1: rgba(11, 132, 227, .16); --aura-2: rgba(56, 189, 248, .14); --aura-3: rgba(255, 176, 32, .10);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg-app: #0D141C; --bg-surface: #151F2A; --border-subtle: #263445; --text-primary: #EEF3F8; --text-secondary: #A9B6C4;
+    --btn-primary-bg: #4AA8F5; --btn-primary-text: #0D141C; --accent-primary: #4AA8F5; --accent-hover: #7CC0FA; --accent-soft-bg: #0F2A42; --accent-soft-border: #1D4B73;
+    --lang-off: #8E9CAC;
+    --bg: #0D141C; --paper: #151F2A; --ink: #EEF3F8; --sub: #A9B6C4; --mute: #8E9CAC;
+    --line: #263445; --soft: #1B2734; --hover: #1B2734;
+    --accent: #4AA8F5; --accent-ink: #7CC0FA; --accent-soft: #0F2A42;
+    --brand-text: #7CC0FA; --cta: var(--btn-primary-bg); --cta-text: var(--btn-primary-text); --cta-hover: #7CC0FA;
+    --control: #EEF3F8; --control-text: #0D141C; --pin-text: #0D141C;
+    --hot: #FF6B75; --hot-soft: #3A1F23; --ok: #2FD08A; --ok-soft: #15301F;
+    --warn: #FFAA3B; --warn-soft: #36291A; --stay: #33C7C7; --stay-soft: #152E2E;
+    --fly: #FDBA74; --fly-soft: #3A2414;
+    --on-solid: #0D141C; --stay-solid: #33C7C7; --ok-solid: #2FD08A; --hot-solid: #FF6B75; --fly-solid: #FDBA74;
+    --shadow: 0 8px 24px rgba(0, 0, 0, .4); --shadow-pop: 0 12px 32px rgba(0, 0, 0, .55);
+    --card-shadow: none;
+    --aura-1: rgba(74, 168, 245, .22); --aura-2: rgba(56, 189, 248, .16); --aura-3: rgba(251, 191, 36, .08);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg-app: #0D141C; --bg-surface: #151F2A; --border-subtle: #263445; --text-primary: #EEF3F8; --text-secondary: #A9B6C4;
+  --btn-primary-bg: #4AA8F5; --btn-primary-text: #0D141C; --accent-primary: #4AA8F5; --accent-hover: #7CC0FA; --accent-soft-bg: #0F2A42; --accent-soft-border: #1D4B73;
+  --lang-off: #8E9CAC;
+  --bg: #0D141C; --paper: #151F2A; --ink: #EEF3F8; --sub: #A9B6C4; --mute: #8E9CAC;
+  --line: #263445; --soft: #1B2734; --hover: #1B2734;
+  --accent: #4AA8F5; --accent-ink: #7CC0FA; --accent-soft: #0F2A42;
+  --brand-text: #7CC0FA; --cta: var(--btn-primary-bg); --cta-text: var(--btn-primary-text); --cta-hover: #7CC0FA;
+  --control: #EEF3F8; --control-text: #0D141C; --pin-text: #0D141C;
+  --hot: #FF6B75; --hot-soft: #3A1F23; --ok: #2FD08A; --ok-soft: #15301F;
+  --warn: #FFAA3B; --warn-soft: #36291A; --stay: #33C7C7; --stay-soft: #152E2E;
+  --fly: #FDBA74; --fly-soft: #3A2414;
+  --on-solid: #0D141C; --stay-solid: #33C7C7; --ok-solid: #2FD08A; --hot-solid: #FF6B75; --fly-solid: #FDBA74;
+  --shadow: 0 8px 24px rgba(0, 0, 0, .4); --shadow-pop: 0 12px 32px rgba(0, 0, 0, .55);
+  --card-shadow: none;
+  --aura-1: rgba(74, 168, 245, .22); --aura-2: rgba(56, 189, 248, .16); --aura-3: rgba(251, 191, 36, .08);
+  color-scheme: dark;
+}

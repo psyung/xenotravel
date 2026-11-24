@@ -229,7 +229,9 @@ test('P0-7: 저장값이 없으면 브라우저 언어 — 앱(detectLang)과 �
 test('P0-7: 언어는 언어 버튼을 누를 때만 저장한다', () => {
   const app = appSource();
   assert.equal([...app.matchAll(/\bsaveLang\(\)/g)].length, 1);
-  assert.match(app, /setLang\(button\.dataset\.lang\);\n  saveLang\(\);/);
+  // 저장은 chooseLanguage 한 곳 — 언어 버튼(#langSwitch)과 360px 이하 "KO ▾"(#langSelect, I-4)만 부른다
+  assert.match(app, /function chooseLanguage\(lang\) \{[^}]*setLang\(lang\);\n  saveLang\(\);/);
+  assert.equal([...app.matchAll(/chooseLanguage\(/g)].length, 3);
 });
 
 test('P0-8: 여행 페이지 "요즘 뜨는 곳"은 여행지 도시만 — 데이터가 없으면 장소 검색 안내', () => {

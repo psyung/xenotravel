@@ -68,7 +68,8 @@ test('H-1 through H-3: translations, preview isolation and nonfatal TODO warning
     assert.ok(summaries.includes('tokyo.ko.md: 1'));
     const html = output.get('/ko/guides/tokyo/index.html');
     assert.match(html, /TODO\(확인 필요\)/);
-    assert.doesNotMatch(html, /hidden|noindex|hreflang="ja"/);
+    assert.doesNotMatch(html, /hidden|hreflang="ja"/);
+    assert.match(html, /<meta name="robots" content="noindex">/, 'I-0: pre-launch pages are noindex');
     assert.ok(html.includes(`hreflang="x-default" href="${SITE_ORIGIN}/en/guides/tokyo/"`));
     assert.ok(!output.has('/ja/guides/tokyo/index.html'));
     assert.ok(!output.has('/ja/guides/index.html'));
@@ -77,8 +78,7 @@ test('H-1 through H-3: translations, preview isolation and nonfatal TODO warning
     assert.match(preview.get('/ja/guides/tokyo/index.html'), /noindex/);
     assert.match(preview.get('/ko/guides/osaka/index.html'), /class="draft">초안/);
     assert.ok(!preview.get('/ko/guides/index.html').includes('/ko/guides/osaka/'));
-    assert.ok(!preview.get('/sitemap.xml').includes('/ja/guides/tokyo/'));
-    assert.ok(!preview.get('/sitemap.xml').includes('/ko/guides/osaka/'));
+    assert.ok(!preview.get('/sitemap.xml').includes('<url>'), 'I-0: pre-launch sitemap is empty');
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -86,9 +86,14 @@ test('H-1 through H-3: translations, preview isolation and nonfatal TODO warning
 
 const { output } = build();
 const shanghai = output.get('/ko/guides/shanghai/index.html');
+// 정식 오픈(production) 결과: 실제 초안에는 TODO가 남아 있어 production 빌드가 멈추므로(I-0) TODO 없는 글로 본다
+const prodDir = mkdtempSync(join(tmpdir(), 'xenotravel-p6-prod-'));
+writeFileSync(join(prodDir, 'shanghai.ko.md'), fixtures({ slug: 'shanghai' }));
+const prodOutput = build({ directory: prodDir, stage: 'production' }).output;
+rmSync(prodDir, { recursive: true, force: true });
 
 test('A-2 and A-5: origin, sitemap alternates, robots, ads.txt and disabled ad slots', () => {
-  const xml = output.get('/sitemap.xml');
+  const xml = prodOutput.get('/sitemap.xml');
   for (const lang of ['ko', 'en', 'zh', 'ja']) {
     for (const key of ['privacy', 'about', 'contact', 'terms']) {
       assert.ok(xml.includes(`<loc>${SITE_ORIGIN}/${lang}/${key}/</loc>`));
@@ -98,11 +103,12 @@ test('A-2 and A-5: origin, sitemap alternates, robots, ads.txt and disabled ad s
   assert.ok(xml.includes(`hreflang="x-default" href="${SITE_ORIGIN}/ko/guides/shanghai/"`));
   assert.ok(shanghai.includes(`rel="canonical" href="${SITE_ORIGIN}/ko/guides/shanghai/"`));
   assert.ok(shanghai.includes(`property="og:image" content="${SITE_ORIGIN}/og.png"`));
-  assert.equal(output.get('/robots.txt'), `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /s/\nSitemap: ${SITE_ORIGIN}/sitemap.xml\n`);
+  assert.equal(prodOutput.get('/robots.txt'), `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /s/\nSitemap: ${SITE_ORIGIN}/sitemap.xml\n`);
+  assert.equal(output.get('/robots.txt'), 'User-agent: *\nDisallow: /\n', 'I-0: pre-launch robots blocks everything');
   assert.match(output.get('/ads.txt'), /\n# google.com, pub-xenoday, DIRECT, f08c47fec0942fa0\n/);
   assert.equal(adsText('pub-1234567890123456'), 'google.com, pub-1234567890123456, DIRECT, f08c47fec0942fa0\n');
   for (const position of ['home', 'guideMiddle', 'guideBottom', 'budget']) assert.equal(adSlot(position), '');
-  assert.doesNotMatch(shanghai, /<script|display-ad/);
+  assert.doesNotMatch(shanghai, /guide-ads.js|display-ad/);
   const html = withSiteMeta(source('public/index.html'));
   assert.equal(withSiteMeta(html), html);
 });
@@ -114,11 +120,12 @@ test('A-3 and A-4: the popup and privacy pages render a shared source in every l
     assert.ok(html.includes(renderPrivacySections(sections)));
     assert.match(html, /AdSense[\s\S]*adssettings.google.com/);
     assert.match(html, /180/);
-    assert.match(output.get(`/${lang}/contact/index.html`), /href="https:\/\/github.com\/psyung\/xenotravel\/issues"/);
+    assert.match(output.get(`/${lang}/contact/index.html`), /href="mailto:xenobase\.official@gmail\.com"/);
+    assert.match(html, /xenobase\.official@gmail\.com/, 'I-2: privacy section 7 uses the contact email');
   }
   const app = source('public/app.js');
-  assert.match(app, /privacySections\(getLang\(\)\)/);
-  assert.match(app, /renderPrivacySections\(doc, \{ modal: true \}\)/);
+  assert.match(app, /<a href="\/\$\{getLang\(\)\}\/privacy\/">/, 'I-1: the app links to the privacy page');
+  assert.doesNotMatch(app + source('public/index.html'), /privacyDialog|openPrivacy/, 'I-1: no privacy modal');
   assert.equal(detectLang(['fr-FR', 'zh-TW']), 'zh');
   assert.equal(detectLang(['fr-FR']), 'en');
 });
@@ -150,18 +157,16 @@ test('H-5: guide destination URLs target the app form and the latest list has th
   const route = source('public/app.js').split('function route()')[1].split('function openTrip')[0];
   assert.match(route, /const id = params.get\('dest'\)/);
   assert.match(route, /\$\('#homeNewDestination'\)\.value = t\(destination.value\)/);
-  assert.match(route, /importShanghaiCourse\(location.hash\)/);
+  assert.match(route, /if \(params\.get\('course'\) === id\) void importCourse\(id, location\.hash\)/);
 });
 
-test('H-5: the built Shanghai course imports eight finite places into a new trip inbox', () => {
+test('H-5: the built Shanghai course has eight finite places in guide order (no bus stop yet)', () => {
   const catalog = JSON.parse(output.get('/guide-catalog.json'));
-  const course = catalog.courses.shanghai;
-  assert.deepEqual(course.map((p) => p.name), ['신천지', '예상하이', '티엔즈팡', '예원', '인민광장', '난징동루', '와이탄', 'The Fellas Terrace']);
-  assert.ok(course.every((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng) && !/버스/.test(p.name)));
+  const items = catalog.courses.shanghai.days[0].items;
+  assert.deepEqual(items.map((p) => p.name.ko), ['신천지', '예상하이', '티엔즈팡', '예원', '인민광장', '난징동루', '와이탄', 'The Fellas Terrace']);
+  assert.ok(items.every((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng) && !/버스/.test(p.name.ko)));
   assert.match(shanghai, /href="\/#\/\?dest=shanghai&amp;course=shanghai"/);
   const trip = createTrip({ startDate: '2026-12-24', endDate: '2026-12-24' });
-  trip.inbox.push(...course.map(createItem));
-  assert.equal(trip.inbox.length, 8);
-  assert.equal(new Set(trip.inbox.map((p) => p.id)).size, 8);
-  assert.match(source('public/app.js'), /tr.inbox.push\(\.\.\.places.map\(M.createItem\)\)/);
+  assert.equal(trip.inbox.length, 0);
+  assert.equal(new Set(items.map((p) => createItem({ ...p, name: p.name.ko })).map((p) => p.id)).size, 8);
 });

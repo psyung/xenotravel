@@ -1,6 +1,5 @@
 export const SITE_ORIGIN = 'https://xenotravel.vercel.app';
-export const CONTACT_EMAIL = ''; // Set to the operator's confirmed address to enable mailto.
-export const ISSUES_URL = 'https://github.com/psyung/xenotravel/issues';
+export const CONTACT_EMAIL = 'xenobase.official@gmail.com'; // 문의·개인정보 보호책임자 연락처 (I-2)
 export const ADSENSE_PUBLISHER = 'xenoday'; // Replace with pub- followed by 16 digits.
 export const ADS_ENABLED = false;
 

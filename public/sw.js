@@ -17,6 +17,7 @@ const LIBS = 'xenotravel-libs-v14'; // 글꼴·엑셀 라이브러리는 주소�
 const APP_FILES = [
   './',
   'index.html',
+  'tokens.css',
   'styles.css',
   'app.js',
   'pages/budget.js',
@@ -24,6 +25,7 @@ const APP_FILES = [
   'pages/plan.js',
   'map/map.js',
   'map/picking.js',
+  'map/sheet-swipe.js',
   'ui/dialog.js',
   'ui/toast.js',
   'ui/scroll-fab.js',
@@ -51,6 +53,7 @@ const APP_FILES = [
   'data/checklist-presets.json',
   'lib/backup.js',
   'lib/covers.js',
+  'lib/courses.js',
   'lib/budget.js',
   'lib/checklist.js',
   'lib/datepicker.js',

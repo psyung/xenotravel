@@ -655,10 +655,10 @@ test('팔레트 A: 옛 테라코타 값이 남지 않고, 강조색·일차 색�
     return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
   };
   const ratio = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
-  for (const f of ['styles.css', 'app.js', 'index.html', '404.html', 'lib/summary.js', 'icons/logo-xeno-route.svg', 'manifest.webmanifest']) {
+  for (const f of ['tokens.css', 'styles.css', 'app.js', 'index.html', '404.html', 'lib/summary.js', 'icons/logo-xeno-route.svg', 'manifest.webmanifest']) {
     assert.doesNotMatch(f === 'app.js' ? appSource() : read(f), /#(D94E34|BF3E26|F2745B|A3432E)\b/i, f);
   }
-  const css = read('styles.css');
+  const css = read('tokens.css');
   const root = /:root \{([\s\S]*?)\n\}/.exec(css)[1];
   const tok = (name, src = root) => new RegExp(`--${name}: (#[0-9A-F]{6})`, 'i').exec(src)[1];
   for (const bg of [tok('paper'), tok('bg'), tok('accent-soft')]) assert.ok(ratio(tok('accent'), bg) >= 4.5, `강조 글자 ${bg}`);
@@ -716,7 +716,7 @@ test('R6-7: 상태색 바탕 글자(on-solid)는 라이트·다크 모두 4.5:1 
   };
   const ratio = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
   const css = read('styles.css');
-  const lines = css.match(/--on-solid: #[0-9A-F]{6};[^\n]*/gi);
+  const lines = read('tokens.css').match(/--on-solid: #[0-9A-F]{6};[^\n]*/gi);
   assert.equal(lines.length, 3, '라이트 · 시스템 다크 · 다크 고정');
   for (const l of lines) {
     const on = /--on-solid: (#[0-9A-F]{6})/i.exec(l)[1];

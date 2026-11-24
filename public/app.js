@@ -10,10 +10,10 @@ import * as C from './lib/checklist.js';
 import { encodeShare, decodeShare, shareUrl, shareCodeFromHash, shareSummary, shareMessage, sharedCopy } from './lib/share.js';
 import { enhanceDates, openDateRange, refreshDates } from './lib/datepicker.js';
 import { watchSelects } from './lib/select.js';
+import * as Courses from './lib/courses.js';
 import { enhanceSuggestions } from './lib/suggestions.js';
 import { loadWeather, weatherSignature } from './lib/weather.js';
 import { t, k, missing as i18nMissing, LANGS, LANG_KEY, getLang, setLang, loadLang, saveLang, locale, num, dayName, shortDate, dateTime, normalizeLang, tripLength, allVersions } from './lib/i18n.js';
-import { privacySections, renderPrivacySections } from './lib/privacy.js';
 import { adSlot, loadAds } from './lib/ads.js';
 import { createUndoStack } from './lib/undo.js';
 import { stayRangeWithin } from './lib/stays.js';
@@ -1380,7 +1380,6 @@ $('.menu .menu-pop').addEventListener('click', (e) => {
     $('.menu summary').focus();
     $('#shareBtn').click();
   }
-  else if (action === 'theme') $('#themeBtn').click();
   else if (action === 'about') {
     $('.menu summary').focus();
     ask({ title: t('앱 정보'), body: `XenoTravel · ${t('빌드')} ${buildCommit}`, actions: [], cancel: t('닫기') });
@@ -1618,7 +1617,7 @@ function route() {
       const destination = destinationById(id);
       if (destination) {
         $('#homeNewDestination').value = t(destination.value);
-        if (id === 'shanghai' && params.get('course') === 'shanghai') void importShanghaiCourse(location.hash);
+        if (params.get('course') === id) void importCourse(id, location.hash);
       }
     }
     return;
@@ -1676,7 +1675,7 @@ function deleteTrip(id) {
 }
 
 /** 새 여행: 여행지 좌표(와 나라)를 찾고 만든 뒤 일정 화면으로. 나라를 알면 가계부 통화도 그 나라 돈으로 시작한다. */
-async function createTripFrom({ destination, title = '', startDate, endDate, places = [] }, submit) {
+async function createTripFrom({ destination, title = '', startDate, endDate, places = [], course = null, withChecklist = true }, submit) {
   const label = submit?.textContent;
   if (submit) {
     submit.disabled = true;
@@ -1698,11 +1697,18 @@ async function createTripFrom({ destination, title = '', startDate, endDate, pla
   const center = found ? { lat: found.lat, lng: found.lng } : null;
   const tr = M.createTrip({ title, destination: destination.trim(), startDate, endDate, center });
   tr.inbox.push(...places.map(M.createItem));
+  // I-5: 가이드 코스는 보관함이 아니라 Day 1부터 글의 순서·시간·메모 그대로
+  const placed = course ? Courses.applyCourse(tr, course, { startDay: 0, lang: getLang(), withChecklist }) : null;
   if (found?.country) tr.country = found.country;
   B.ensureBudget(tr); // 통화를 정해 둔다 (근거가 없으면 첫 기록 전에 확인받는다)
   switchTrip(tr, { save: true });
+  if (placed) {
+    selectDay(placed.firstDay, { scroll: false });
+    return tr;
+  }
   if (center) map.setView([center.lat, center.lng], 12);
   setTimeout(() => searchEl.focus(), 50);
+  return tr;
 }
 
 function defaultDates() {
@@ -1839,12 +1845,12 @@ function homeAlertHtml() {
     </section>`;
 }
 
-/** 공통 푸터 (모든 화면 아래): 저작권 · 문의 · 개인정보처리방침 */
+/** 공통 푸터 (모든 화면 아래): 개인정보처리방침 · 이용약관 · 문의 — 모두 현재 언어의 웹페이지 링크 (I-1) */
 function renderFooter() {
   $('#siteFoot').innerHTML = `
       <nav class="foot-links" aria-label="${esc(t('사이트 정보'))}">
-        <button type="button" class="linkbtn" id="privacyLink" data-foot="privacy" aria-haspopup="dialog">${esc(t('개인정보처리방침'))}</button>
-        <a href="/${getLang()}/privacy/">${esc(t('개인정보처리방침 웹페이지'))}</a>
+        <a href="/${getLang()}/privacy/">${esc(t('개인정보처리방침'))}</a>
+        <a href="/${getLang()}/terms/">${esc(t('이용약관'))}</a>
         <a href="/${getLang()}/contact/">${esc(t('문의'))}</a>
       </nav>
       <p class="foot-note">${esc(t('일정·가계부는 이 브라우저에만 저장돼요. 다른 기기로 옮길 땐 백업 파일을 쓰세요'))}<span class="edit-only"> · <button type="button" class="linkbtn" data-foot="import">${esc(t('백업 파일 불러오기'))}</button></span></p>
@@ -1868,8 +1874,7 @@ if (!/^[0-9a-f]{7}$/.test(buildCommit)) {
 renderFooter();
 $('#siteFoot').addEventListener('click', (e) => {
   const act = e.target.closest('[data-foot]')?.dataset.foot;
-  if (act === 'privacy') openPrivacy();
-  else if (act === 'import' && !ui.readonly) $('#importFile').click();
+  if (act === 'import' && !ui.readonly) $('#importFile').click();
 });
 
 let guideCatalog;
@@ -1886,17 +1891,93 @@ function readGuideCatalog() {
   return catalogRequest;
 }
 
-async function importShanghaiCourse(hash) {
+/* ───────── I-5: 가이드 코스로 일정 만들기 (/#/?dest=shanghai&course=shanghai) ─────────
+ * 링크로 들어와도 확인 창에서 [만들기]를 눌러야만 저장한다 (남이 보낸 링크로 여행이 생기지 않게).
+ * 같은 코스로 만든 여행이 있으면 먼저 [그 여행 열기] [하나 더 만들기]. 날짜는 지난 날짜도 고를 수 있다(복기용). */
+async function importCourse(id, hash) {
   const data = await readGuideCatalog();
   if (location.hash !== hash || ui.readonly) return;
-  const places = data?.courses?.shanghai;
-  if (!places?.length) {
+  history.replaceState(null, '', '#/');
+  const course = data?.courses?.[id];
+  if (!Courses.validCourse(course)) {
     toast(t('가이드 코스를 불러오지 못했어요.'));
     return;
   }
-  history.replaceState(null, '', '#/');
-  const [startDate] = defaultDates();
-  await createTripFrom({ destination: t(destinationById('shanghai').value), startDate, endDate: startDate, places });
+  const trips = Object.values(store.trips);
+  const made = Courses.courseTrips(trips, id);
+  if (made.length) {
+    const pick = await ask({
+      title: t('이미 이 코스로 만든 여행이 있어요'),
+      body: made[0].title,
+      actions: [{ value: 'open', label: t('그 여행 열기') }, { value: 'more', label: t('하나 더 만들기'), primary: true }],
+    });
+    if (pick === 'open') switchTrip(made[0]);
+    if (pick !== 'more') return;
+  }
+  const dest = destinationById(course.destination);
+  const destNames = dest ? allVersions(dest.value) : [];
+  const choices = Courses.tripChoices(trips, destNames);
+  const title = Courses.localized(course.title, getLang());
+  const dayOptions = (tr) => tr.days.map((d, i) => `<option value="${i}">${esc(dayName(i))}${d.date ? ` · ${esc(shortDate(d.date))}` : ''}</option>`).join('');
+  const html = `<p>${esc(t('{title}({n}곳)를 일정으로 만들까요?', { title, n: Courses.coursePlaceCount(course) }))}</p>
+    <p class="hint">${esc(t('시간과 메모도 함께 들어가요. 시간은 제안값이라 바꿀 수 있어요.'))}</p>
+    <div class="course-form">
+      <fieldset><legend>${esc(t('넣을 곳'))}</legend>
+        <label><input type="radio" name="courseTarget" value="new" checked> ${esc(t('새 여행으로 만들기'))}</label>
+        <label><input type="radio" name="courseTarget" value="existing"${choices.length ? '' : ' disabled'}> ${esc(t('기존 여행에 넣기'))}</label>
+      </fieldset>
+      <label class="course-new"><span>${esc(t('여행 날짜'))}</span><input type="date" class="inp" id="courseDate" value="${Courses.nextSaturday(TODAY)}"></label>
+      <div class="course-existing" hidden>
+        <label><span>${esc(t('여행'))}</span><select id="courseTrip" class="inp" data-ui-select>${choices.map((tr) => `<option value="${esc(tr.id)}">${esc(tr.title)}</option>`).join('')}</select></label>
+        <label><span>${esc(t('일차'))}</span><select id="courseDay" class="inp" data-ui-select>${choices[0] ? dayOptions(choices[0]) : ''}</select></label>
+      </div>
+      <label class="check"><input type="checkbox" id="courseChecklist" checked> ${esc(t('준비할 일도 체크리스트에 추가'))}</label>
+    </div>`;
+  const answer = ask({ title, html, actions: [{ value: 'create', label: t('만들기'), primary: true }] });
+  const body = $('#askBody');
+  const sync = () => {
+    const existing = $('input[name="courseTarget"]:checked', body)?.value === 'existing';
+    $('.course-new', body).hidden = existing;
+    $('.course-existing', body).hidden = !existing;
+  };
+  body.addEventListener('change', (e) => {
+    if (e.target.name === 'courseTarget') sync();
+    if (e.target.id === 'courseTrip') $('#courseDay', body).innerHTML = dayOptions(store.trips[e.target.value]);
+  });
+  // 날짜 칸에서 Enter를 눌러도 [취소]가 아니라 [만들기]로
+  body.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.matches('input')) {
+      e.preventDefault();
+      $('#askActions .primary')?.click();
+    }
+  });
+  if (await answer !== 'create') return;
+  const withChecklist = $('#courseChecklist', body).checked;
+  if ($('input[name="courseTarget"]:checked', body).value === 'existing') {
+    const tr = store.trips[$('#courseTrip', body).value];
+    if (!tr) return;
+    if (trip?.id !== tr.id) switchTrip(tr);
+    const before = structuredClone(trip);
+    const { placed, firstDay } = Courses.applyCourse(trip, course, { startDay: Number($('#courseDay', body).value) || 0, lang: getLang(), withChecklist });
+    if (!commit().ok) return;
+    selectDay(firstDay, { scroll: true });
+    pushUndo(t('{day}에 {n}곳을 넣었어요', { day: dayName(firstDay), n: placed }), () => {
+      if (trip?.id !== before.id) return;
+      for (const key of Object.keys(trip)) if (!(key in before)) delete trip[key];
+      Object.assign(trip, before);
+      commit();
+    });
+    return;
+  }
+  const startDate = /^\d{4}-\d{2}-\d{2}$/.test($('#courseDate', body).value) ? $('#courseDate', body).value : Courses.nextSaturday(TODAY);
+  await createTripFrom({
+    destination: dest ? t(dest.value) : title,
+    title,
+    startDate,
+    endDate: Courses.courseEndDate(startDate, Courses.courseDays(course)),
+    course,
+    withChecklist,
+  });
 }
 
 function homeGuides() {
@@ -2624,10 +2705,11 @@ function applyTheme() {
   syncBrowserTheme();
   const btn = $('#themeBtn');
   btn.setAttribute('aria-pressed', String(th === 'dark'));
-  const label = th === 'dark' ? t('어둡게 (누르면 밝게)') : t('밝게 (누르면 어둡게)');
+  // 밝을 때는 달(어둡게 바꾸기), 어두울 때는 해(밝게 바꾸기) — I-4
+  const label = th === 'dark' ? t('밝은 화면으로 바꾸기') : t('어두운 화면으로 바꾸기');
   btn.title = label;
-  btn.setAttribute('aria-label', `${t('화면 밝기')}: ${label}`);
-  $('#themeMenu').textContent = `${t('화면 밝기')}: ${label}`;
+  btn.setAttribute('aria-label', label);
+  btn.querySelector('use').setAttribute('href', th === 'dark' ? '#i-sun' : '#i-moon');
 }
 $('#themeBtn').addEventListener('click', () => {
   prefs.theme = isDark() ? 'light' : 'dark';
@@ -2663,7 +2745,6 @@ function applyLanguage() {
     ui.share.message = shareMessage({ ...trip, title }, ui.share.url);
   }
   if (bulkDialog.open) renderBulk();
-  if (privacyDialog.open) renderPrivacy();
   renderSaveBar();
   renderFooter();
   if (trip && prefs.page !== 'home') {
@@ -2673,15 +2754,24 @@ function applyLanguage() {
 }
 function syncLanguageSwitch() {
   for (const button of $$('#langSwitch [data-lang]')) button.setAttribute('aria-pressed', String(button.dataset.lang === getLang()));
+  const select = $('#langSelect');
+  if (select.value !== getLang()) {
+    select.value = getLang();
+    select.dispatchEvent(new Event('change')); // 공용 Select 버튼 글자("KO ▾")도 맞춘다
+  }
+}
+function chooseLanguage(lang) {
+  if (!LANGS[lang] || lang === getLang()) return false;
+  setLang(lang);
+  saveLang(); // 저장이 막혀도 이번 화면에서는 바뀐 언어로 계속 쓴다
+  applyLanguage();
+  return true;
 }
 $('#langSwitch').addEventListener('click', (e) => {
   const button = e.target.closest('[data-lang]');
-  if (!button || button.dataset.lang === getLang()) return;
-  setLang(button.dataset.lang);
-  saveLang(); // 저장이 막혀도 이번 화면에서는 바뀐 언어로 계속 쓴다
-  applyLanguage();
-  button.focus({ preventScroll: true });
+  if (button && chooseLanguage(button.dataset.lang)) button.focus({ preventScroll: true });
 });
+$('#langSelect').addEventListener('change', (e) => chooseLanguage(e.target.value));
 
 function renderBadge() {
   const n = trip && Array.isArray(trip.checks) ? C.pendingTodos(trip) : 0;
@@ -3016,33 +3106,6 @@ initPresets({
   get ui() { return ui; },
   $, $$, esc, commit, saved, toast, pushUndo, showDialog, closeOnBackdrop,
 });
-
-/* ───────── 개인정보처리방침 (메인 푸터) ─────────
- * 지금 언어로 연다. 닫기 버튼·Esc·바깥 누르기로 닫고, 닫으면 연 링크로 포커스를 돌려준다. 본문만 스크롤된다.
- */
-const privacyDialog = $('#privacyDialog');
-closeOnBackdrop(privacyDialog);
-function renderPrivacy() {
-  const doc = privacySections(getLang());
-  // 위쪽 차례: 저장·공유·외부 전송·삭제·문의로 바로 이동
-  const toc = `<nav class="privacy-toc" aria-label="${esc(t('차례'))}"><ul>${doc.map((s, i) => `<li><a href="#pv-${i}" data-pv="${i}">${esc(s.title)}</a></li>`).join('')}</ul></nav>`;
-  $('#privacyBody').innerHTML = toc + renderPrivacySections(doc, { modal: true });
-}
-$('#privacyBody').addEventListener('click', (e) => {
-  const i = e.target.closest('[data-pv]')?.dataset.pv;
-  if (i == null) return;
-  e.preventDefault(); // 주소(#/trip/…)는 바꾸지 않는다
-  const sec = $(`#pv-${i}`);
-  sec.scrollIntoView({ block: 'start' });
-  sec.focus({ preventScroll: true });
-});
-function openPrivacy() {
-  renderPrivacy();
-  showDialog(privacyDialog);
-  $('#privacyBody').scrollTop = 0;
-  $('#privacyClose').focus();
-}
-$('#privacyClose').addEventListener('click', () => privacyDialog.close());
 
 /* ───────── 장소 여러 개 한 번에 담기 ─────────
  * 링크 여러 개 / 테이크아웃 파일 → 미리 보기(체크) → 담기. 위치 없이 이름만 있는 곳은 "이름으로 찾기"를 눌러야 찾는다.

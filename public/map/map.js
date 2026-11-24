@@ -3,6 +3,7 @@ import { getLang, t, k, dayName, shortDate } from '../lib/i18n.js';
 import * as M from '../lib/model.js';
 import { staySuggestions } from '../lib/route-check.js';
 import * as T from '../lib/trends.js';
+import { gestureAxis, swipeResult, dragOffset, dayIndicator } from './sheet-swipe.js';
 
 let boundAllLists, boundCatIcon, boundClearCandidate, boundDirectionsHtml, boundExpandMap, mapLayer, boundLocateMapPlace, mapInstance, boundMapControlsText, boundMapDayContext, boundMapDayOptions, boundMapTileKind, boundPinIcon, boundRenderMap, boundShowCandidate, boundSyncTiles, boundTileGroup, boundShowAllRoutes, registerLegend;
 export { boundAllLists as allLists };
@@ -527,12 +528,80 @@ export function init(ctx) {
     const date = focus >= 0 ? ctx.trip.days[focus].date : '';
     $('#msTitle').textContent = focus >= 0 ? `${dayName(focus)}${date ? ` · ${shortDate(date)}` : ''}` : t('전체 동선');
     $('#msCount').textContent = count ? t('{n}곳', { n: count }) : '';
+    // 위치 표시 (I-3): 점 8개까지, 넘으면 "2 / 20". 경계 쪽 화살표는 흐리게
+    const total = ctx.trip.days.length;
+    const mark = dayIndicator(focus, total);
+    $('#msDots').innerHTML = mark.dots ? mark.dots.map((on, i) => `<i class="${on ? 'on' : ''}" style="--c:${dayColor(i)}"></i>`).join('') : esc(mark.text);
+    $('#msDots').hidden = focus < 0;
+    for (const chev of $$('#mapSheet .ms-chev')) {
+      chev.hidden = focus < 0;
+      chev.classList.toggle('off', chev.dataset.dir === 'prev' ? focus <= 0 : focus >= total - 1);
+    }
+    $('#mapSheet .ms-head').setAttribute('aria-label', focus >= 0 ? `${dayName(focus)} / ${total}` : t('전체 동선'));
     const picker = $('#msDay');
     picker.innerHTML = `<option value="">${esc(t('전체 동선'))}</option>${mapDayOptions()}`;
     picker.value = focus >= 0 ? ui.focusList : '';
     $('#msList').innerHTML = rows;
     $('#msEdit').hidden = Boolean(ui.readonly) && focus < 0;
     setSheet(sheetState);
+  }
+  /* ───────── I-3: 시트를 좌우로 밀어 일차 바꾸기 ─────────
+   * 머리(손잡이)와 목록 본문에서만 받는다. 지도 위에서 미는 것은 지도 이동 그대로.
+   * 미는 동안 내용이 손가락을 따라오고, 넘기면 다음 날 내용이 옆에서 들어온다(200ms). 동작 줄이기 설정이면 바로 바꾼다. */
+  const sheetEl = $('#mapSheet');
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  const sheetDay = () => ctx.trip.days.findIndex((d) => d.id === ui.focusList);
+  function swipeMove(dx) {
+    sheetEl.classList.add('ms-swiping');
+    sheetEl.style.setProperty('--swipe-x', `${dragOffset(dx, sheetDay(), ctx.trip.days.length)}px`);
+  }
+  function swipeSettle() {
+    sheetEl.classList.remove('ms-swiping');
+    sheetEl.style.setProperty('--swipe-x', '0px');
+  }
+  function swipeEnd(dx, dt) {
+    const { target } = swipeResult({ dx, dt, index: sheetDay(), count: ctx.trip.days.length });
+    if (target == null) return swipeSettle(); // 못 미치거나 경계: 제자리로 (경계는 늘어났던 만큼 반동)
+    selectDay(target, { scroll: false }); // 위쪽 ‹ › 화살표와 같은 동작: 지도 강조·라벨·목록이 같이 바뀐다
+    if (reduceMotion.matches) return swipeSettle();
+    // 다음 날(왼쪽으로 밂)은 오른쪽에서, 전날은 왼쪽에서 들어온다
+    sheetEl.classList.add('ms-swiping');
+    sheetEl.style.setProperty('--swipe-x', `${(dx < 0 ? 1 : -1) * Math.min(160, sheetEl.clientWidth * 0.4)}px`);
+    void sheetEl.offsetWidth; // 시작 위치를 확정한 뒤 transition으로 0까지
+    swipeSettle();
+  }
+  {
+    const list = $('#msList');
+    let swipe = null;
+    let suppressRow = 0;
+    list.addEventListener('pointerdown', (e) => {
+      if (e.button > 0 || !e.isPrimary) return;
+      swipe = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId, axis: null };
+    });
+    list.addEventListener('pointermove', (e) => {
+      if (!swipe || e.pointerId !== swipe.id) return;
+      const dx = e.clientX - swipe.x;
+      swipe.axis ??= gestureAxis(dx, swipe.y - e.clientY);
+      if (swipe.axis === 'y') { swipe = null; return; } // 세로는 목록 스크롤 (touch-action: pan-y)
+      if (swipe.axis !== 'x') return;
+      if (!list.hasPointerCapture(e.pointerId)) list.setPointerCapture(e.pointerId);
+      swipeMove(dx);
+    });
+    list.addEventListener('pointerup', (e) => {
+      if (!swipe || e.pointerId !== swipe.id) return;
+      if (swipe.axis === 'x') {
+        swipeEnd(e.clientX - swipe.x, performance.now() - swipe.t);
+        suppressRow = performance.now() + 400; // 민 끝에 행이 눌리지 않게
+      }
+      swipe = null;
+    });
+    list.addEventListener('pointercancel', () => {
+      if (swipe?.axis === 'x') swipeSettle();
+      swipe = null;
+    });
+    list.addEventListener('click', (e) => {
+      if (performance.now() < suppressRow) e.stopImmediatePropagation();
+    }, true);
   }
   {
     const handle = $('#msHandle');
@@ -541,17 +610,24 @@ export function init(ctx) {
     let suppressClick = 0; // 끌기를 마친 직후의 click만 무시한다 (키보드 Enter·Space는 영향 없음)
     handle.addEventListener('pointerdown', (e) => {
       if (e.button > 0) return;
-      drag = { y: e.clientY, h: sheetHeights()[sheetState], id: e.pointerId };
+      drag = { x: e.clientX, y: e.clientY, t: performance.now(), h: sheetHeights()[sheetState], id: e.pointerId, axis: null };
       dragged = false;
       handle.setPointerCapture(e.pointerId); // 손잡이 밖으로 빨리 끌어도 계속 받는다 (마우스·펜)
     });
     handle.addEventListener('pointermove', (e) => {
       if (!drag || e.pointerId !== drag.id) return;
       const dy = drag.y - e.clientY;
-      if (!dragged && Math.abs(dy) < 6) return;
+      const dx = e.clientX - drag.x;
+      // 처음 10px: 가로가 크면 일차 넘기기, 아니면 시트 높이 조절 — 한 제스처에서 둘이 같이 일어나지 않는다 (I-3)
+      drag.axis ??= gestureAxis(dx, dy);
+      if (!drag.axis) return;
       if (!dragged) {
         dragged = true;
-        $('.mapwrap').classList.add('sheet-dragging');
+        if (drag.axis === 'y') $('.mapwrap').classList.add('sheet-dragging');
+      }
+      if (drag.axis === 'x') {
+        swipeMove(dx);
+        return;
       }
       const hs = sheetHeights();
       $('.mapwrap').style.setProperty('--sheet-h', `${Math.min(hs.full, Math.max(hs.peek, drag.h + dy))}px`);
@@ -559,7 +635,10 @@ export function init(ctx) {
     const end = (e) => {
       if (!drag || e.pointerId !== drag.id) return;
       $('.mapwrap').classList.remove('sheet-dragging');
-      if (dragged) {
+      if (dragged && drag.axis === 'x') {
+        swipeEnd(e.clientX - drag.x, performance.now() - drag.t);
+        suppressClick = performance.now() + 400;
+      } else if (dragged) {
         const h = drag.h + (drag.y - e.clientY);
         const hs = sheetHeights();
         setSheet(SHEET_STATES.reduce((a, s) => (Math.abs(hs[s] - h) < Math.abs(hs[a] - h) ? s : a), 'peek'));
@@ -571,7 +650,8 @@ export function init(ctx) {
     handle.addEventListener('pointerup', end);
     handle.addEventListener('pointercancel', () => {
       $('.mapwrap').classList.remove('sheet-dragging');
-      if (drag) setSheet(sheetState); // 취소되면 원래 단계로
+      if (drag?.axis === 'x') swipeSettle();
+      else if (drag) setSheet(sheetState); // 취소되면 원래 단계로
       dragged = false;
       drag = null;
     });

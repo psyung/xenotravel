@@ -1,10 +1,32 @@
-[
-  { "name": "신천지", "address": "新天地", "lat": 31.22194, "lng": 121.47050 },
-  { "name": "예상하이", "address": "夜上海 · 黄陂南路338号", "lat": 31.22080, "lng": 121.47450 },
-  { "name": "티엔즈팡", "address": "田子坊", "lat": 31.21023, "lng": 121.46410 },
-  { "name": "예원", "address": "豫园", "lat": 31.22892, "lng": 121.48775 },
-  { "name": "인민광장", "address": "人民广场", "lat": 31.23108, "lng": 121.47040 },
-  { "name": "난징동루", "address": "南京东路步行街", "lat": 31.23798, "lng": 121.47403 },
-  { "name": "와이탄", "address": "外滩", "lat": 31.24033, "lng": 121.48604 },
-  { "name": "The Fellas Terrace", "address": "延安东路7号", "lat": 31.23469, "lng": 121.48673 }
-]
+{
+  "id": "shanghai",
+  "destination": "shanghai",
+  "title": { "ko": "상하이 하루 코스", "en": "Shanghai one-day course", "zh": "上海一日路线", "ja": "上海1日コース" },
+  "days": [
+    {
+      "items": [
+        { "name": { "ko": "신천지", "en": "Xintiandi", "zh": "新天地", "ja": "新天地" }, "address": "新天地", "lat": 31.22194, "lng": 121.47050, "time": "11:00",
+          "memo": { "ko": "오전에 가면 사진 찍기 좋아요", "en": "Best for photos in the morning", "zh": "上午去最适合拍照", "ja": "午前中が写真を撮りやすいです" } },
+        { "name": { "ko": "예상하이", "en": "Ye Shanghai", "zh": "夜上海", "ja": "夜上海" }, "address": "夜上海 · 黄陂南路338号", "lat": 31.22080, "lng": 121.47450, "time": "12:00",
+          "memo": { "ko": "점심 예약 권장 · 동파육 추천", "en": "Lunch reservation recommended · Try the Dongpo pork", "zh": "午餐建议预约 · 推荐东坡肉", "ja": "ランチは予約がおすすめ · 東坡肉がおすすめ" } },
+        { "name": { "ko": "티엔즈팡", "en": "Tianzifang", "zh": "田子坊", "ja": "田子坊" }, "address": "田子坊", "lat": 31.21023, "lng": 121.46410, "time": "13:30",
+          "memo": { "ko": "핸드크림은 上海 디자인 각인 · 각인 후 교환 불가", "en": "Hand cream with a 上海 engraving · No exchanges after engraving", "zh": "护手霜可刻“上海”图案 · 刻字后不可换货", "ja": "ハンドクリームは「上海」デザインの刻印 · 刻印後は交換不可" } },
+        { "name": { "ko": "예원", "en": "Yuyuan Garden", "zh": "豫园", "ja": "豫園" }, "address": "豫园", "lat": 31.22892, "lng": 121.48775, "time": "15:00",
+          "memo": { "ko": "정원 입장 마감 16:00 · 월요일 휴무", "en": "Garden last entry 16:00 · Closed on Mondays", "zh": "园林16:00停止入园 · 周一闭园", "ja": "庭園の入場は16:00まで · 月曜休園" } },
+        { "name": { "ko": "인민광장", "en": "People's Square", "zh": "人民广场", "ja": "人民広場" }, "address": "人民广场", "lat": 31.23108, "lng": 121.47040, "time": "16:30",
+          "memo": { "ko": "화장실은 미리 · 레고·M&M's 매장", "en": "Use the restroom beforehand · LEGO and M&M's stores", "zh": "提前去洗手间 · 乐高、M&M's 门店", "ja": "トイレは先に · レゴ・M&M's の店舗" } },
+        { "name": { "ko": "난징동루", "en": "Nanjing Road East", "zh": "南京东路步行街", "ja": "南京東路" }, "address": "南京东路步行街", "lat": 31.23798, "lng": 121.47403, "time": "17:00",
+          "memo": { "ko": "피규어샵, 치이카와 매장", "en": "Figure shops, Chiikawa store", "zh": "手办店、吉伊卡哇门店", "ja": "フィギュアショップ、ちいかわの店舗" } },
+        { "name": { "ko": "와이탄", "en": "The Bund", "zh": "外滩", "ja": "外灘" }, "address": "外滩", "lat": 31.24033, "lng": 121.48604, "time": "18:00",
+          "memo": { "ko": "겨울 18:00 점등 · 10~15분 전 자리 잡기", "en": "Lights on at 18:00 in winter · Get a spot 10–15 minutes early", "zh": "冬季18:00亮灯 · 提前10～15分钟占位", "ja": "冬は18:00点灯 · 10〜15分前に場所取り" } },
+        { "name": { "ko": "The Fellas Terrace", "en": "The Fellas Terrace", "zh": "The Fellas Terrace", "ja": "The Fellas Terrace" }, "address": "延安东路7号", "lat": 31.23469, "lng": 121.48673, "time": "19:30",
+          "memo": { "ko": "예약금 100위안(방문 시 환불, 노쇼 시 환불 없음)", "en": "100 yuan deposit (refunded when you visit, not refunded for no-shows)", "zh": "订金100元（到店退还，未到店不退）", "ja": "予約金100元（来店時に返金、ノーショーは返金なし）" } }
+      ]
+    }
+  ],
+  "checklist": [
+    { "group": "todo", "text": { "ko": "예상하이 점심 예약", "en": "Book lunch at Ye Shanghai", "zh": "预约夜上海午餐", "ja": "夜上海のランチを予約" } },
+    { "group": "todo", "text": { "ko": "The Fellas Terrace 예약(예약금 100위안)", "en": "Book The Fellas Terrace (100 yuan deposit)", "zh": "预约 The Fellas Terrace（订金100元）", "ja": "The Fellas Terrace を予約（予約金100元）" } },
+    { "group": "todo", "text": { "ko": "알리페이·위챗페이에 해외 카드 연결", "en": "Link an international card to Alipay and WeChat Pay", "zh": "在支付宝、微信支付绑定境外银行卡", "ja": "Alipay・WeChat Pay に海外カードを登録" } }
+  ]
+}
