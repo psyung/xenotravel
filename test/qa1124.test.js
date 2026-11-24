@@ -270,3 +270,7 @@ test('toast ✕, cover picker without the native file button, timeline spacing, 
   assert.match(css, /\.day-tools \{ display: flex; gap: 2px; flex-wrap: wrap; align-items: center;/);
   assert.match(css, /\.timeline\.no-times \.tl-row/);
 });
+
+test('mobile Select sheet spans the full width (it was capped at 100vw - 16px and hugged the left edge)', () => {
+  assert.match(source('public/styles.css'), /\.uis-pop\.sheet \{ left: 0; right: 0; bottom: 0; top: auto; width: 100%; max-width: none; min-width: 0 !important;/);
+});
