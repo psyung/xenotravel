@@ -107,7 +107,8 @@ test('I-3: the first 10px decide between day swipe (horizontal) and sheet/list (
   assert.equal(gestureAxis(6, 3), null, 'under 10px: undecided');
   assert.equal(gestureAxis(12, 4), 'x', 'horizontal');
   assert.equal(gestureAxis(3, -14), 'y', 'vertical');
-  assert.equal(gestureAxis(10, 11), 'y', 'diagonal, vertical wins');
+  assert.equal(gestureAxis(8, 12), 'y', 'steep diagonal: vertical wins');
+  assert.equal(gestureAxis(10, 12), 'x', 'shallow diagonal (under ~53°): day swipe wins');
   assert.equal(gestureAxis(-11, 10), 'x', 'diagonal, horizontal wins');
 });
 

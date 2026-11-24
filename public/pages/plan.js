@@ -595,12 +595,16 @@ export function init(ctx) {
       return leg && { ...leg, from: route[k - 1], to: route[k], mode: dayTravelMode(l.dayIndex) || leg.mode };
     };
     const overlaps = dayTimeConflicts(l.dayIndex);
-    return `<div class="timeline" style="--c:${l.color}">
-      ${flightRowsHtml(l.dayIndex, 'top')}
+    const flightsTop = flightRowsHtml(l.dayIndex, 'top');
+    const flightsBottom = flightRowsHtml(l.dayIndex, 'bottom');
+    // 시간이 하나도 없는 날은 왼쪽 시간 칸을 접는다 (모바일에서 여백이 넓어 보이던 것)
+    const noTimes = !l.items.some((it) => it.time) && !/class="tl-time">[^<]/.test(flightsTop + flightsBottom);
+    return `<div class="timeline${noTimes ? ' no-times' : ''}" style="--c:${l.color}">
+      ${flightsTop}
       ${st.start ? stayRowHtml(st.start, l.dayIndex, 'start', st) : ''}
       <ol class="items" data-list="${l.id}" data-empty="${esc(ui.readonly ? t('아직 정한 곳이 없어요') : t('장소를 검색하거나 여기로 끌어오세요'))}">${l.items.map((it, j) => itemHtml(it, j, true, legTo(off + j), l.items, overlaps.get(it.id) ?? '')).join('')}</ol>
       ${st.end ? stayRowHtml(st.end, l.dayIndex, 'end', st, legTo(route.length - 1)) : ''}
-      ${flightRowsHtml(l.dayIndex, 'bottom')}
+      ${flightsBottom}
     </div>`;
   }
 
@@ -1181,6 +1185,7 @@ export function init(ctx) {
     $('.item-sub', li).textContent = li.classList.contains('dock-card') ? it.memo.split('\n')[0] || it.address : it.memo || it.address;
     const timeEl = $('.tl-time', li);
     if (timeEl) timeEl.textContent = it.time;
+    if (it.time) li.closest('.timeline')?.classList.remove('no-times'); // 시간을 넣으면 시간 칸을 다시 연다
     if (field === 'memo' || field === 'name') renderRetrospective();
     refreshMapSoon();
   });

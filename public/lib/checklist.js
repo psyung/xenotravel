@@ -230,9 +230,10 @@ export function linkedExpense(trip, checkId) {
  */
 export function expenseEdited(trip, c, e = linkedExpense(trip, c.id)) {
   if (!e) return false;
-  // 체크로 만들 때 남긴 금액·통화(auto)와 다르면 고친 것. 예전 기록처럼 auto가 없으면 고친 것으로 보고 물어본다
-  const a = e.auto;
-  return !a || Number(e.amount) !== Number(a.amount) || e.cur !== a.cur || (e.ccy ?? null) !== (a.ccy ?? null);
+  // 체크로 만들 때 남긴 금액·통화(auto)와 다르면 고친 것.
+  // 예전 기록처럼 auto가 없으면 체크 항목의 가격·통화와 비교한다 (같으면 자동 기록 그대로 → P0-3 정책대로 함께 지운다)
+  const a = e.auto ?? { amount: c.price, cur: c.cur === 'KRW' ? 'KRW' : 'local', ccy: e.ccy ?? null };
+  return Number(e.amount) !== Number(a.amount) || e.cur !== a.cur || (e.ccy ?? null) !== (a.ccy ?? null);
 }
 
 /**

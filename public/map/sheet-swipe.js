@@ -7,11 +7,13 @@
 export const AXIS_LOCK = 10;
 export const SWIPE_MIN = 50;
 export const FLICK_SPEED = 0.3;
+// 손가락은 정확히 수평으로 움직이지 않는다: 가로가 세로의 0.75배만 넘어도 일차 넘기기로 본다 (약 53° 안쪽, 실기기 피드백)
+export const HORIZONTAL_BIAS = 0.75;
 
 /** 처음 움직임의 방향: 아직 모르면 null, 가로 'x', 세로(대각선 포함 세로 우세) 'y' */
 export function gestureAxis(dx, dy, lock = AXIS_LOCK) {
   if (Math.max(Math.abs(dx), Math.abs(dy)) < lock) return null;
-  return Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+  return Math.abs(dx) >= Math.abs(dy) * HORIZONTAL_BIAS ? 'x' : 'y';
 }
 
 /** 지금 일차(index, 전체 동선이면 -1)에서 dx만큼 민 쪽의 일차. 없으면(경계) null */

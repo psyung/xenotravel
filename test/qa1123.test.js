@@ -329,7 +329,7 @@ test('교차 리뷰 #1: 최대 일수를 넘는 늘리기는 하지 않는다 (�
   assert.match(appSource(), /if \(!r\.tooLong\) actions\.push\(\{ value: 'extend'/);
 });
 
-test('교차 리뷰 #2: 통화만 바꾼 지출도 "고친 지출", 예전 기록(auto 없음)은 물어본다', () => {
+test('교차 리뷰 #2: 통화만 바꾼 지출도 "고친 지출", 예전 기록(auto 없음)은 체크 가격과 비교한다', () => {
   const { t, a } = checkTrip();
   C.toggleCheck(t, a.id, '2026-11-23');
   const e = C.linkedExpense(t, a.id);
@@ -338,7 +338,9 @@ test('교차 리뷰 #2: 통화만 바꾼 지출도 "고친 지출", 예전 기�
   assert.equal(C.expenseEdited(t, a), true);
   e.cur = e.auto.cur;
   delete e.auto;
-  assert.equal(C.expenseEdited(t, a), true);
+  assert.equal(C.expenseEdited(t, a), false, '가격 그대로인 예전 자동 기록은 함께 지운다 (P0-3)');
+  e.amount += 10;
+  assert.equal(C.expenseEdited(t, a), true, '금액이 다르면 물어본다');
 });
 
 test('교차 리뷰 #3·#4·#6·#7·#8: 실행 취소는 날짜로 복원, 직접 고른 위치 유지, 일차 기준 결과 미리보기, 열 때 백업 권유, 트렌드는 이름 일치만', () => {

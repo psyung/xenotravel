@@ -453,8 +453,15 @@ body[data-view="board"] .board-only { display: inline-flex; }
 .nearby-trends .trend-note { margin-inline: 14px; }
 .nearby-trends :is(.btn, .link, .tc-add) { min-height: 40px; white-space: normal; }
 .nearby-trends :is(.tc-name, .tc-area, .tc-src) { overflow-wrap: anywhere; }
-.day-warnings .day-warning { min-height: 40px; color: var(--ink); background: var(--warn-soft); white-space: normal; text-align: start; }
-.chips .day-travel-select { min-width: 0; min-height: 40px; max-width: 100%; }
+/* 일차 경고: 상자 없이 붉은 굵은 글씨 (누르면 해당 장소로) */
+.day-warnings { gap: 2px 14px; }
+.day-warnings .day-warning { height: auto; min-height: 28px; padding: 0; border: 0; background: none; color: var(--hot); font-size: 12.5px; font-weight: 800; white-space: normal; text-align: start; cursor: pointer; }
+.day-warnings .day-warning:hover { text-decoration: underline; text-underline-offset: 3px; }
+/* 예상 이동 수단 고르기("자동")도 옆 칩과 같은 모양 */
+.chips .day-travel-select { min-width: 0; max-width: 100%; }
+.chips .ui-select.day-travel-select { height: 22px; min-height: 22px; gap: 2px; padding: 0 4px 0 8px; border: 0; border-radius: 6px; background: var(--soft); color: var(--sub); font-size: 12px; font-weight: 500; }
+.chips .ui-select.day-travel-select:hover { color: var(--ink); background: var(--hover); }
+.chips .ui-select.day-travel-select .uis-chev { width: 12px; height: 12px; }
 .place-hours { margin: 0; min-width: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--r); }
 .place-hours legend { color: var(--sub); }
 .closed-days, .hours-inputs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
@@ -810,10 +817,10 @@ body.readonly .trip-title { pointer-events: none; }
   .daytab { height: 30px; font-size: 12.5px; }
   .dc-title { font-size: 15px; }
   .item-name { font-size: 13.5px; }
-  .timeline::before { left: 41px; }
-  .tl-row, .item:not(.dock-card) { grid-template-columns: 34px 1fr; column-gap: 14px; }
+  .timeline::before { left: 35px; }
+  .tl-row, .item:not(.dock-card) { grid-template-columns: 30px 1fr; column-gap: 12px; }
   .tl-time { font-size: 11.5px; }
-  .tl-time::after { left: 37px; }
+  .tl-time::after { left: 31px; }
   .empty-list, .days .items:empty { margin-left: 48px; }
   .editor { padding-left: 12px; }
   .trend-card { flex-basis: 220px; }
@@ -2149,3 +2156,22 @@ dialog.p3-dialog { width: min(520px, calc(100vw - 32px)); overflow-wrap: anywher
 .course-form .course-new span, .course-form .course-existing span { font-size: 13px; color: var(--sub); font-weight: 600; }
 .course-form .course-existing { display: grid; gap: 10px; }
 .course-form .course-existing[hidden] { display: none; }
+
+/* 시간이 없는 날: 시간 칸을 접어 왼쪽 여백을 줄인다 (점·세로선만 남김) */
+.timeline.no-times::before { left: 5px; }
+.timeline.no-times .tl-row, .timeline.no-times .item:not(.dock-card) { grid-template-columns: 0 1fr; column-gap: 14px; }
+.timeline.no-times .tl-time::after { left: 1px; }
+.timeline.no-times .empty-list { margin-left: 14px; }
+
+/* 고정 검색 바의 일정/지도: 검색칸과 같은 높이·바탕, 지금 탭(일정)만 흰 바탕 */
+@media (max-width: 767px) {
+  .search.card.compact .mini-tabs { align-self: center; height: 36px; padding: 3px; gap: 2px; border-radius: 10px; background: var(--soft); }
+  .search.card.compact .mini-tabs button { height: 30px; padding: 0 10px; border-radius: 8px; background: none; color: var(--sub); }
+  .search.card.compact .mini-tabs button[data-mini-tab="plan"] { background: var(--paper); color: var(--ink); box-shadow: 0 1px 2px rgba(15, 30, 46, .1); }
+}
+
+/* 커버 바꾸기: 커버 사진 위 오른쪽의 작은 반투명 버튼 (카드 아래 큰 버튼이 따로 놀던 것) */
+.tcard:not(.add) .tc-body { padding-bottom: 14px; padding-right: 48px; }
+.tc-edit-cover.btn { top: 10px; right: 10px; bottom: auto; left: auto; min-height: 32px; height: 32px; max-width: calc(100% - 96px); padding: 0 10px; gap: 4px;
+  border: 0; border-radius: 999px; background: rgba(15, 30, 46, .55); color: #fff; font-size: 12px; font-weight: 600; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.tc-edit-cover.btn:hover { background: rgba(15, 30, 46, .75); color: #fff; }
