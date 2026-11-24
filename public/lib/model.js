@@ -316,6 +316,28 @@ export function moveItem(trip, itemId, toListId, toIndex) {
   return true;
 }
 
+/**
+ * 끌어서 옮긴 장소의 시간이 새 자리의 앞뒤 시간과 어긋나면 맞춘다.
+ * 앞 장소(시간 있는 것) + 30분, 그게 다음 시간과 같거나 늦으면 둘의 가운데(5분 단위), 자리가 없으면 시간을 비운다.
+ * → 바뀌면 { from, to } (to가 ''이면 비움), 순서가 맞거나 시간이 없으면 null
+ */
+export function fitMovedTime(items, index) {
+  const item = items[index];
+  const own = toMinutes(item?.time ?? '');
+  if (own == null) return null;
+  const prev = items.slice(0, index).map((it) => toMinutes(it.time ?? '')).filter((m) => m != null).at(-1) ?? null;
+  const next = items.slice(index + 1).map((it) => toMinutes(it.time ?? '')).find((m) => m != null) ?? null;
+  if ((prev == null || prev <= own) && (next == null || own <= next)) return null;
+  const round5 = (m) => Math.round(m / 5) * 5;
+  let to = prev != null ? prev + 30 : next - 30;
+  if (next != null && prev != null && to >= next) to = round5((prev + next) / 2);
+  const fits = to >= 0 && to <= 23 * 60 + 55 && (prev == null || to > prev) && (next == null || to < next);
+  const hhmm = fits ? `${String(Math.floor(to / 60)).padStart(2, '0')}:${String(to % 60).padStart(2, '0')}` : '';
+  const from = item.time;
+  item.time = hhmm;
+  return { from, to: hhmm };
+}
+
 /** 시간이 있는 장소를 시간순으로, 시간이 없는 장소는 원래 순서대로 뒤에 둔다. */
 export function sortByTime(items) {
   const timed = items.filter((it) => it.time).sort((a, b) => a.time.localeCompare(b.time));

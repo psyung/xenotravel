@@ -48,6 +48,14 @@ export function init(ctx) {
         action.run();
       }, { once: true });
       el.append(' ', b);
+      // 바로 닫을 수 있게 ✕ (백업 권유처럼 오래 떠 있는 알림)
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'toast-close';
+      x.textContent = '×';
+      x.setAttribute('aria-label', t('닫기'));
+      x.addEventListener('click', hide, { once: true });
+      el.append(x);
     }
     el.classList.add('show');
     clearTimeout(toastTimer);

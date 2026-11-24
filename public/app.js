@@ -1792,6 +1792,22 @@ $('#coverFile').addEventListener('change', (e) => {
   if (file) editCover(file);
 });
 $('#resetCover').addEventListener('click', () => editCover(null));
+// 사진을 상자에 끌어다 놓아도 된다
+{
+  const drop = $('#coverDrop');
+  drop.addEventListener('dragover', (e) => {
+    if (![...(e.dataTransfer?.types ?? [])].includes('Files')) return;
+    e.preventDefault();
+    drop.classList.add('over');
+  });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', (e) => {
+    e.preventDefault();
+    drop.classList.remove('over');
+    const file = [...(e.dataTransfer?.files ?? [])].find((f) => f.type.startsWith('image/'));
+    if (file) editCover(file);
+  });
+}
 
 function newTripForm(id) {
   const [ds, de] = defaultDates();

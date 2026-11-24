@@ -868,7 +868,18 @@ export function init(ctx) {
           delayOnTouchOnly: true,
           touchStartThreshold: 6,
           onEnd: (e) => {
-            if (M.moveItem(ctx.trip, e.item.dataset.id, e.to.dataset.list, e.newIndex)) commit();
+            if (!M.moveItem(ctx.trip, e.item.dataset.id, e.to.dataset.list, e.newIndex)) return;
+            // 시간이 있는 장소를 옮기면 새 자리의 앞뒤 시간에 맞춘다 (보관함으로 옮길 때는 그대로)
+            const day = ctx.trip.days.find((d) => d.id === e.to.dataset.list);
+            const index = day ? day.items.findIndex((it) => it.id === e.item.dataset.id) : -1;
+            const fit = index >= 0 ? M.fitMovedTime(day.items, index) : null;
+            if (!commit().ok || !fit) return;
+            const item = day.items[index];
+            pushUndo(fit.to ? t('{name} 시간을 {from} → {to}로 바꿨어요', { name: item.name, from: fit.from, to: fit.to })
+              : t('{name}의 {from} 시간이 새 자리와 맞지 않아 비웠어요', { name: item.name, from: fit.from }), () => {
+              item.time = fit.from;
+              commit();
+            });
           },
         }),
       );

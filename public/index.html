@@ -310,7 +310,13 @@
   <dialog id="coverDialog" class="p3-dialog" aria-labelledby="coverTitle">
     <h2 class="dialog-heading" id="coverTitle" data-i18n="여행 커버 바꾸기">여행 커버 바꾸기</h2>
     <div class="dialog-body p3-form">
-      <label><span data-i18n="사진 선택">사진 선택</span><input id="coverFile" type="file" accept="image/*"></label>
+      <!-- 브라우저 기본 파일 버튼 대신 누르거나 끌어다 놓는 상자 (입력칸은 화면에서만 숨김, 키보드 포커스는 상자에 보인다) -->
+      <label class="cover-drop" id="coverDrop">
+        <input id="coverFile" class="cover-file" type="file" accept="image/*">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h3l2-2h6l2 2h3v12H4z M12 16a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/></svg>
+        <b data-i18n="사진 선택">사진 선택</b>
+        <small data-i18n="누르거나 사진을 끌어다 놓으면 바로 커버로 바뀌어요">누르거나 사진을 끌어다 놓으면 바로 커버로 바뀌어요</small>
+      </label>
       <div class="p3-actions">
         <button type="button" class="btn" id="resetCover" data-i18n="기본으로 되돌리기">기본으로 되돌리기</button>
         <button type="button" class="btn" id="closeCover" data-i18n="닫기">닫기</button>

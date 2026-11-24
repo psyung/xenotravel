@@ -232,3 +232,41 @@ test('I-5: the app always asks before saving, offers open/another for duplicates
   const { output } = build();
   assert.match(output.get('/ko/guides/shanghai/index.html'), />이 코스로 일정 만들기</);
 });
+
+/* ───────── 2026-11-24 실기기 피드백 ───────── */
+import { fitMovedTime } from '../public/lib/model.js';
+
+test('moving a timed place fits its time between the new neighbours (or clears it), with undo', () => {
+  const day = (times) => times.map((time, i) => ({ id: 'p' + i, name: 'P' + i, time }));
+  // 예원 15:00을 와이탄 18:00 뒤, Fellas 19:30 앞으로 → 18:30
+  let items = day(['17:00', '18:00', '15:00', '19:30']);
+  assert.deepEqual(fitMovedTime(items, 2), { from: '15:00', to: '18:30' });
+  assert.equal(items[2].time, '18:30');
+  // 앞 + 30분이 다음과 겹치면 가운데
+  items = day(['18:00', '15:00', '18:20']);
+  assert.deepEqual(fitMovedTime(items, 1), { from: '15:00', to: '18:10' });
+  // 맨 앞으로 옮기면 다음 - 30분
+  items = day(['20:00', '11:00']);
+  assert.deepEqual(fitMovedTime([items[0], items[1]].reverse().reverse(), 0), { from: '20:00', to: '10:30' });
+  // 자리가 없으면 비운다
+  items = day(['18:00', '09:00', '18:00']);
+  assert.deepEqual(fitMovedTime(items, 1), { from: '09:00', to: '' });
+  // 순서가 맞거나 시간이 없으면 그대로
+  assert.equal(fitMovedTime(day(['10:00', '12:00', '14:00']), 1), null);
+  assert.equal(fitMovedTime(day(['10:00', '', '14:00']), 1), null);
+  const plan = source('public/pages/plan.js');
+  assert.match(plan, /const fit = index >= 0 \? M\.fitMovedTime\(day\.items, index\) : null;/);
+  assert.match(plan, /pushUndo\(fit\.to \?/);
+});
+
+test('toast ✕, cover picker without the native file button, timeline spacing, aligned day tools', () => {
+  assert.match(source('public/ui/toast.js'), /x\.className = 'toast-close';[\s\S]*x\.addEventListener\('click', hide/);
+  const html = source('public/index.html');
+  assert.match(html, /<label class="cover-drop" id="coverDrop">\s*<input id="coverFile" class="cover-file" type="file"/);
+  const css = source('public/styles.css');
+  assert.match(css, /\.cover-file \{ position: absolute; width: 1px; height: 1px; opacity: 0;/);
+  assert.match(css, /\.p3-form label:not\(\.p3-check\):not\(\.cover-drop\) \{ display: grid;/);
+  assert.match(css, /\.tl-time \{ font-size: 11px; padding-right: 8px; \}/);
+  assert.match(css, /\.day-tools \{ display: flex; gap: 2px; flex-wrap: wrap; align-items: center;/);
+  assert.match(css, /\.timeline\.no-times \.tl-row/);
+});
