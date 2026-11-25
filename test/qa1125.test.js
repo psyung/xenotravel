@@ -280,3 +280,12 @@ test('K-1: 버튼은 네 종류 × 크기 토큰 (md 40 · sm 32 · 모서리 10
   assert.match(css, /\.icon \{ width: var\(--h-sm\); height: var\(--h-sm\);/);
   assert.match(css, /:is\(\.daytab, \.city-tabs button, \.dest-chips button, \.leg-rail\) \{ height: var\(--h-sm\); min-height: var\(--h-sm\); border-radius: var\(--r-chip\);/);
 });
+
+test('K-2: 모바일 터치 영역 44px — 작은 버튼은 보이지 않는 ::after로, 체크박스는 줄 전체, 글자 칸은 44px 높이', () => {
+  const block = css.slice(css.indexOf('/* ───────── K-2: 터치 영역 44×44 ─────────'));
+  assert.match(block, /@media \(pointer: coarse\), \(max-width: 767px\)/);
+  assert.match(block, /width: max\(100%, var\(--tap\)\); height: max\(100%, var\(--tap\)\); transform: translate\(-50%, -50%\);/);
+  for (const sel of ['.icon', '.daytab', '.leg-go', '.lang-switch button', '.item-main', '.chipset button', '.site-foot a']) assert.ok(block.includes(sel), sel);
+  assert.match(block, /label:has\(> input:is\(\[type="checkbox"\], \[type="radio"\]\)\) \{ min-height: var\(--tap\);/);
+  assert.match(block, /select, \.addrow button \{ min-height: var\(--tap\); \}/);
+});

@@ -2431,3 +2431,32 @@ button.chip { height: 24px; min-height: 24px; border-radius: var(--r-chip); font
 .map-day-switcher button, .map-locate, .layout[data-view="board"] .board-nav:not([hidden]) { width: var(--h-md); height: var(--h-md); min-width: var(--h-md); min-height: var(--h-md); padding: 0; border-radius: var(--r-btn); font-size: var(--fs-lg); font-weight: 600; }
 #showAll { height: var(--h-md); min-height: var(--h-md); border-radius: var(--r-btn); font-size: var(--fs-base); font-weight: 600; }
 .leg .leg-go { display: inline-flex; align-items: center; }
+
+/* ───────── K-2: 터치 영역 44×44 ─────────
+ * 손가락으로 쓰는 기기에서는 보이는 크기는 그대로 두고, 보이지 않는 누르는 영역(::after)을 가운데 기준 44px 이상으로 넓힌다. */
+@media (pointer: coarse), (max-width: 767px) {
+  :is(.icon, .pill, .btn, .ui-select, .day-tools button, .route-link, .day-more > summary, .leg-mode, .leg-go, .leg-rail, .linkbtn, .sum-loc,
+    .dp-field, .daytab, .seg button, .mtabs button, .mini-tabs button, .trend-tabs .btn, .lang-switch button, button.chip,
+    .info-toggle, .city-tabs button, .dest-chips button, .tc-add, .menu > summary, .tc-more > summary, .dock-toggle,
+    .brand, .tripsw > summary, .item-main, .stay-main, .day-title, .dc-title-btn, .chipset button, .cur-btn, .check-tabs button, .bulk button, .price-chip,
+    .site-foot a, .sec-head a) {
+    position: relative;
+  }
+  :is(.icon, .pill, .btn, .ui-select, .day-tools button, .route-link, .day-more > summary, .leg-mode, .leg-go, .leg-rail, .linkbtn, .sum-loc,
+    .dp-field, .daytab, .seg button, .mtabs button, .mini-tabs button, .trend-tabs .btn, .lang-switch button, button.chip,
+    .info-toggle, .city-tabs button, .dest-chips button, .tc-add, .menu > summary, .tc-more > summary, .dock-toggle,
+    .brand, .tripsw > summary, .item-main, .stay-main, .day-title, .dc-title-btn, .chipset button, .cur-btn, .check-tabs button, .bulk button, .price-chip,
+    .site-foot a, .sec-head a)::after {
+    content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, var(--tap)); height: max(100%, var(--tap)); transform: translate(-50%, -50%);
+  }
+}
+/* K-2: 체크박스·라디오는 감싼 줄(label) 전체가 누르는 영역 — 줄 높이를 44px 이상으로 */
+@media (pointer: coarse), (max-width: 767px) {
+  label:has(> input:is([type="checkbox"], [type="radio"])) { min-height: var(--tap); display: flex; align-items: center; }
+}
+/* K-2: 글자 칸도 손가락 높이 44px 이상 (모바일) */
+@media (pointer: coarse), (max-width: 767px) {
+  input:not([type="checkbox"], [type="radio"], [type="range"], [type="hidden"], [type="file"]), select, .addrow button { min-height: var(--tap); }
+}
+.memo-row .ui-select { flex: 0 1 auto; width: auto; max-width: 45%; }
+@media (pointer: coarse), (max-width: 767px) { details.settle > summary { min-height: var(--tap); display: flex; align-items: center; } }
