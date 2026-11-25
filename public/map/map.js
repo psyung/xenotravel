@@ -310,14 +310,14 @@ export function init(ctx) {
   function renderPinLegend(empty = '') {
     const el = $('#pinLegend');
     el.innerHTML = `<div class="pin-seg" role="group" aria-label="${esc(t('핀 색 기준'))}">
-      <button type="button" data-pin="day" aria-pressed="${!byCategory()}" class="${byCategory() ? '' : 'active'}">${esc(t('일차별'))}</button>
+      <button type="button" data-pin="day" aria-pressed="${!byCategory()}" class="${byCategory() ? '' : 'active'}">${esc(t('Day별'))}</button>
       <button type="button" data-pin="category" aria-pressed="${byCategory()}" class="${byCategory() ? 'active' : ''}">${esc(t('종류별'))}</button>
     </div>${
         byCategory()
           ? `<div class="legend${legendOpen() ? '' : ' folded'}" role="group" aria-label="${esc(t('종류별'))}">${[...Object.entries(M.CATEGORIES), ['stay', { label: '숙소', color: M.STAY_COLOR }]]
               .filter(([k]) => legendOpen() || ui.catFilter === k)
               .map(([k, c]) => `<button type="button" class="cat-chip${ui.catFilter === k ? ' on' : ''}" data-cat-filter="${k}" aria-pressed="${ui.catFilter === k}" style="--c:${c.color}"><i></i>${esc(t(c.label))}</button>`)
-              .join('')}<button type="button" class="legend-toggle" data-legend-toggle aria-expanded="${legendOpen()}" title="${esc(legendOpen() ? t('범례 접기') : t('범례 펼치기'))}" aria-label="${esc(legendOpen() ? t('범례 접기') : t('범례 펼치기'))}">${legendOpen() ? '▴' : `${esc(t('범례'))} ▾`}</button></div>${empty ? `<p class="cat-empty" role="status">${esc(empty)}${catElsewhere() ? ` <button type="button" class="linkbtn" data-cat-all>${esc(t('전체 일차에서 보기 ({n}곳)', { n: catElsewhere() }))}</button>` : ''}</p>` : ''}`
+              .join('')}<button type="button" class="legend-toggle" data-legend-toggle aria-expanded="${legendOpen()}" title="${esc(legendOpen() ? t('범례 접기') : t('범례 펼치기'))}" aria-label="${esc(legendOpen() ? t('범례 접기') : t('범례 펼치기'))}">${legendOpen() ? '▴' : `${esc(t('범례'))} ▾`}</button></div>${empty ? `<p class="cat-empty" role="status">${esc(empty)}${catElsewhere() ? ` <button type="button" class="linkbtn" data-cat-all>${esc(t('모든 Day에서 보기 ({n}곳)', { n: catElsewhere() }))}</button>` : ''}</p>` : ''}`
           : ''
       }`;
   }
@@ -346,10 +346,10 @@ export function init(ctx) {
   function catEmptyText() {
     if (!byCategory() || !ui.catFilter || catFilterCount()) return '';
     const day = ctx.trip.days.some((d) => d.id === ui.focusList);
-    if (ui.catFilter === 'stay') return day ? t('이 일차에 등록된 숙소가 없어요') : t('이 여행에 등록된 숙소가 없어요');
+    if (ui.catFilter === 'stay') return day ? t('이 Day에 등록된 숙소가 없어요') : t('이 여행에 등록된 숙소가 없어요');
     const name = catLabel(ui.catFilter);
     return day
-      ? t('이 일차에 등록된 {cat} 장소가 없어요', { cat: name })
+      ? t('이 Day에 등록된 {cat} 장소가 없어요', { cat: name })
       : t('이 여행에 등록된 {cat} 장소가 없어요', { cat: name });
   }
 

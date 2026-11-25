@@ -57,7 +57,7 @@ export function init(ctx) {
     return `<li class="${c.done ? 'done' : ''}${ctx.ui.editPrice === c.id || ctx.ui.editPaid === c.id ? ' editing' : ''}">
       <label><input type="checkbox" data-c="toggle" data-id="${c.id}"${c.done ? ' checked' : ''}><span>${esc(C.checkText(c))}</span></label>
       ${price}
-      <button class="icon" data-c="del" data-id="${c.id}" title="${esc(t('지우기'))}" aria-label="${esc(t('{name} 삭제', { name: C.checkText(c) }))}">✕</button>
+      <button class="icon" data-c="del" data-id="${c.id}" title="${esc(t('삭제'))}" aria-label="${esc(t('{name} 삭제', { name: C.checkText(c) }))}">✕</button>
     </li>`;
   }
 
@@ -232,7 +232,7 @@ export function init(ctx) {
     const res = commit();
     focus();
     if (r.expense) saved(res, `${r.expense.krw == null ? t('가계부에 기록했어요. 원화는 환율을 받으면 계산해요') : t('가계부에 {amount} 기록했어요', { amount: bm(r.expense.krw) })} · ${t('금액이 달랐다면 ‘결제’를 눌러 고치세요')}`, 3500);
-    else if (r.removed && res.ok) pushUndo(t('체크를 풀고 가계부 지출 {amount}도 지웠어요', { amount: expenseLabel(r.removed) }), uncheckUndo([id], [r.removed]));
+    else if (r.removed && res.ok) pushUndo(t('체크를 풀고 가계부 지출 {amount}도 삭제했어요', { amount: expenseLabel(r.removed) }), uncheckUndo([id], [r.removed]));
     else if (linked) saved(res, t('체크를 풀었어요. 가계부 지출은 그대로 남겼어요'));
   });
   async function changeCheckGroup(group, action) {
@@ -312,7 +312,7 @@ export function init(ctx) {
     if (choice === 'all' && opt.done && opt.done < opt.total) {
       const confirmed = await ask({
         title: t('전체 {n}개 항목을 삭제할까요?', { n: opt.total }),
-        body: `${t('미완료 {n}개도 함께 지워져요.', { n: opt.total - opt.done })} ${kept(entries)}`,
+        body: `${t('미완료 {n}개도 함께 삭제돼요.', { n: opt.total - opt.done })} ${kept(entries)}`,
         actions: [{ value: 'all', label: t('전체 삭제'), danger: true }],
       });
       if (!confirmed || !valid()) return;

@@ -133,7 +133,7 @@ export function minTransfers(people) {
 
 /** 메신저에 붙일 정산 글 */
 export function settlementText(trip, s, won) {
-  const lines = [t('[정산] {title}', { title: trip.title }), t('함께 쓴 돈 {amount} · {n}건', { amount: won(s.total), n: s.counted })];
+  const lines = [t('[정산] {title}', { title: trip.title }), t('공동 지출 {amount} · {n}건', { amount: won(s.total), n: s.counted })];
   lines.push('', t('인당 부담'));
   for (const p of s.people) lines.push(`· ${p.name}: ${won(p.share)} (${t('낸 돈 {amount}', { amount: won(p.paid) })})`);
   lines.push('', t('보낼 돈'));

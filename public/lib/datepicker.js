@@ -3,7 +3,7 @@
 //
 // 원래 input은 숨긴 채로 그대로 두고 value만 채운다. 그래서 기존 change 핸들러·FormData가 그대로 동작한다.
 //  - 기간: [data-dp-pair] 안의 input[data-dp="start"] + input[data-dp="end"]. 하나의 달력에서 시작~끝을 고른다.
-//    data-dp-pair="여행 날짜"처럼 값에 제목을, data-dp-min-nights="1"로 최소 박 수를 줄 수 있다.
+//    data-dp-pair="여행 기간"처럼 값에 제목을, data-dp-min-nights="1"로 최소 박 수를 줄 수 있다.
 //    고른 뒤 "적용"을 누르면 end input에 change(버블링)를 한 번만 보낸다.
 //  - 날짜+시간: input[type="datetime-local"] → 날짜 버튼 + 시간 칸.
 //  - 날짜 하나: input[type="date"][data-dp-single] → 날짜 버튼 (J-6).

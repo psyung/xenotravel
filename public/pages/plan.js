@@ -524,7 +524,7 @@ export function init(ctx) {
         <span class="item-name">${nameHtml(it)}</span>
         <span class="item-sub">${sub}</span>
       </button>
-      ${isDay || ctx.trip.days.length ? `<button class="icon" data-action="place-ops" title="${esc(t('다른 일차로 이동·복제'))}" aria-label="${esc(t('{name} 다른 일차로 이동·복제', { name: it.name }))}" aria-haspopup="dialog">⇄</button>` : ''}
+      ${isDay || ctx.trip.days.length ? `<button class="icon" data-action="place-ops" title="${esc(t('다른 Day로 이동·복제'))}" aria-label="${esc(t('{name} 다른 Day로 이동·복제', { name: it.name }))}" aria-haspopup="dialog">⇄</button>` : ''}
       <button class="icon" data-action="locate" title="${esc(t('지도에서 보기'))}" aria-label="${esc(t('{name} 지도에서 보기', { name: it.name }))}">◎</button>
       ${open ? `<button class="icon collapse" data-action="toggle" title="${esc(t('접기'))}" aria-label="${esc(t('접기'))}"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button>` : ''}
     </div>
@@ -562,7 +562,7 @@ export function init(ctx) {
           </div>
           <label>${esc(t('다른 날로 옮기기'))}<select class="move-to" data-ui-select>${moveOptions(listIdOf(it.id), t('옮길 날 고르기'))}</select></label>
           <div class="editor-actions">
-            <span class="ea-buttons"><button data-action="place-move" aria-haspopup="dialog">${esc(t('다른 일차로 이동'))}</button> <button data-action="place-copy" aria-haspopup="dialog">${esc(t('다른 일차로 복제'))}</button> <button data-action="duplicate">${esc(t('같은 날 복제'))}</button> <button data-action="delete" class="danger">${esc(t('삭제'))}</button></span>
+            <span class="ea-buttons"><button data-action="place-move" aria-haspopup="dialog">${esc(t('다른 Day로 이동'))}</button> <button data-action="place-copy" aria-haspopup="dialog">${esc(t('다른 Day로 복제'))}</button> <button data-action="duplicate">${esc(t('같은 날 복제'))}</button> <button data-action="delete" class="danger">${esc(t('삭제'))}</button></span>
           </div>
         </div>
       </details>
@@ -1245,7 +1245,7 @@ export function init(ctx) {
       if (!found) return;
       if (action === 'unpay') {
         B.unpayPlace(ctx.trip, id);
-        return void saved(commit(), t('결제 기록을 지웠어요'));
+        return void saved(commit(), t('지출을 삭제했어요'));
       }
       // 칸에 적은 금액으로 기록 (예정 비용이 비어 있으면 그 금액을 예정 비용으로도 둔다)
       const row = btn.closest('.cost-row');
@@ -1754,7 +1754,7 @@ export function initDialogs(ctx) {
     if (op.kind === 'place') {
       const found = M.findItem(ctx.trip, op.itemId);
       if (!found) return void dayOpsDialog.close();
-      $('#dayOpsTitle').textContent = op.mode === 'move' ? t('다른 일차로 이동') : t('다른 일차로 복제');
+      $('#dayOpsTitle').textContent = op.mode === 'move' ? t('다른 Day로 이동') : t('다른 Day로 복제');
       $('#dayOpsBody').innerHTML = placeOpsHtml(op);
       const ok = op.mode === 'move' ? Boolean(ctx.trip.days[op.to] && ctx.trip.days[op.to].id !== found.listId) : op.copy.size > 0;
       $('#dayOpsActions').innerHTML = `<button type="button" class="btn ghost" data-ops="cancel">${esc(t('취소'))}</button><button type="button" class="btn primary" data-ops="apply"${ok ? '' : ' disabled'}>${esc(op.mode === 'move' ? t('{day}(으)로 이동', { day: dayName(op.to) }) : t('{n}개 날에 복제', { n: op.copy.size }))}</button>`;

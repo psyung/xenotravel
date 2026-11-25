@@ -155,7 +155,7 @@ test('P0-3·P0-4: 확인 창 선택지와 실행 취소, 가계부의 출처 아
   assert.match(app, /value: 'drop', label: t\('지출도 삭제'\)/);
   assert.match(app, /value: 'drop', label: t\('체크 해제 \+ 지출 \{n\}건 삭제'/);
   assert.match(app, /t\('직접 고친 지출 \{n\}건은 남겨요'/);
-  assert.match(app, /pushUndo\(t\('체크를 풀고 가계부 지출 \{amount\}도 지웠어요'/);
+  assert.match(app, /pushUndo\(t\('체크를 풀고 가계부 지출 \{amount\}도 삭제했어요'/);
   assert.match(app, /class="src-tag"/);
 });
 

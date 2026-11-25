@@ -359,7 +359,7 @@ function afterSave(r) {
       if (next) trip = next;
       else {
         trip = null;
-        toast(t('다른 탭에서 이 여행을 지웠어요'), 4000);
+        toast(t('다른 탭에서 이 여행을 삭제했어요'), 4000);
         go('home');
       }
     }
@@ -540,7 +540,7 @@ function conflictLabel(c) {
   const [tripId, ...path] = c.path;
   const tripTitle = (store.trips[tripId] ?? trip)?.title ?? '';
   if (path[0] === '__trip') return t('여행 “{title}” 전체', { title: (c.local ?? c.remote)?.title ?? tripTitle });
-  if (path[0] === '__dates') return t('여행 날짜');
+  if (path[0] === '__dates') return t('여행 기간');
   const list = LIST_NAMES[path[0]];
   if (list) {
     const entity = c.local && typeof c.local === 'object' && !path[2] ? c.local : null;
@@ -637,7 +637,7 @@ function renderPlanEmpty() {
   el.innerHTML = show
     ? `<section class="plan-empty card" aria-labelledby="planEmptyTitle">
         <h2 id="planEmptyTitle">${esc(t('첫 장소를 추가해 보세요'))}</h2>
-        <p>${esc(t('장소를 검색하거나 구글맵 링크를 붙여넣으면 {target}에 담겨요. 지도에서 찍을 때는 지도 일차를 사용해요.', { target: targetLabel() }))}</p>
+        <p>${esc(t('장소를 검색하거나 구글맵 링크를 붙여넣으면 {target}에 담겨요. 지도에서 찍을 때는 지도에서 고른 Day에 담겨요.', { target: targetLabel() }))}</p>
         <div class="plan-empty-actions">
           <button type="button" class="btn primary" data-empty="search">${esc(t('장소 검색하기'))}</button>
           <button type="button" class="btn" data-empty="pick">${esc(t('지도에서 찍기'))}</button>
@@ -1292,19 +1292,19 @@ async function onDatesChange() {
     ].filter(Boolean).join(' · ');
     items.push([
       t('기존 장소·숙소·지출은 날짜 그대로 유지돼요'),
-      t('‘일차 순서대로 옮기기’를 고르면 모두 일차 번호를 따라 {date}부터로 함께 옮겨져요', { date: M.formatDate(start) }) + (extra ? ` (${extra})` : ''),
+      t('‘Day 순서대로 옮기기’를 고르면 모두 Day 번호를 따라 {date}부터로 함께 옮겨져요', { date: M.formatDate(start) }) + (extra ? ` (${extra})` : ''),
     ]);
   }
   let mode = 'date';
   if (items.length) {
     mode = await ask({
-      title: t('여행 날짜를 바꿀까요?'),
+      title: t('여행 기간을 바꿀까요?'),
       html: `<p>${esc(`${formatRange(M.formatDate(start), M.formatDate(end))} · ${tripLength(M.dateRange(start, end).length)}`)}</p>
         <ul class="impact">${items.map(([head, detail]) => `<li><b>${esc(head)}</b>${detail ? `<small>${esc(detail)}</small>` : ''}</li>`).join('')}</ul>`,
       actions: choose
         ? [
             { value: 'date', label: t('날짜 그대로 두고 바꾸기'), primary: true },
-            { value: 'index', label: t('일차 순서대로 옮기기') },
+            { value: 'index', label: t('Day 순서대로 옮기기') },
           ]
         : [{ value: 'date', label: t('날짜 바꾸기'), primary: true }],
     });
@@ -1326,7 +1326,7 @@ async function extendTripFor(from, to, opts) {
   if (!r.tooLong) actions.push({ value: 'extend', label: t('여행 기간 늘리기'), primary: true });
   if (stayRangeWithin(trip, from, to)) actions.push({ value: 'clip', label: t('기간 안만 저장(잘라서)') });
   const choice = await ask({
-    title: trip.startDate ? t('여행 기간을 늘릴까요?') : t('여행 날짜를 정할까요?'),
+    title: trip.startDate ? t('여행 기간을 늘릴까요?') : t('여행 기간을 정할까요?'),
     body: r.tooLong
       ? t('여행은 최대 {n}일까지예요. 기간을 늘리지 않았어요', { n: M.MAX_DAYS })
       : t('여행을 {range}로 늘릴까요? 기존 일정은 날짜 그대로 유지돼요', { range: formatRange(M.formatDate(r.start), M.formatDate(r.end)) }),
@@ -1403,7 +1403,7 @@ $('.menu .menu-pop').addEventListener('click', (e) => {
   const action = e.target.closest('[data-menu]')?.dataset.menu;
   $('.menu').open = false;
   if (action === 'backup') saveTripBackup();
-  else if (action === 'calendar' && !downloadCalendar(trip)) toast(t('캘린더에 내보낼 일정이 없어요. 날짜가 있는 일차에 장소를 넣으면 내보낼 수 있어요'), 3500);
+  else if (action === 'calendar' && !downloadCalendar(trip)) toast(t('캘린더에 내보낼 일정이 없어요. 날짜가 있는 Day에 장소를 넣으면 내보낼 수 있어요'), 3500);
   else if (action === 'import') $('#importFile').click();
   else if (action === 'delete') deleteTrip(trip.id);
   else if (action === 'wipe-device') {
@@ -1855,7 +1855,7 @@ $('#resetCover').addEventListener('click', () => editCover(null));
 
 function newTripForm(id) {
   const [ds, de] = defaultDates();
-  return `<form id="${id}" class="home-new" autocomplete="off" data-dp-pair="여행 날짜">
+  return `<form id="${id}" class="home-new" autocomplete="off" data-dp-pair="여행 기간">
     <label class="hn-dest suggest-field"><span>${esc(t('어디로 떠나요?'))}</span><input id="${id}Destination" name="destination" placeholder="${esc(t('예: 오사카, 다낭, Lisbon'))}" required></label>
     <label class="hn-date"><span>${esc(t('가는 날'))}</span><input type="date" name="startDate" data-dp="start" aria-label="가는 날" required value="${ds}"></label>
     <label class="hn-date"><span>${esc(t('오는 날'))}</span><input type="date" name="endDate" data-dp="end" aria-label="오는 날" required value="${de}"></label>
@@ -1986,10 +1986,10 @@ async function importCourse(id, hash) {
         <label><input type="radio" name="courseTarget" value="new" checked> ${esc(t('새 여행으로 만들기'))}</label>
         <label><input type="radio" name="courseTarget" value="existing"${choices.length ? '' : ' disabled'}> ${esc(t('기존 여행에 넣기'))}</label>
       </fieldset>
-      <label class="course-new"><span>${esc(t('여행 날짜'))}</span><input type="date" class="inp" id="courseDate" data-dp-single value="${Courses.nextSaturday(TODAY)}"></label>
+      <label class="course-new"><span>${esc(t('여행 시작일'))}</span><input type="date" class="inp" id="courseDate" data-dp-single value="${Courses.nextSaturday(TODAY)}"></label>
       <div class="course-existing" hidden>
         <label><span>${esc(t('여행'))}</span><select id="courseTrip" class="inp" data-ui-select>${choices.map((tr) => `<option value="${esc(tr.id)}">${esc(tr.title)}</option>`).join('')}</select></label>
-        <label><span>${esc(t('일차'))}</span><select id="courseDay" class="inp" data-ui-select>${choices[0] ? dayOptions(choices[0]) : ''}</select></label>
+        <label><span>${esc(t('Day'))}</span><select id="courseDay" class="inp" data-ui-select>${choices[0] ? dayOptions(choices[0]) : ''}</select></label>
       </div>
       <label class="check"><input type="checkbox" id="courseChecklist" checked> ${esc(t('준비할 일도 체크리스트에 추가'))}</label>
     </div>`;
@@ -2062,7 +2062,7 @@ async function importTrend(id, hash) {
       </fieldset>
       <div class="course-existing"${list.length ? '' : ' hidden'}>
         <label><span>${esc(t('여행'))}</span><select id="trendTrip" class="inp" data-ui-select>${list.map((tr) => `<option value="${esc(tr.id)}">${esc(tr.title)}</option>`).join('')}</select></label>
-        <label><span>${esc(t('일차'))}</span><select id="trendDay" class="inp" data-ui-select>${list[0] ? dayOptions(list[0]) : ''}</select></label>
+        <label><span>${esc(t('Day'))}</span><select id="trendDay" class="inp" data-ui-select>${list[0] ? dayOptions(list[0]) : ''}</select></label>
       </div>
     </div>`;
   const answer = ask({ title: t('이 장소 일정에 담기'), html, actions: [{ value: 'add', label: t('담기'), primary: true }] });
@@ -2594,7 +2594,7 @@ function todayRowHtml(it, n, isNext) {
       ${
         ui.readonly
           ? `<span class="td-num">${it.visited ? '✓' : n}</span>`
-          : `<button type="button" class="td-num" data-today="visit" data-id="${it.id}" aria-pressed="${!!it.visited}" aria-label="${esc(t('{name} 다녀옴 표시', { name: it.name }))}" title="${esc(it.visited ? t('다녀온 표시 지우기') : t('다녀왔어요'))}">${it.visited ? '✓' : n}</button>`
+          : `<button type="button" class="td-num" data-today="visit" data-id="${it.id}" aria-pressed="${!!it.visited}" aria-label="${esc(t('{name} 다녀옴 표시', { name: it.name }))}" title="${esc(it.visited ? t('다녀온 표시 풀기') : t('다녀왔어요'))}">${it.visited ? '✓' : n}</button>`
       }
       <div class="td-body">
         <b>${esc(it.name)}${isNext ? `<span class="td-next">${esc(t('다음'))}</span>` : ''}${costTagHtml(it)}</b>
@@ -2602,7 +2602,7 @@ function todayRowHtml(it, n, isNext) {
         ${memo ? `<small class="td-memo">${esc(memo)}</small>` : ''}
       </div>
       <div class="td-acts">
-        ${canPay ? `<button type="button" data-today="pay" data-id="${it.id}" title="${esc(t('예정 비용 그대로 가계부에 기록'))}" aria-label="${esc(t('{name} 결제 기록', { name: it.name }))}">${esc(t('결제'))}</button>` : ''}
+        ${canPay ? `<button type="button" data-today="pay" data-id="${it.id}" title="${esc(t('예정 비용 그대로 가계부에 기록'))}" aria-label="${esc(t('{name} 지출로 기록', { name: it.name }))}">${esc(t('결제'))}</button>` : ''}
         <button type="button" data-today="copy" data-text="${esc(addr)}" title="${esc(t('주소 복사 (택시 기사에게 보여주기)'))}" aria-label="${esc(t('{name} 주소 복사', { name: it.name }))}">${esc(t('주소'))}</button>
         <a href="${href(M.directionsFromHereUrl(it))}" target="_blank" rel="noopener" title="${esc(t('지금 위치에서 길찾기'))}" aria-label="${esc(t('{name} 길찾기', { name: it.name }))}">${esc(t('길찾기'))}</a>
       </div>

@@ -38,7 +38,7 @@ export function init(ctx) {
       .map(([k, d]) => ({ k, d, v: map[k] ?? 0 }))
       .filter((r) => r.v > 0)
       .sort((a, b) => b.v - a.v);
-    if (!rows.length) return `<p class="empty-note">${esc(t('기록이 생기면 보여요'))}</p>`;
+    if (!rows.length) return `<p class="empty-note">${esc(t('지출이 생기면 보여요'))}</p>`;
     return `<div class="bars">${rows
       .map((r) => `<div class="bar-row"><span class="lbl">${esc(t(r.d.label))}</span><span class="bar" aria-hidden="true"><i style="width:${(r.v / max) * 100}%"></i></span><span class="v">${bm(r.v)}</span></div>`)
       .join('')}</div>`;
@@ -57,7 +57,7 @@ export function init(ctx) {
         <span class="bar${over ? ' over' : ''}" aria-hidden="true"><i style="width:${(sp / max) * 100}%"></i>${pl ? `<em style="left:${(pl / max) * 100}%"></em>` : ''}</span>
         <span class="v">${bm(sp)}<small>${pl ? ` / ${bm(pl)}` : ''}</small></span></div>`;
       })
-      .join('')}</div><p class="fine">${esc(t('막대는 쓴 돈, 세로 눈금은 장소·체크리스트 예상이에요.'))}</p>`;
+      .join('')}</div><p class="fine">${esc(t('막대는 지출, 세로 눈금은 장소·체크리스트 예상이에요.'))}</p>`;
   }
 
   /** 예산 칸: 예산 없음 · 남음 · 딱 맞게 다 씀 · 초과 (문구와 색이 상태와 같게) */
@@ -87,7 +87,7 @@ export function init(ctx) {
       ? t('남은 {n}일 동안 하루 {amount}까지 가능', { n: num(p.remainingDays), amount: B.won(p.remainingPerDay) })
       : p.status === 'after' ? t('여행 끝') : p.status === 'undated' ? t('날짜 미정') : t('예산을 넣으면 계산해요');
     return `<div class="box budget-pace">
-      <b>${esc(t('오늘 쓴 돈 / 하루 권장액'))}</b>
+      <b>${esc(t('오늘 지출 / 하루 권장액'))}</b>
       <span>${esc(B.won(p.todaySpent))} / ${p.recommended == null || p.status === 'after' ? '—' : esc(B.won(p.recommended))}</span>
       <span>${p.status === 'before' ? `${esc(t('출발 전'))} · ` : ''}${esc(available)}</span>
       ${p.pending ? `<small>${esc(t('환율 미정'))}</small>` : ''}
@@ -129,7 +129,7 @@ export function init(ctx) {
         confirmCur && !ctx.ui.readonly
           ? `<div class="cur-confirm" role="group" aria-labelledby="curConfirmTitle">
             <b id="curConfirmTitle">${esc(t('현지 통화를 확인해 주세요'))}</b>
-            <p>${esc(t('여행지 "{dest}"만으로는 어느 나라 돈을 쓰는지 알 수 없어요. 첫 기록 전에 통화를 골라 주세요. 지금은 임시로 {code}예요.', { dest: ctx.trip.destination || t('여행'), code: b.currency }))}</p>
+            <p>${esc(t('여행지 "{dest}"만으로는 어느 나라 돈을 쓰는지 알 수 없어요. 첫 지출 전에 통화를 골라 주세요. 지금은 임시로 {code}예요.', { dest: ctx.trip.destination || t('여행'), code: b.currency }))}</p>
             <div class="cur-confirm-row"><select id="bConfirmCur" data-ui-select aria-label="${esc(t('현지 통화'))}">${currencyOptions(b.currency)}</select>
             <button class="btn primary" data-b="cur-ok">${esc(t('이 통화로 쓰기'))}</button></div>
           </div>`
@@ -141,7 +141,7 @@ export function init(ctx) {
         <span>${esc(t('예상 (장소·체크리스트)'))}</span><b>${plan.priced ? bm(plan.total) : '—'}</b>
         <small>${plan.priced ? (b.total && plan.total > b.total ? esc(t('예산보다 {diff} 많아요', { diff: bm(plan.total - b.total) })) : `${esc(t('{n}개 항목', { n: plan.priced }))}${plan.noRate ? ` · ${esc(t('환율 미정 {n}개', { n: plan.noRate }))}` : ''}`) : esc(t('장소나 체크리스트에 가격 넣기 →'))}</small>
       </button>
-      <div class="kpi"><span>${esc(t('쓴 돈'))}</span><b>${bu(s.spentU)}</b><small>${esc(t('{n}건', { n: ctx.trip.expenses.length }))}${s.pending.count ? ` · <span class="pend">${esc(t('환율 미정 {n}건 ({amount})', { n: s.pending.count, amount: B.moneyCode(s.pending.amount, b.currency) }))}</span>` : ''}</small></div>
+      <div class="kpi"><span>${esc(t('지출'))}</span><b>${bu(s.spentU)}</b><small>${esc(t('{n}건', { n: ctx.trip.expenses.length }))}${s.pending.count ? ` · <span class="pend">${esc(t('환율 미정 {n}건 ({amount})', { n: s.pending.count, amount: B.moneyCode(s.pending.amount, b.currency) }))}</span>` : ''}</small></div>
       ${budgetTileHtml(b, s)}
     </div>
     ${currencyTotalsHtml(b, s)}
@@ -201,7 +201,7 @@ export function init(ctx) {
     </div>
 
     <div class="box" style="margin-top:14px">
-      <h3>${esc(t('기록'))} <button class="link" data-b="csv"${recs.length ? '' : ' hidden'}>${esc(t('CSV로 받기'))}</button></h3>
+      <h3>${esc(t('지출 내역'))} <button class="link" data-b="csv"${recs.length ? '' : ' hidden'}>${esc(t('CSV로 받기'))}</button></h3>
       ${payFilterHtml()}
       ${
           shown.length
@@ -546,7 +546,7 @@ export function init(ctx) {
     else if (act === 'del') {
       const ex = ctx.trip.expenses.find((x) => x.id === btn.dataset.id);
       const linked = ex?.checkId && ctx.trip.checks?.find((c) => c.id === ex.checkId);
-      if (confirm(linked ? t('이 기록을 지울까요? 체크리스트의 "{text}" 체크도 풀려요.', { text: linked.text }) : t('이 기록을 지울까요?'))) {
+      if (confirm(linked ? t('이 지출을 삭제할까요? 체크리스트의 "{text}" 체크도 풀려요.', { text: linked.text }) : t('이 지출을 삭제할까요?'))) {
         B.removeExpense(ctx.trip, btn.dataset.id);
         if (linked) linked.done = false; // 체크리스트와 맞춘다
         commit();

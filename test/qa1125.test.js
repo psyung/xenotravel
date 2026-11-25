@@ -296,3 +296,22 @@ test('K-1: 카드 16 · 창 20 · 칩 999 모서리 토큰', () => {
   assert.match(css, /:is\(\.chip, \.cat-tag, \.stay-tag, \.tc-badge, \.soon-badge, \.trend-badge, \.count-badge\) \{ border-radius: var\(--r-chip\); \}/);
   assert.doesNotMatch(css, /border-radius: (22|18)px (22|18)px 0 0/);
 });
+
+test('K-4·K-5: 사이트 안내는 해요체, 앱 문구는 용어집의 "쓰지 말 것"을 쓰지 않는다', async () => {
+  const { chrome, usage } = await import('../scripts/site-copy.mjs');
+  const ko = JSON.stringify([chrome.ko, usage]);
+  assert.doesNotMatch(ko, /[가-힣]니다/, '한국어 사이트 안내는 해요체');
+  const RESET = /^지우기$|데이터|백업 후 지우기|지운 데이터|사이트 데이터가 지워졌/; // '지우기'는 데이터 지우기 확인 창 버튼
+  const banned = [
+    [/지우기|지워요|지웠어요|지울까요|지워져요/, (k) => RESET.test(k)],
+    [/일차/, (k) => k === '일차'], // 엑셀·CSV 열 이름
+    [/쓴 돈/, () => false],
+    [/여행 날짜/, () => false],
+  ];
+  const bad = [];
+  for (const key of Object.keys(MESSAGES)) for (const [re, ok] of banned) if (re.test(key) && !ok(key)) bad.push(key);
+  assert.deepEqual(bad, []);
+  const app = appSource();
+  assert.doesNotMatch(app, /t\('일차'\)/, '화면 문구로는 Day');
+  assert.match(readFileSync(new URL('../docs/glossary.md', import.meta.url), 'utf8'), /\| 날짜 단위 \| Day N \|/);
+});
