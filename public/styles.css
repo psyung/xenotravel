@@ -1164,7 +1164,7 @@ button.kpi:hover { border-color: var(--accent); }
 .dp-pop.sheet { pointer-events: auto; }
 .dp-pop.sheet.show .dp-scrim { opacity: 1; }
 .dp-pop.sheet .dp-panel {
-  left: 0; right: 0; bottom: 0; top: auto; border-radius: 22px 22px 0 0; border-width: 1px 0 0;
+  left: 0; right: 0; bottom: 0; top: auto; border-radius: var(--r-modal) var(--r-modal) 0 0; border-width: 1px 0 0;
   padding: 8px 16px calc(16px + env(safe-area-inset-bottom)); transform: translateY(24px);
 }
 .dp-pop.sheet.show .dp-panel { transform: none; }
@@ -1917,7 +1917,7 @@ dialog.preset-dialog { width: min(520px, calc(100vw - 32px)); }
   .layout[data-tab="map"] .map-sheet {
     position: absolute; left: 0; right: 0; bottom: 0; z-index: 1005; height: var(--sheet-h, 112px);
     display: flex; flex-direction: column; background: var(--paper); color: var(--ink);
-    border-top: 1px solid var(--line); border-radius: 18px 18px 0 0; box-shadow: 0 -10px 28px rgba(15, 30, 46, .16);
+    border-top: 1px solid var(--line); border-radius: var(--r-modal) var(--r-modal) 0 0; box-shadow: 0 -10px 28px rgba(15, 30, 46, .16);
     transition: height .22s cubic-bezier(.2, .8, .2, 1);
   }
   .mapwrap.sheet-dragging .map-sheet { transition: none; }
@@ -1968,7 +1968,7 @@ dialog:modal { margin: auto; }
 @media (max-width: 599px) {
   dialog:modal, dialog#flightDialog:modal, dialog#new-trip-modal:modal, dialog.share-dialog:modal, dialog.bulk-dialog:modal,
   dialog.dayops-dialog:modal, dialog.preset-dialog:modal, dialog.ask-dialog:modal, dialog.p3-dialog:modal {
-    width: 100%; max-width: 100%; margin: auto 0 0; border-radius: 22px 22px 0 0;
+    width: 100%; max-width: 100%; margin: auto 0 0; border-radius: var(--r-modal) var(--r-modal) 0 0;
     max-height: min(88dvh, calc(100dvh - env(safe-area-inset-top) - 12px)); padding-bottom: env(safe-area-inset-bottom);
   }
   dialog[open] { animation: sheet-up .22s ease-out; }
@@ -2052,7 +2052,7 @@ dialog:modal { margin: auto; }
 .ui-select .uis-chev { width: 14px; height: 14px; color: var(--sub); }
 .uis-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
 .uis-pop { position: fixed; z-index: 3000; max-height: 360px; display: flex; flex-direction: column; background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-pop); overflow: hidden; max-width: calc(100vw - 16px); }
-.uis-pop.sheet { left: 0; right: 0; bottom: 0; top: auto; width: 100%; max-width: none; min-width: 0 !important; max-height: 70dvh; border-radius: 18px 18px 0 0; padding-bottom: env(safe-area-inset-bottom); }
+.uis-pop.sheet { left: 0; right: 0; bottom: 0; top: auto; width: 100%; max-width: none; min-width: 0 !important; max-height: 70dvh; border-radius: var(--r-modal) var(--r-modal) 0 0; padding-bottom: env(safe-area-inset-bottom); }
 .uis-shade { position: fixed; inset: 0; z-index: 2999; background: rgba(0, 12, 30, .35); }
 .uis-head { padding: 14px 16px 6px; font-size: var(--fs-md); }
 .uis-search { margin: 8px; height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--soft); color: var(--ink); }
@@ -2460,3 +2460,11 @@ button.chip { height: 24px; min-height: 24px; border-radius: var(--r-chip); font
 }
 .memo-row .ui-select { flex: 0 1 auto; width: auto; max-width: 45%; }
 @media (pointer: coarse), (max-width: 767px) { details.settle > summary { min-height: var(--tap); display: flex; align-items: center; } }
+
+/* ───────── K-1: 칩·카드·창 모서리 ─────────
+ * 카드(겉 카드·장소 카드·여행 카드·홈 카드) 16 · 창(모달·바텀시트) 20 · 칩·태그·배지 999. 펼침 메뉴는 12 그대로. */
+:is(.card, .box, .tc-open, .insp li, .feats li, .trend-card, .item .tl-box, .inbox-dock) { border-radius: var(--r-card); }
+.inbox-dock { border-radius: var(--r-card) var(--r-card) 0 0; }
+dialog { border-radius: var(--r-modal); }
+:is(.chip, .cat-tag, .stay-tag, .tc-badge, .soon-badge, .trend-badge, .count-badge) { border-radius: var(--r-chip); }
+:is(.cat-tag, .stay-tag, .tc-badge, .soon-badge) { padding-inline: 8px; }

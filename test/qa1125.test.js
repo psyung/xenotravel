@@ -289,3 +289,10 @@ test('K-2: 모바일 터치 영역 44px — 작은 버튼은 보이지 않는 ::
   assert.match(block, /label:has\(> input:is\(\[type="checkbox"\], \[type="radio"\]\)\) \{ min-height: var\(--tap\);/);
   assert.match(block, /select, \.addrow button \{ min-height: var\(--tap\); \}/);
 });
+
+test('K-1: 카드 16 · 창 20 · 칩 999 모서리 토큰', () => {
+  assert.match(css, /:is\(\.card, \.box, \.tc-open, \.insp li, \.feats li, \.trend-card, \.item \.tl-box, \.inbox-dock\) \{ border-radius: var\(--r-card\); \}/);
+  assert.match(css, /dialog \{ border-radius: var\(--r-modal\); \}/);
+  assert.match(css, /:is\(\.chip, \.cat-tag, \.stay-tag, \.tc-badge, \.soon-badge, \.trend-badge, \.count-badge\) \{ border-radius: var\(--r-chip\); \}/);
+  assert.doesNotMatch(css, /border-radius: (22|18)px (22|18)px 0 0/);
+});
