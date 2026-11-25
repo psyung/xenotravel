@@ -191,3 +191,19 @@ test('J-14: PDF 표는 열 너비 고정(번호 8mm · 시간 16mm · 장소 40%
   assert.doesNotMatch(app, /t\('숙'\)|t\('항'\)/);
   assert.match(css, /\.print-day col\.c-n \{ width: 8mm; \}\n\.print-day col\.c-t \{ width: 16mm; \}\n\.print-day col\.c-place \{ width: 40%; \}/);
 });
+
+test('J-2: 기간 표기는 formatRange 하나로 — 한국어 " ~ ", 일본어 "〜", 중국어·영어 "–", 같은 날은 하나', async () => {
+  const I = await import('../public/lib/i18n.js');
+  const M = await import('../public/lib/model.js');
+  const cases = { ko: '12/25 ~ 12/28', en: '12/25–12/28', zh: '12/25–12/28', ja: '12/25〜12/28' };
+  for (const [lang, want] of Object.entries(cases)) {
+    I.setLang(lang);
+    assert.equal(I.formatRange('12/25', '12/28'), want);
+    assert.equal(I.formatRange('11/28', '11/28'), '11/28');
+    assert.equal(I.formatRange(I.shortDate('2026-12-28'), I.shortDate('2027-01-03')), lang === 'ko' ? '12/28 ~ 1/3' : lang === 'ja' ? '12/28〜1/3' : '12/28–1/3');
+  }
+  I.setLang('ko');
+  assert.equal(M.dayRanges([2, 3, 4, 5]), 'Day 3 ~ Day 6');
+  const app = appSource();
+  assert.doesNotMatch(app, /\$\{[^}]*\}\s?[–~]\s?\$\{/, '범위 기호를 직접 붙이는 코드가 남아 있으면 안 된다');
+});

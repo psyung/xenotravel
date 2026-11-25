@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as M from '../public/lib/model.js';
-import { checkDay, estimateMinutes, hoursWarning, staySuggestions } from '../public/lib/route-check.js';
+import { checkDay, estimateMinutes, hoursWarning } from '../public/lib/route-check.js';
 import { flightReminders, reminderTodos } from '../public/lib/flight-reminders.js';
 import { tripToCalendar } from '../public/lib/export.js';
 import { budgetPace } from '../public/lib/budget.js';
@@ -31,7 +31,7 @@ test('F-2 estimates each travel mode and identifies the stops that trigger day w
   assert.deepEqual(checkDay(trip, 2).warnings, [{ id: late.id, kind: 'flight' }]);
 });
 
-test('F-3 stay legs contribute to distance and travel time and suggestions group missing nights', () => {
+test('F-3 stay legs contribute to distance and travel time (J-3: stay suggestions removed)', () => {
   const trip = tripFor('2026-11-28');
   add(trip, 0, 'First stop', 0.1);
   add(trip, 1, 'Stop A', 179);
@@ -44,10 +44,6 @@ test('F-3 stay legs contribute to distance and travel time and suggestions group
   assert.ok(result.firstKm > 11 && result.firstKm < 11.2);
   assert.equal(M.dayKm(trip, 0), result.firstKm * 2);
   assert.equal(result.minutes, estimateMinutes(result.firstKm, 'transit') * 2);
-  assert.deepEqual(staySuggestions(trip), [
-    { start: 1, end: 2, lat: 0, lng: -180 },
-    { start: 4, end: 4, lat: 0, lng: 55 },
-  ]);
 });
 
 test('F-6 backs up hours, validates inputs, and handles closed weekdays and overnight service', () => {
@@ -149,7 +145,7 @@ test('F-10 country chooses the primary app, with overrides and safe coordinate l
 test('Part F UI uses explicit actions, safe links, and resets current toasts on language change', () => {
   const source = appSource();
   assert.match(source, /action === 'day-warning'[\s\S]*?scrollIntoView/);
-  assert.match(source, /data-stay-suggestions[\s\S]*?staySuggestion/);
+  assert.doesNotMatch(source, /data-stay-suggestions|staySuggestion/); // J-3: 숙소 추천 위치 삭제
   assert.match(source, /type="time" data-hours="opensAt"/);
   assert.match(source, /label: t\('할 일로 추가'\),\s*run: \(\) => \{[\s\S]*?C\.addCheck/);
   assert.match(source, /action === 'nearby-load'\) \{\s*void loadNearby\(\)/);

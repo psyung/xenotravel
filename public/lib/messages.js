@@ -1144,7 +1144,6 @@ export const MESSAGES = {
   "예상 이동 3시간 초과": ["Over 3 hours of travel", "预计移动超过3小时", "移動の目安が3時間超"],
   "장소 8곳 이상": ["8 or more places", "8处及以上", "8か所以上"],
   "숙소에서 첫 장소까지 {km}": ["{km} from stay to first stop", "住宿到首站{km}", "宿から最初の場所まで {km}"],
-  "숙소 추천 위치": ["Suggested area to stay", "建议住宿位置", "宿泊候補エリア"],
   "휴무 요일": ["Closed weekdays", "每周休息日", "定休日"],
   "영업시간": ["Opening hours", "营业时间", "営業時間"],
   "영업 시작": ["Opens", "开始营业", "開店"],

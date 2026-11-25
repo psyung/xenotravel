@@ -2,7 +2,7 @@
 // trip = { id, title, destination, startDate, endDate, center, days: [{id, date, items}], inbox: [items] }
 // item = { id, name, address, lat, lng, time, memo, url, category }
 
-import { t, longDate, dayName, tripLength } from './i18n.js';
+import { t, longDate, dayName, tripLength, formatRange } from './i18n.js';
 import { cleanSegments, pointIds } from './segments.js';
 import { checkTripLimits } from './limits.js';
 
@@ -1131,7 +1131,7 @@ export function dayRanges(indices) {
     const a = sorted[i];
     while (sorted[i + 1] === sorted[i] + 1) i++;
     const b = sorted[i];
-    parts.push(a === b ? dayName(a) : b === a + 1 ? `${dayName(a)}, ${dayName(b)}` : `${dayName(a)}–${dayName(b)}`);
+    parts.push(a === b ? dayName(a) : b === a + 1 ? `${dayName(a)}, ${dayName(b)}` : formatRange(dayName(a), dayName(b)));
   }
   return parts.join(', ');
 }

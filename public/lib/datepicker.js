@@ -8,7 +8,7 @@
 //  - 날짜+시간: input[type="datetime-local"] → 날짜 버튼 + 시간 칸.
 import { enhanceTime } from './timefield.js';
 import { parseDate, selectRangeDate } from './model.js';
-import { t, getLang, locale, longDateYear, shortDate, weekday, tripLength } from './i18n.js';
+import { t, getLang, locale, longDateYear, shortDate, weekday, tripLength, formatRange } from './i18n.js';
 
 const ICON_CAL = '<svg class="dp-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5h16V20H4z M4 10.5h16 M8.5 3.5v4 M15.5 3.5v4"/></svg>';
 const CHEV = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;
@@ -21,7 +21,7 @@ const label = (date) => longDateYear(date);
 function rangeText(a, b) {
   if (!a) return t('날짜를 골라 주세요');
   if (!b) return `${label(a)} → ${t('끝나는 날을 골라 주세요')}`;
-  return `${label(a)} – ${label(b)} · ${tripLength(nights(a, b) + 1)}`;
+  return `${formatRange(label(a), label(b))} · ${tripLength(nights(a, b) + 1)}`;
 }
 
 /* ───────── 팝오버 (화면에 하나만) ───────── */

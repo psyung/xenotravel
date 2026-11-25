@@ -16,11 +16,11 @@ test('P1-3: 767px 이하는 목록만 (보드 전환 숨김), 저장값은 덮�
 });
 
 test('P1-6: 숙소가 빈 밤은 범위로 묶는다', () => {
-  assert.equal(M.dayRanges([2, 3, 4, 5, 18, 20, 21]), 'Day 3–Day 6, Day 19, Day 21, Day 22');
+  assert.equal(M.dayRanges([2, 3, 4, 5, 18, 20, 21]), 'Day 3 ~ Day 6, Day 19, Day 21, Day 22');
   const t = M.createTrip({ title: 'J', startDate: '2026-11-23', endDate: '2026-12-12' });
   M.addStay(t, { name: 'H', lat: 30, lng: 120 }, 0, 2);
   const n = M.tripNotices(t).join(' ');
-  assert.match(n, /Day 3–Day 19 밤 숙소 미정 \(17박\)/);
+  assert.match(n, /Day 3 ~ Day 19 밤 숙소 미정 \(17박\)/);
 });
 
 test('P1-8: 맨 위로/맨 아래로 — 600px 넘게 내리면 보이고, 아래 고정 요소 위에, 인쇄 때 숨김, 4개 국어 라벨', () => {

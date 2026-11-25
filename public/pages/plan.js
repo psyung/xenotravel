@@ -1,5 +1,5 @@
 import * as M from '../lib/model.js';
-import { t, shortDate, dayName, num, weekday, locale } from '../lib/i18n.js';
+import { t, shortDate, dayName, num, weekday, locale, formatRange } from '../lib/i18n.js';
 import * as B from '../lib/budget.js';
 import { enhanceTimes, normalizeTime, destroyTimes } from '../lib/timefield.js';
 import { refreshDates, enhanceDates } from '../lib/datepicker.js';
@@ -54,7 +54,7 @@ export function initStays(ctx) {
     $('#stayList').innerHTML = [...ctx.trip.stays].sort((a, b) => a.startIndex - b.startIndex).map((stay) => {
       const { checkIn, checkOut } = M.stayDates(ctx.trip, stay);
       const meta = [
-        checkIn ? [shortDate(checkIn), stay.checkInTime, '–', shortDate(checkOut), stay.checkOutTime].filter(Boolean).join(' ') : dayName(stay.startIndex),
+        checkIn ? formatRange([shortDate(checkIn), stay.checkInTime].filter(Boolean).join(' '), [shortDate(checkOut), stay.checkOutTime].filter(Boolean).join(' ')) : dayName(stay.startIndex),
         t('{n}박', { n: stay.nights }),
       ].join(' · ');
       return `<li>
@@ -254,7 +254,7 @@ export function initStays(ctx) {
         title: t('숙소 날짜가 겹쳐요'),
         body: [conflicts.map((stay) => {
           const dates = M.stayDates(ctx.trip, stay);
-          return [stay.name, [shortDate(dates.checkIn), shortDate(dates.checkOut)].filter(Boolean).join(' – ')].filter(Boolean).join(' · ');
+          return [stay.name, formatRange(shortDate(dates.checkIn), shortDate(dates.checkOut))].filter(Boolean).join(' · ');
         }).join(', '), t('새 숙소를 겹치는 밤에 배정하고 기존 숙소의 나머지 밤을 남겨요')].join('\n'),
         actions: [
           { value: 'replace', label: t('교체'), danger: true },
@@ -357,7 +357,7 @@ export function init(ctx) {
     const link = M.tripDirectionsLinks(ctx.trip, leg.to, leg.from, prefs.directionsApp, roadMode)[0];
     const distance = t('직선 {km}', { km: M.formatKm(leg.km) });
     const seg = plan.seg;
-    const extra = seg && (seg.trainNo || seg.dep) ? [seg.trainNo, seg.dep && seg.arr ? `${seg.dep}–${seg.arr}` : seg.dep].filter(Boolean).join(' ') : '';
+    const extra = seg && (seg.trainNo || seg.dep) ? [seg.trainNo, seg.dep && seg.arr ? `${formatRange(seg.dep, seg.arr)}` : seg.dep].filter(Boolean).join(' ') : '';
     const what = plan.long ? t('장거리 · 수단 미정')
       : `${SEG_LABELS()[plan.mode]} ${durationText(plan.minutes, !TIMED_MODES.has(plan.mode))}${plan.buffer ? ` + ${t('여유 {m}분', { m: plan.buffer })}` : ''}`;
     const icon = plan.long ? '' : `<span class="leg-ic" aria-hidden="true">${SEG_ICONS[plan.mode]}</span>`;
@@ -457,7 +457,7 @@ export function init(ctx) {
     const range = stay ? M.stayDates(ctx.trip, x) : null;
     const dateTimeLabel = (date, time) => [M.formatDate(date), time].filter(Boolean).join(' ');
     return `<div class="editor detail">
-      ${stay ? `<p><b>${esc(t('{n}박', { n: x.nights }))}</b>${range.checkIn ? ` · ${esc(dateTimeLabel(range.checkIn, x.checkInTime))} ~ ${esc(dateTimeLabel(range.checkOut, x.checkOutTime))}` : ''}</p>` : ''}
+      ${stay ? `<p><b>${esc(t('{n}박', { n: x.nights }))}</b>${range.checkIn ? ` · ${esc(formatRange(dateTimeLabel(range.checkIn, x.checkInTime), dateTimeLabel(range.checkOut, x.checkOutTime)))}` : ''}</p>` : ''}
       ${stay && x.bookingRef ? `<p>${esc(t('예약번호 {ref}', { ref: x.bookingRef }))}</p>` : ''}
       ${stay && x.phone ? `<p>${esc(t('전화번호'))} · ${esc(x.phone)}</p>` : ''}
       ${x.memo ? `<p class="memo-text">${esc(x.memo)}</p>` : ''}
@@ -931,7 +931,7 @@ export function init(ctx) {
       sum.places ? `<span class="chip">${esc(t('{n}곳', { n: sum.places }))}</span>` : '',
       moveChip ? `<span class="chip${check.longLegs ? ' long' : ''}">${esc(moveChip)}</span>` : '',
       sum.km >= 0.05 && !ui.readonly ? dayTravelSelect(l.dayIndex) : '',
-      sum.from ? `<span class="chip">${esc(sum.from)}${sum.to !== sum.from ? ` – ${esc(sum.to)}` : ''}</span>` : '',
+      sum.from ? `<span class="chip">${esc(formatRange(sum.from, sum.to))}</span>` : '',
     ].join('');
     const infoOpen = ui.dayInfoOpen?.has(dayId);
     const info = [

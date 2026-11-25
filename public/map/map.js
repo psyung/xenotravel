@@ -1,8 +1,7 @@
 import { locationChoice } from './picking.js';
 import { legPlan } from '../lib/segments.js';
-import { getLang, t, k, dayName, shortDate } from '../lib/i18n.js';
+import { getLang, t, k, dayName, shortDate, formatRange } from '../lib/i18n.js';
 import * as M from '../lib/model.js';
-import { staySuggestions } from '../lib/route-check.js';
 import * as T from '../lib/trends.js';
 import { gestureAxis, swipeResult, dragOffset, dayIndicator } from './sheet-swipe.js';
 
@@ -313,7 +312,6 @@ export function init(ctx) {
     el.innerHTML = `<div class="pin-seg" role="group" aria-label="${esc(t('핀 색 기준'))}">
       <button type="button" data-pin="day" aria-pressed="${!byCategory()}" class="${byCategory() ? '' : 'active'}">${esc(t('일차별'))}</button>
       <button type="button" data-pin="category" aria-pressed="${byCategory()}" class="${byCategory() ? 'active' : ''}">${esc(t('종류별'))}</button>
-      ${ctx.trip && staySuggestions(ctx.trip).length ? `<button type="button" data-stay-suggestions aria-pressed="${Boolean(prefs.staySuggestions)}" class="${prefs.staySuggestions ? 'active' : ''}">${esc(t('숙소 추천 위치'))}</button>` : ''}
     </div>${
         byCategory()
           ? `<div class="legend${legendOpen() ? '' : ' folded'}" role="group" aria-label="${esc(t('종류별'))}">${[...Object.entries(M.CATEGORIES), ['stay', { label: '숙소', color: M.STAY_COLOR }]]
@@ -418,24 +416,13 @@ export function init(ctx) {
     });
     const focusIdx = ctx.trip.days.findIndex((d) => d.id === ui.focusList);
     const focusStays = focusIdx >= 0 ? new Set(Object.values(M.dayStays(ctx.trip, focusIdx)).filter((x) => x?.id).map((x) => x.id)) : null;
-    if (prefs.staySuggestions && (!byCategory() || !ui.catFilter || ui.catFilter === 'stay')) {
-      for (const { start, end, lat, lng } of staySuggestions(ctx.trip)) {
-        if (focusIdx >= 0 && (focusIdx < start || focusIdx > end)) continue;
-        const marker = L.marker([lat, lng], {
-          icon: L.divIcon({ className: 'stay-suggestion-marker', iconSize: [40, 40], iconAnchor: [20, 20] }),
-        }).addTo(layer);
-        const label = `${t('숙소 추천 위치')} · ${M.dayRanges(Array.from({ length: end - start + 1 }, (_, i) => start + i))}`;
-        labelMarker(marker, label);
-        marker.bindPopup(esc(label));
-      }
-    }
     for (const s of ctx.trip.stays) {
       const { checkIn, checkOut } = M.stayDates(ctx.trip, s);
       const m = L.marker([s.lat, s.lng], {
         icon: L.divIcon({ className: '', html: stayPinHtml(!focusStays || focusStays.has(s.id)), iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -12] }),
         zIndexOffset: 1500,
       }).addTo(layer);
-      const detail = `${t('숙소')} · ${t('{n}박', { n: s.nights })}${checkIn ? ` · ${M.formatDate(checkIn)} ~ ${M.formatDate(checkOut)}` : ''}`;
+      const detail = `${t('숙소')} · ${t('{n}박', { n: s.nights })}${checkIn ? ` · ${formatRange(M.formatDate(checkIn), M.formatDate(checkOut))}` : ''}`;
       labelMarker(m, `${s.name} · ${detail}`);
       m.on('click', () => showMapPlace(s, detail, false, m));
       markers.set(s.id, m);
@@ -890,13 +877,6 @@ export function init(ctx) {
 
   registerLegend = ({ renderDays }) => {
     $('#pinLegend').addEventListener('click', (e) => {
-      if (e.target.closest('[data-stay-suggestions]')) {
-        prefs.staySuggestions = !prefs.staySuggestions;
-        savePrefs();
-        renderMap();
-        $('#pinLegend [data-stay-suggestions]')?.focus({ preventScroll: true });
-        return;
-      }
       if (e.target.closest('[data-legend-toggle]')) {
         prefs.legendOpen = !legendOpen();
         savePrefs();

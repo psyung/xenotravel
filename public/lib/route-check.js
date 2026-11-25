@@ -1,5 +1,5 @@
 import { legPlan } from './segments.js';
-import { dayRoute, distanceKm, flightTimeBounds, flightsForDay, routeLeg, timeConflictKinds, uncoveredStayNights } from './model.js';
+import { dayRoute, distanceKm, flightTimeBounds, flightsForDay, routeLeg, timeConflictKinds } from './model.js';
 
 // Minutes per straight-line kilometre, allowing for typical detours.
 export const WALK_FACTOR = 60 * 1.25 / 4.5;
@@ -57,22 +57,4 @@ export function checkDay(trip, index, mode) {
   }
   const firstKm = items.length && route[0] !== items[0] ? distanceKm(route[0], items[0]) : null;
   return { minutes, longLegs, byMode, warnings, firstKm };
-}
-
-export function staySuggestions(trip) {
-  const periods = [];
-  for (const night of uncoveredStayNights(trip)) {
-    const last = periods.at(-1);
-    if (last?.end === night - 1) last.end = night;
-    else periods.push({ start: night, end: night });
-  }
-  return periods.flatMap(({ start, end }) => {
-    const places = trip.days.slice(start, end + 1).flatMap((day) => day.items);
-    if (!places.length) return [];
-    const lat = places.reduce((sum, p) => sum + p.lat, 0) / places.length;
-    // Average longitude around the first point to handle the antimeridian.
-    const origin = places[0].lng;
-    const offset = places.reduce((sum, p) => sum + ((p.lng - origin + 540) % 360 - 180), 0) / places.length;
-    return [{ start, end, lat, lng: (origin + offset + 540) % 360 - 180 }];
-  });
 }

@@ -387,6 +387,6 @@ test('one selection rule: segmented switches are white on a grey track, toggles 
     assert.ok(rule.includes(sel), sel);
   }
   assert.match(rule, /background: var\(--paper\); color: var\(--ink\); border-color: transparent;/);
-  assert.match(rule, /\.pin-seg \[data-stay-suggestions\]\.active \{ background: var\(--ink\);/);
+  assert.doesNotMatch(rule, /data-stay-suggestions/); // J-3: 숙소 추천 위치 토글 삭제
   assert.match(rule, /\.pill\.active \{ background: var\(--ink\);/);
 });

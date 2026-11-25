@@ -4,7 +4,7 @@
 import { uid, validateTrip } from './model.js';
 import { LIMITS, limitError } from './limits.js';
 import { cleanSegments, MAX_SEGMENTS } from './segments.js';
-import { t, k, monthDay, tripLength } from './i18n.js';
+import { t, k, monthDay, tripLength, formatRange } from './i18n.js';
 
 /** 짧은 링크 id: 영문·숫자 8자 */
 export const SHORT_ID = /^[A-Za-z0-9]{8}$/;
@@ -20,7 +20,7 @@ export function shareSummary(trip) {
   const places = trip.days.reduce((s, d) => s + d.items.length, 0);
   const s = monthDay(trip.startDate);
   const e = monthDay(trip.endDate);
-  const range = s ? (s === e ? s : `${s} ~ ${e}`) : '';
+  const range = formatRange(s, e);
   return {
     title: trip.title || t('여행 일정'),
     line: [range, tripLength(n, '당일치기'), places ? t('장소 {n}곳', { n: places }) : ''].filter(Boolean).join(' · '),

@@ -3,7 +3,7 @@ import * as B from '../lib/budget.js';
 import * as C from '../lib/checklist.js';
 import * as S from '../lib/settle.js';
 import { focusSelect } from '../lib/select.js';
-import { t, k, num, dayName, shortDate } from '../lib/i18n.js';
+import { t, k, num, dayName, shortDate, formatRange } from '../lib/i18n.js';
 import { adSlot, loadAds } from '../lib/ads.js';
 
 let drawPage, requestRate;
@@ -190,7 +190,7 @@ export function init(ctx) {
         <h3>${esc(t('날짜별'))}</h3>
         <div class="daybars${bars.bars.length > 16 ? ' dense' : ''}" role="list">${bars.bars
             .map((x) => {
-              const full = x.kind === 'week' ? `${dayName(x.from)}–${dayName(x.to)}` : dayLabel(x.key);
+              const full = x.kind === 'week' ? formatRange(dayName(x.from), dayName(x.to)) : dayLabel(x.key);
               const short = x.kind === 'week' ? t('{n}주차', { n: Number(x.key.slice(1)) + 1 }) : dayShort(x.key);
               return `<div role="listitem" title="${esc(full)} ${bm(x.value)}" aria-label="${esc(full)} ${bm(x.value)}"><i style="height:${(x.value / barMax) * 100}%"></i><span${x.label ? '' : ' aria-hidden="true" class="off"'}>${esc(short)}</span></div>`;
             })

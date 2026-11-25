@@ -13,7 +13,7 @@ import { watchSelects } from './lib/select.js';
 import * as Courses from './lib/courses.js';
 import { enhanceSuggestions } from './lib/suggestions.js';
 import { loadWeather, weatherSignature } from './lib/weather.js';
-import { t, k, missing as i18nMissing, LANGS, LANG_KEY, getLang, setLang, loadLang, saveLang, locale, num, dayName, shortDate, dateTime, normalizeLang, tripLength, allVersions } from './lib/i18n.js';
+import { t, k, missing as i18nMissing, LANGS, LANG_KEY, getLang, setLang, loadLang, saveLang, locale, num, dayName, shortDate, dateTime, normalizeLang, tripLength, allVersions, formatRange, rangeSep } from './lib/i18n.js';
 import { adSlot, loadAds } from './lib/ads.js';
 import { createUndoStack } from './lib/undo.js';
 import { stayRangeWithin } from './lib/stays.js';
@@ -55,7 +55,7 @@ loadLang();
 
 // 화면 설정(보기 방식 등)은 이 브라우저에만 기억한다. 저장소를 못 써도 기본값으로 동작.
 const PREF_KEY = 'xenotravel:prefs';
-const PREF_DEFAULTS = { view: 'list', mapHidden: false, pinColor: 'day', page: 'plan', theme: 'system', staySuggestions: true };
+const PREF_DEFAULTS = { view: 'list', mapHidden: false, pinColor: 'day', page: 'plan', theme: 'system' };
 const prefs = (() => {
   try {
     return { ...PREF_DEFAULTS, ...JSON.parse(localStorage.getItem(PREF_KEY) || '{}') };
@@ -109,6 +109,8 @@ const debounce = (fn, ms) => {
  */
 function applyStaticI18n(root = document) {
   for (const el of root.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
+  const sep = root.querySelector?.('#dateSep');
+  if (sep) sep.textContent = rangeSep().trim(); // J-2: 여행 날짜 사이 기호 (한국어 ~ · 일본어 〜 · 그 밖 –)
   for (const el of root.querySelectorAll('[data-i18n-attr]')) {
     for (const pair of el.dataset.i18nAttr.split(';')) {
       const i = pair.indexOf('=');
@@ -550,7 +552,7 @@ function conflictLabel(c) {
 }
 function conflictValue(c, v) {
   if (v === null || v === undefined) return t('삭제됨');
-  if (c.path[1] === '__dates') return `${v.startDate} ~ ${v.endDate}`;
+  if (c.path[1] === '__dates') return formatRange(v.startDate, v.endDate);
   if (typeof v !== 'object') return String(v);
   if ('amount' in v) return `${v.memo ? `${v.memo} · ` : ''}${B.money(v.amount, trip?.budget?.currency ?? 'USD')}`;
   return v.name || v.text || v.title || JSON.stringify(v).slice(0, 60);
@@ -810,9 +812,9 @@ flightForm.addEventListener('submit', async (e) => {
     const choice = r
       ? await ask({
           title: t('출발일이 여행 기간 밖이에요'),
-          body: t('{date} 출발이에요. 여행 기간({range})을 늘릴까요?', { date: M.formatDate(dep), range: `${M.formatDate(trip.startDate)} – ${M.formatDate(trip.endDate)}` }),
+          body: t('{date} 출발이에요. 여행 기간({range})을 늘릴까요?', { date: M.formatDate(dep), range: formatRange(M.formatDate(trip.startDate), M.formatDate(trip.endDate)) }),
           actions: [
-            { value: 'extend', label: t('여행 기간을 {range}로 늘리기', { range: `${M.formatDate(r.start)} – ${M.formatDate(r.end)}` }), primary: true },
+            { value: 'extend', label: t('여행 기간을 {range}로 늘리기', { range: formatRange(M.formatDate(r.start), M.formatDate(r.end)) }), primary: true },
             { value: 'keep', label: keepLabel },
           ],
         })
@@ -1294,7 +1296,7 @@ async function onDatesChange() {
   if (items.length) {
     mode = await ask({
       title: t('여행 날짜를 바꿀까요?'),
-      html: `<p>${esc(`${M.formatDate(start)} – ${M.formatDate(end)} · ${tripLength(M.dateRange(start, end).length)}`)}</p>
+      html: `<p>${esc(`${formatRange(M.formatDate(start), M.formatDate(end))} · ${tripLength(M.dateRange(start, end).length)}`)}</p>
         <ul class="impact">${items.map(([head, detail]) => `<li><b>${esc(head)}</b>${detail ? `<small>${esc(detail)}</small>` : ''}</li>`).join('')}</ul>`,
       actions: choose
         ? [
@@ -1324,7 +1326,7 @@ async function extendTripFor(from, to, opts) {
     title: trip.startDate ? t('여행 기간을 늘릴까요?') : t('여행 날짜를 정할까요?'),
     body: r.tooLong
       ? t('여행은 최대 {n}일까지예요. 기간을 늘리지 않았어요', { n: M.MAX_DAYS })
-      : t('여행을 {range}로 늘릴까요? 기존 일정은 날짜 그대로 유지돼요', { range: `${M.formatDate(r.start)} – ${M.formatDate(r.end)}` }),
+      : t('여행을 {range}로 늘릴까요? 기존 일정은 날짜 그대로 유지돼요', { range: formatRange(M.formatDate(r.start), M.formatDate(r.end)) }),
     actions,
   });
   return choice === 'extend' ? r : choice === 'clip' ? null : false;
@@ -1763,7 +1765,7 @@ function tripCardHtml(tr) {
         <span class="tc-cover" data-cover-image="${esc(tr.id)}"><span class="tc-dday">${esc(s.dday.label)}</span><span class="tc-dest">${esc(destinationLabel(tr.destination) || t('여행'))}</span></span>
         <span class="tc-body">
           <b>${esc(tr.title)}</b>
-          <small>${tr.startDate ? `${shortDate(tr.startDate)} – ${shortDate(tr.endDate)} · ` : ''}${esc(s.length)} · ${esc(t('{n}곳', { n: s.places }))}</small>
+          <small>${tr.startDate ? `${formatRange(shortDate(tr.startDate), shortDate(tr.endDate))} · ` : ''}${esc(s.length)} · ${esc(t('{n}곳', { n: s.places }))}</small>
         </span>
       </button>
       <button type="button" class="btn tc-edit-cover" data-edit-cover="${esc(tr.id)}" aria-haspopup="dialog" aria-label="${esc(t('{name} 커버 바꾸기', { name: tr.title }))}">${esc(t('커버 바꾸기'))}</button>
@@ -2229,7 +2231,7 @@ function renderTripSwitcher() {
     const color = dayColor([...(tr.destination || tr.title)].reduce((h, c) => h + c.charCodeAt(0), 0));
     return `<button class="sw${tr.id === trip?.id ? ' on' : ''}${M.tripEnded(tr, TODAY) ? ' ended' : ''}" data-sw="${tr.id}" style="--c:${color}"${tr.id === trip?.id ? ' aria-current="true"' : ''}>
         <span class="sw-dot"></span>
-        <span class="sw-main"><b>${esc(tr.title)}</b><small>${tr.startDate ? `${shortDate(tr.startDate)} – ${shortDate(tr.endDate)} · ` : ''}${esc(tr.destination || '')}</small></span>
+        <span class="sw-main"><b>${esc(tr.title)}</b><small>${tr.startDate ? `${formatRange(shortDate(tr.startDate), shortDate(tr.endDate))} · ` : ''}${esc(tr.destination || '')}</small></span>
         <span class="sw-dday">${esc(dd.label)}</span>
       </button>`;
   };
@@ -2263,7 +2265,7 @@ function handbookOverviewHtml() {
   const places = trip.days.reduce((n, d) => n + d.items.length, 0);
   const facts = [
     trip.destination && [t('여행지'), trip.destination],
-    trip.startDate && [t('기간'), `${M.formatDate(trip.startDate)} ~ ${M.formatDate(trip.endDate)} (${tripLength(trip.days.length)})`],
+    trip.startDate && [t('기간'), `${formatRange(M.formatDate(trip.startDate), M.formatDate(trip.endDate))} (${tripLength(trip.days.length)})`],
     [t('일정'), t('{n}곳', { n: places })],
   ].filter(Boolean);
   return `<section class="hb-overview">
@@ -2275,7 +2277,7 @@ function handbookOverviewHtml() {
       ${stays.length ? `<h3>${esc(t('숙소'))}</h3><table class="hb-table"><thead><tr><th>${esc(t('숙소'))}</th><th>${esc(t('체크인 ~ 체크아웃'))}</th><th>${esc(t('메모'))}</th></tr></thead><tbody>${stays
         .map((st) => {
           const { checkIn, checkOut } = M.stayDates(trip, st);
-          return `<tr><td><strong>${esc(st.name)}</strong>${st.address ? `<div class="addr">${esc(st.address)}</div>` : ''}</td><td>${checkIn ? `${esc(M.formatDate(checkIn))} ~ ${esc(M.formatDate(checkOut))}<br>` : ''}${esc(t('{n}박', { n: st.nights }))}</td><td class="memo">${esc(st.memo)}</td></tr>`;
+          return `<tr><td><strong>${esc(st.name)}</strong>${st.address ? `<div class="addr">${esc(st.address)}</div>` : ''}</td><td>${checkIn ? `${esc(formatRange(M.formatDate(checkIn), M.formatDate(checkOut)))}<br>` : ''}${esc(t('{n}박', { n: st.nights }))}</td><td class="memo">${esc(st.memo)}</td></tr>`;
         })
         .join('')}</tbody></table>` : ''}
     </section>`;
@@ -2284,7 +2286,7 @@ function handbookOverviewHtml() {
 /** 여행 핸드북 본문 (인쇄 미리보기와 브라우저 인쇄 단축키 공용). maps = 일차별 지도 칸을 넣을지 */
 function handbookHtml({ maps = true } = {}) {
   const lists = allLists().filter((l) => l.isDay || l.items.length);
-  const range = trip.startDate ? `${M.formatDate(trip.startDate)} ~ ${M.formatDate(trip.endDate)} · ${t('{n}일', { n: trip.days.length })}` : '';
+  const range = trip.startDate ? `${formatRange(M.formatDate(trip.startDate), M.formatDate(trip.endDate))} · ${t('{n}일', { n: trip.days.length })}` : '';
   return `<div class="print-page" lang="${LANGS[getLang()].html}">
       <h1>${esc(trip.title)}</h1>
       <p class="p-sub">${esc(range)}</p>

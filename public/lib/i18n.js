@@ -107,6 +107,16 @@ export function monthDay(s) {
   return fmt(d, { month: 'short', day: 'numeric' });
 }
 
+/* J-2: 날짜·일차 범위는 이 함수로만 만든다. 한국어 " ~ ", 일본어 "〜", 중국어·영어 "–"(공백 없음).
+ * 시작과 끝이 같으면 하나만 ("11/28"). 화면 곳곳에서 기호를 직접 붙이지 않는다. */
+const RANGE_SEP = { ko: ' ~ ', en: '–', zh: '–', ja: '〜' };
+export const rangeSep = () => RANGE_SEP[lang];
+export function formatRange(a, b) {
+  if (!a) return b || '';
+  if (!b || a === b) return a;
+  return `${a}${RANGE_SEP[lang]}${b}`;
+}
+
 /** "12/1" (모든 언어 공통 숫자 표기) */
 export function shortDate(s) {
   const d = parse(s);
