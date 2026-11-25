@@ -1,4 +1,5 @@
 import { locationChoice } from './picking.js';
+import { legPlan } from '../lib/segments.js';
 import { getLang, t, k, dayName, shortDate } from '../lib/i18n.js';
 import * as M from '../lib/model.js';
 import { staySuggestions } from '../lib/route-check.js';
@@ -409,7 +410,15 @@ export function init(ctx) {
         // 종류별 필터가 켜져 있으면 동선은 0.25로 낮춰 강조 핀이 맨 위로 보이게 한다
         const faded = byCategory() && ui.catFilter;
         L.polyline(pts, { color: color === 'var(--accent)' ? 'var(--paper)' : 'var(--day-route-outline)', weight: 7, opacity: dim ? 0.12 : faded ? 0.25 : 1, interactive: false }).addTo(layer);
-        L.polyline(pts, { color, weight: preview ? 4 : 3, opacity: dim ? 0.18 : faded ? 0.25 : 1, dashArray: preview ? null : '7 6', interactive: false }).addTo(layer);
+        // J-16: 구간마다 수단별 선 모양 — 도보는 점선, 차량·기차·비행기는 실선, 수단 미정 장거리는 긴 점선 (색만으로 구분하지 않는다)
+        const opacity = dim ? 0.18 : faded ? 0.25 : 1;
+        const dayMode = ['walking', 'transit', 'driving'].includes(ctx.trip.days[dayIndex]?.travelMode) ? ctx.trip.days[dayIndex].travelMode : '';
+        for (let k = 1; k < route.length; k++) {
+          const leg = M.routeLeg(route[k - 1], route[k]);
+          const plan = leg && !preview ? legPlan(ctx.trip, route[k - 1], route[k], leg.km, dayMode) : null;
+          const dashArray = preview || !plan ? null : plan.long ? '12 8' : plan.mode === 'walking' ? '1 7' : null;
+          L.polyline([pts[k - 1], pts[k]], { color, weight: preview ? 4 : 3, opacity, dashArray, lineCap: 'round', interactive: false }).addTo(layer);
+        }
       }
       l.items.forEach((it, i) => {
         const n = preview ? preview.indexOf(it) + 1 : i + 1;

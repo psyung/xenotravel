@@ -129,7 +129,8 @@ test('todayPlan: 여행 중일 때만, 다음 장소는 안 다녀온 곳 중 �
   assert.equal(M.todayPlan(t, '2026-12-02', '09:00').nextId, c.id);
   // 복제하면 다녀온 표시는 따라가지 않는다
   assert.equal(M.duplicateItem(t, b.id).visited, undefined);
-  // 마지막 날: 오늘 밤 숙소가 없으면 출발 숙소
-  assert.equal(M.todayPlan(t, '2026-12-03', '09:00').stay.name, '호텔');
+  // 마지막 날: 오늘 밤 숙소는 없고, 아침에 체크아웃하는 숙소로 따로 보여 준다 (J-4)
+  assert.equal(M.todayPlan(t, '2026-12-03', '09:00').tonight, null);
+  assert.equal(M.todayPlan(t, '2026-12-03', '09:00').checkOut.name, '호텔');
   assert.match(M.directionsFromHereUrl(NAMBA), /dir\/\?api=1&destination=34\.6656,135\.5013&travelmode=transit$/);
 });

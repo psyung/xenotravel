@@ -5,7 +5,8 @@ import { enhanceTimes, normalizeTime, destroyTimes } from '../lib/timefield.js';
 import { refreshDates, enhanceDates } from '../lib/datepicker.js';
 import { HANGUL, searchPlacesKo, searchPlaces, reversePlace } from '../lib/geo.js';
 import { stayRangeWithin, overlappingStays, splitStayAround } from '../lib/stays.js';
-import { estimateMinutes, checkDay, isLongLeg } from '../lib/route-check.js';
+import { checkDay } from '../lib/route-check.js';
+import { legPlan, setSegment, segKey, spanMinutes, SEG_ICONS, TIMED_MODES } from '../lib/segments.js';
 import { enhanceSelect, focusSelect } from '../lib/select.js';
 import { groupPlaces, removePlaceGroup } from '../lib/place-groups.js';
 import * as D from '../lib/dayops.js';
@@ -331,15 +332,114 @@ export function init(ctx) {
       : h ? t('예상 이동 약 {h}시간', { h }) : t('예상 이동 약 {m}분', { m });
   }
 
+  // 영어 번역의 "walking"·"transit"은 문장 안에 쓰는 소문자라, 수단 이름으로 쓸 때는 첫 글자를 대문자로
+  const cap = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+  const SEG_LABELS = () => ({
+    walking: cap(t('도보')), transit: cap(t('대중교통')), driving: t('택시'), rail: t('고속철·기차'), flight: t('비행기'), custom: t('직접 입력'),
+  });
+  /** 짧은 소요 시간: "12분" · "1시간 5분" (approx면 "약 12분") */
+  function durationText(minutes, approx) {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    const text = h && m ? t('{h}시간 {m}분', { h, m }) : h ? t('{h}시간', { h }) : t('{m}분', { m });
+    return approx ? t('약 {time}', { time: text }) : text;
+  }
+
+  /**
+   * 앞 지점에서 여기까지 이동 구간 (J-10·J-16).
+   * [🚇 대중교통 약 12분] 직선 3.4km [길찾기] — 수단 버튼을 누르면 이 구간만 수단을 바꾼다.
+   * 30km 이상인데 수단을 정하지 않았으면 시간 대신 "장거리 · 수단 미정", 양끝이 역이면 [고속철일까요?].
+   */
   function legHtml(leg) {
     if (!leg) return '';
-    const link = M.tripDirectionsLinks(ctx.trip, leg.to, leg.from, prefs.directionsApp, leg.mode)[0];
-    const mode = leg.mode === 'walking' ? t('도보') : leg.mode === 'driving' ? t('택시') : t('대중교통');
+    const plan = legPlan(ctx.trip, leg.from, leg.to, leg.km, leg.dayMode);
+    const roadMode = ['walking', 'transit', 'driving'].includes(plan.mode) ? plan.mode : 'transit';
+    const link = M.tripDirectionsLinks(ctx.trip, leg.to, leg.from, prefs.directionsApp, roadMode)[0];
     const distance = t('직선 {km}', { km: M.formatKm(leg.km) });
-    const how = isLongLeg(leg.km) ? `${distance} · ${t('장거리 · 수단 미정')}` : `${distance} · ${mode} · ${travelEstimate(estimateMinutes(leg.km, leg.mode))}`;
-    return `<a class="leg${isLongLeg(leg.km) ? ' long' : ''}" href="${href(link.url)}" target="_blank" rel="noopener" title="${esc(link.label)}">
-      <span class="leg-how">${esc(how)}</span><span class="leg-go">${esc(t('길찾기'))}</span></a>`;
+    const seg = plan.seg;
+    const extra = seg && (seg.trainNo || seg.dep) ? [seg.trainNo, seg.dep && seg.arr ? `${seg.dep}–${seg.arr}` : seg.dep].filter(Boolean).join(' ') : '';
+    const what = plan.long ? t('장거리 · 수단 미정')
+      : `${SEG_LABELS()[plan.mode]} ${durationText(plan.minutes, !TIMED_MODES.has(plan.mode))}${plan.buffer ? ` + ${t('여유 {m}분', { m: plan.buffer })}` : ''}`;
+    const icon = plan.long ? '' : `<span class="leg-ic" aria-hidden="true">${SEG_ICONS[plan.mode]}</span>`;
+    const ids = `data-from="${esc(leg.from.id)}" data-to="${esc(leg.to.id)}" data-km="${leg.km}" data-day-mode="${esc(leg.dayMode || '')}"`;
+    const modeEl = ui.readonly
+      ? `<span class="leg-mode">${icon}<span class="leg-how">${esc(what)}</span></span>`
+      : `<button type="button" class="leg-mode${plan.source === 'user' ? ' set' : ''}" data-action="seg-edit" ${ids} title="${esc(t('이 구간 이동 수단 바꾸기'))}" aria-label="${esc(`${what} · ${t('이 구간 이동 수단 바꾸기')}`)}">${icon}<span class="leg-how">${esc(what)}</span></button>`;
+    const rail = plan.long && plan.station && !ui.readonly
+      ? `<button type="button" class="leg-rail" data-action="seg-edit" data-mode="rail" ${ids}>${esc(t('고속철일까요?'))}</button>` : '';
+    return `<div class="leg${plan.long ? ' long' : ''} m-${plan.mode || 'none'}">${modeEl}<span class="leg-dist">${esc(distance)}${extra ? ` · ${esc(extra)}` : ''}</span>${rail}<a class="leg-go" href="${href(link.url)}" target="_blank" rel="noopener" title="${esc(link.label)}">${esc(t('길찾기'))}</a></div>`;
   }
+
+  /** 구간 수단 고르기 (확인 창 하나): 도보 / 대중교통 / 택시 / 고속철·기차 / 비행기 / 직접 입력 + 여유 시간 */
+  async function editSegment(btn) {
+    const { from: fromId, to: toId, km, dayMode, mode: suggested } = btn.dataset;
+    const find = (id) => M.findStay(ctx.trip, id) ?? M.findItem(ctx.trip, id)?.item;
+    const from = find(fromId);
+    const to = find(toId);
+    if (!from || !to) return;
+    const current = legPlan(ctx.trip, from, to, Number(km), dayMode);
+    const seg = current.seg ?? {};
+    const mode = suggested || (current.long ? 'rail' : current.mode);
+    const labels = SEG_LABELS();
+    const html = `<div class="seg-form">
+      <p class="seg-route">${esc(from.name)} → ${esc(to.name)} · ${esc(t('직선 {km}', { km: M.formatKm(Number(km)) }))}</p>
+      <div class="seg-modes" role="radiogroup" aria-label="${esc(t('이동 수단'))}">${Object.entries(labels).map(([value, label]) => `<label class="seg-mode"><input type="radio" name="segMode" value="${value}"${value === mode ? ' checked' : ''}><span>${SEG_ICONS[value]} ${esc(label)}</span></label>`).join('')}</div>
+      <div class="seg-timed" data-seg-for="rail flight custom">
+        <label class="seg-field" data-seg-for="rail flight"><span>${esc(t('열차·편 번호 (선택)'))}</span><input name="segNo" maxlength="20" autocomplete="off" placeholder="G7512" value="${esc(seg.trainNo ?? '')}"></label>
+        <div class="seg-times" data-seg-for="rail flight">
+          <label class="seg-field"><span>${esc(t('출발 시각'))}</span><input name="segDep" data-time-field inputmode="numeric" value="${esc(seg.dep ?? '')}"></label>
+          <label class="seg-field"><span>${esc(t('도착 시각'))}</span><input name="segArr" data-time-field inputmode="numeric" value="${esc(seg.arr ?? '')}"></label>
+        </div>
+        <label class="seg-field"><span>${esc(t('걸리는 시간 (분)'))}</span><input name="segMin" type="number" min="0" max="10080" step="1" inputmode="numeric" value="${seg.minutes ?? ''}"></label>
+        <p class="seg-note" data-seg-for="rail flight">${esc(t('출발·도착 시각을 넣으면 걸리는 시간은 자동으로 계산해요'))}</p>
+      </div>
+      <details class="seg-buffer"${seg.buffer ? ' open' : ''}><summary>${esc(t('역까지 이동·대기 여유 시간'))}</summary>
+        <label class="seg-field"><span>${esc(t('여유 (분)'))}</span><input name="segBuffer" type="number" min="0" max="600" step="5" inputmode="numeric" value="${seg.buffer ?? ''}"></label>
+      </details>
+    </div>`;
+    const body = $('#askBody');
+    const sync = () => {
+      const m = $('input[name="segMode"]:checked', body)?.value;
+      for (const el of $$('[data-seg-for]', body)) el.hidden = !el.dataset.segFor.split(' ').includes(m);
+      const span = spanMinutes($('input[name="segDep"]', body)?.value, $('input[name="segArr"]', body)?.value);
+      if (span != null && (m === 'rail' || m === 'flight')) $('input[name="segMin"]', body).value = span;
+    };
+    const pending = ask({
+      title: t('이동 수단'), html,
+      actions: [
+        ...(current.source === 'user' ? [{ value: 'auto', label: t('자동으로 되돌리기') }] : []),
+        { value: 'save', label: t('저장'), primary: true },
+      ],
+    });
+    body.addEventListener('change', sync);
+    body.addEventListener('input', sync);
+    enhanceTimes(body);
+    sync();
+    const choice = await pending;
+    body.removeEventListener('change', sync);
+    body.removeEventListener('input', sync);
+    if (!choice) return;
+    const before = ctx.trip.segments?.[segKey(from, to)] ?? null;
+    if (choice === 'auto') setSegment(ctx.trip, from, to, null);
+    else {
+      const raw = {
+        mode: $('input[name="segMode"]:checked', body)?.value, trainNo: $('input[name="segNo"]', body)?.value,
+        dep: $('input[name="segDep"]', body)?.value, arr: $('input[name="segArr"]', body)?.value,
+        minutes: $('input[name="segMin"]', body)?.value, buffer: $('input[name="segBuffer"]', body)?.value,
+      };
+      if (TIMED_MODES.has(raw.mode) && raw.minutes === '' && spanMinutes(raw.dep, raw.arr) == null) {
+        toast(t('걸리는 시간이나 출발·도착 시각을 넣어 주세요'), 3200);
+        return;
+      }
+      setSegment(ctx.trip, from, to, raw);
+    }
+    commit();
+    pushUndo(t('{from} → {to} 이동 수단을 바꿨어요', { from: from.name, to: to.name }), () => {
+      setSegment(ctx.trip, from, to, before);
+      commit();
+    });
+  }
+
 
   function hoursEditorHtml(it) {
     // 7 January 2024 was a Sunday.
@@ -599,7 +699,7 @@ export function init(ctx) {
     const off = st.start ? 1 : 0;
     const legTo = (k) => {
       const leg = k > 0 && route[k] ? M.routeLeg(route[k - 1], route[k]) : null;
-      return leg && { ...leg, from: route[k - 1], to: route[k], mode: dayTravelMode(l.dayIndex) || leg.mode };
+      return leg && { ...leg, from: route[k - 1], to: route[k], dayMode: dayTravelMode(l.dayIndex) };
     };
     const overlaps = dayTimeConflicts(l.dayIndex);
     const flightsTop = flightRowsHtml(l.dayIndex, 'top');
@@ -838,6 +938,8 @@ export function init(ctx) {
       `<span class="wx-slot" data-wx="${dayId}">${wxChipHtml(ui.weather.data[dayId], dayId)}</span>`,
       sum.km >= 0.05 ? `<span class="chip">${esc(t('이동 {km}', { km: M.formatKm(sum.km) }))}</span>` : '',
       check.firstKm != null ? `<span class="chip">${esc(t('숙소에서 첫 장소까지 {km}', { km: M.formatKm(check.firstKm) }))}</span>` : '',
+      // J-16: 수단별 합계 (두 가지 이상일 때만)
+      Object.keys(check.byMode).length > 1 ? `<span class="chip modes">${esc(Object.entries(check.byMode).map(([mode, min]) => `${SEG_LABELS()[mode]} ${durationText(min, false)}`).join(' · '))}</span>` : '',
     ].join('');
     const infoBtn = `<button type="button" class="chip info-toggle" data-action="day-info" data-day-id="${dayId}" aria-expanded="${Boolean(infoOpen)}" aria-controls="dinfo-${dayId}" title="${esc(t('예보·총 거리·숙소에서 첫 장소까지'))}" aria-label="${esc(t('{day} 자세한 정보', { day: dayName(l.dayIndex) }))}">ⓘ</button>`;
     const stayChip = night ? `<span class="chip stay" title="${esc(`${t('오늘 밤 숙소')} · ${night.name}`)}"><span class="chip-text">${esc(t('오늘 밤 숙소'))} · ${esc(night.name)}</span></span>` : '';
@@ -1021,6 +1123,10 @@ export function init(ctx) {
     btn.closest('.day-more')?.removeAttribute('open'); // ⋯ 메뉴 안의 항목을 누르면 메뉴를 닫는다
     if (action === 'route-opt' && btn.getAttribute('aria-disabled') === 'true') {
       toast(btn.title);
+      return;
+    }
+    if (action === 'seg-edit') {
+      if (!ui.readonly) void editSegment(btn);
       return;
     }
     if (action === 'day-info') {

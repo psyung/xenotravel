@@ -3,6 +3,7 @@
 // 링크는 만든 순간의 사본이라, 일정을 고친 뒤에는 링크를 다시 만들어 보내야 한다.
 import { uid, validateTrip } from './model.js';
 import { LIMITS, limitError } from './limits.js';
+import { cleanSegments, MAX_SEGMENTS } from './segments.js';
 import { t, k, monthDay, tripLength } from './i18n.js';
 
 /** 짧은 링크 id: 영문·숫자 8자 */
@@ -59,7 +60,37 @@ function shareSnapshot(trip, { includePrivate = false } = {}) {
     flights: (trip.flights ?? []).map(({ kind, flightNo, from, to, departAt, arriveAt, bookingRef, memo }) => ({
       kind, flightNo, from, to, departAt, arriveAt, ...(includePrivate ? { bookingRef, memo } : {}),
     })),
+    segs: shareSegments(trip),
   };
+}
+
+/** J-10: 구간별 이동 수단은 id 대신 자리(d일차.순번 · i보관함 · s숙소)로 담는다 (받는 쪽에서 id를 새로 만든다) */
+function pointRefs(trip, idOf = (x) => x.id) {
+  const refs = new Map();
+  trip.days.forEach((d, di) => d.items.forEach((it, ii) => refs.set(idOf(it), `d${di}.${ii}`)));
+  (trip.inbox ?? []).forEach((it, ii) => refs.set(idOf(it), `i${ii}`));
+  (trip.stays ?? []).forEach((st, si) => refs.set(idOf(st), `s${si}`));
+  return refs;
+}
+function shareSegments(trip) {
+  const refs = pointRefs(trip);
+  const out = [];
+  for (const [key, seg] of Object.entries(trip.segments ?? {})) {
+    const [a, b] = key.split('>');
+    if (refs.has(a) && refs.has(b)) out.push([refs.get(a), refs.get(b), seg]);
+  }
+  return out.length ? out : undefined;
+}
+function readSharedSegments(trip, segs) {
+  if (!Array.isArray(segs)) return {};
+  const byRef = new Map([...pointRefs(trip)].map(([id, ref]) => [ref, id]));
+  const raw = {};
+  for (const entry of segs.slice(0, MAX_SEGMENTS)) {
+    if (!Array.isArray(entry) || entry.length !== 3) continue;
+    const [a, b, seg] = entry;
+    if (byRef.has(a) && byRef.has(b)) raw[`${byRef.get(a)}>${byRef.get(b)}`] = seg;
+  }
+  return cleanSegments(raw);
 }
 
 /** validateTrip이 요구하는 id 자리를 채운다 (진짜 id는 decodeShare에서 새로 만든다). */
@@ -189,7 +220,7 @@ function fromSnapshot(raw) {
     ...item(it), closedWeekdays: it.closedWeekdays, opensAt: it.opensAt, closesAt: it.closesAt,
   });
   const now = new Date().toISOString();
-  return {
+  const trip = {
     version: 1,
     id: uid(),
     title: str(v.title) || t('공유받은 여행'),
@@ -224,4 +255,6 @@ function fromSnapshot(raw) {
     updatedAt: now,
     sharedAt: typeof raw.sharedAt === 'string' && Number.isFinite(Date.parse(raw.sharedAt)) ? raw.sharedAt : null,
   };
+  trip.segments = readSharedSegments(trip, raw.segs);
+  return trip;
 }

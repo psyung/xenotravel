@@ -1,3 +1,4 @@
+import { legPlan } from './segments.js';
 import { dayRoute, distanceKm, flightTimeBounds, flightsForDay, routeLeg, timeConflictKinds, uncoveredStayNights } from './model.js';
 
 // Minutes per straight-line kilometre, allowing for typical detours.
@@ -31,14 +32,19 @@ export function checkDay(trip, index, mode) {
   }
   let minutes = 0;
   let longLegs = 0;
+  const byMode = {};
   for (let i = 1; i < route.length; i++) {
     const leg = routeLeg(route[i - 1], route[i]);
     if (!leg) continue;
-    if (isLongLeg(leg.km)) {
+    // J-10·J-16: 구간마다 정한 수단(없으면 자동 판별). 수단 미정 장거리는 합계·경고에서 뺀다
+    const plan = legPlan(trip, route[i - 1], route[i], leg.km, mode);
+    if (plan.long) {
       longLegs++;
       continue;
     }
-    minutes += estimateMinutes(leg.km, mode || leg.mode);
+    const legMinutes = plan.minutes + plan.buffer;
+    minutes += legMinutes;
+    byMode[plan.mode] = (byMode[plan.mode] ?? 0) + legMinutes;
     if (minutes > 180 && items.length && !warnings.some((w) => w.kind === 'movement')) {
       const target = items.includes(route[i]) ? route[i] : items.at(-1);
       warnings.push({ id: target.id, kind: 'movement' });
@@ -50,7 +56,7 @@ export function checkDay(trip, index, mode) {
     if (kind) warnings.push({ id: place.id, kind });
   }
   const firstKm = items.length && route[0] !== items[0] ? distanceKm(route[0], items[0]) : null;
-  return { minutes, longLegs, warnings, firstKm };
+  return { minutes, longLegs, byMode, warnings, firstKm };
 }
 
 export function staySuggestions(trip) {

@@ -2572,8 +2572,17 @@ function renderToday() {
   el.hidden = !p;
   if (!p) return (el.innerHTML = '');
   const day = trip.days[p.dayIndex];
-  const s = p.stay;
-  const stayAddr = s ? s.address || s.name : '';
+  // J-4: 체크아웃만 / 오늘 밤 숙소만 / 둘 다(숙소 이동) / 오늘 밤 숙소 없음
+  const stayBox = (label, s) => `<div class="td-stay"><div><span>${esc(label)}</span><b>${esc(s.name)}</b>${s.address ? `<small>${esc(s.address)}</small>` : ''}</div>
+          <div class="td-acts"><button type="button" data-today="copy" data-text="${esc(s.address || s.name)}">${esc(t('주소'))}</button><a href="${href(M.directionsFromHereUrl(s))}" target="_blank" rel="noopener">${esc(t('숙소로 가기'))}</a></div></div>`;
+  const lastDay = p.dayIndex === trip.days.length - 1;
+  const stays = [
+    p.checkOut ? stayBox(t('체크아웃'), p.checkOut) : '',
+    p.tonight ? stayBox(t('오늘 밤 숙소'), p.tonight)
+      : lastDay || ui.readonly ? ''
+      : `<div class="td-stay none"><div><span>${esc(t('오늘 밤 숙소'))}</span><b>${esc(t('오늘 밤 숙소를 아직 정하지 않았어요'))}</b></div>
+          <div class="td-acts"><button type="button" data-today="stay" data-day="${p.dayIndex}">${esc(t('숙소 추가'))}</button></div></div>`,
+  ].join('');
   el.innerHTML = `<div class="td-head">
       <div><span class="td-eyebrow">${esc(t('오늘'))} · ${esc(dayName(p.dayIndex))}</span><h2>${esc(M.formatDate(day.date))}</h2></div>
       <span class="wx-slot" data-wx="${day.id}">${wxChipHtml(ui.weather.data[day.id], day.id)}</span>
@@ -2583,12 +2592,7 @@ function renderToday() {
         ? `<ol class="td-list">${p.items.map((it, i) => todayRowHtml(it, i + 1, it.id === p.nextId)).join('')}</ol>`
         : `<p class="td-empty">${esc(t('오늘은 정한 곳이 없어요.'))}</p>`
     }
-    ${
-      s
-        ? `<div class="td-stay"><div><span>${esc(t('오늘 밤 숙소'))}</span><b>${esc(s.name)}</b>${s.address ? `<small>${esc(s.address)}</small>` : ''}</div>
-          <div class="td-acts"><button type="button" data-today="copy" data-text="${esc(stayAddr)}">${esc(t('주소'))}</button><a href="${href(M.directionsFromHereUrl(s))}" target="_blank" rel="noopener">${esc(t('숙소로 가기'))}</a></div></div>`
-        : ''
-    }
+    ${stays}
     <div class="td-foot">
       ${ui.readonly ? '' : `<button type="button" class="btn primary" data-today="expense">${esc(t('지출 적기'))}</button>`}
       <button type="button" class="btn" data-today="share" data-day="${p.dayIndex}">${esc(t('카톡으로 오늘 일정 보내기'))}</button>
@@ -2600,6 +2604,7 @@ $('#today').addEventListener('click', (e) => {
   if (!b) return;
   const act = b.dataset.today;
   if (act === 'copy') copyText(b.dataset.text, t('주소를 복사했어요'));
+  else if (act === 'stay') openStays({ start: Number(b.dataset.day) });
   else if (act === 'visit') {
     const found = M.findItem(trip, b.dataset.id);
     if (!found) return;

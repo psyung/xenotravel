@@ -81,3 +81,85 @@ test('J-22: 소개·개인정보 페이지에 개인 아이디나 "저장소 관
   assert.doesNotMatch(read('lib/privacy.js'), /psyung/);
   assert.match(read('lib/privacy.js'), /개인정보 보호책임자: XenoTravel 운영팀 · \$\{c\}/);
 });
+
+test('J-4: 오늘 카드는 체크아웃하는 숙소를 "오늘 밤 숙소"로 보여 주지 않는다', async () => {
+  const M = await import('../public/lib/model.js');
+  const trip = M.createTrip({ startDate: '2026-11-23', endDate: '2026-12-02' });
+  const hotel = { name: 'Hyatt Place', lat: 30.75, lng: 120.75 };
+  M.addStay(trip, hotel, 0, 2); // 11/23~11/25 체크아웃
+  M.addStay(trip, { ...hotel, name: 'Next Hotel' }, 4, 2);
+  let p = M.todayPlan(trip, '2026-11-25', '10:00'); // Day 3: 체크아웃만
+  assert.equal(p.checkOut.name, 'Hyatt Place');
+  assert.equal(p.tonight, null);
+  p = M.todayPlan(trip, '2026-11-24', '10:00'); // Day 2: 계속 묵음
+  assert.equal(p.tonight.name, 'Hyatt Place');
+  assert.equal(p.checkOut, null);
+  p = M.todayPlan(trip, '2026-11-27', '10:00'); // Day 5: 체크인
+  assert.equal(p.tonight.name, 'Next Hotel');
+  assert.equal(p.checkOut, null);
+  M.addStay(trip, { ...hotel, name: 'Third' }, 6, 1);
+  p = M.todayPlan(trip, '2026-11-29', '10:00'); // Day 7: 숙소 이동 — 둘 다
+  assert.equal(p.checkOut.name, 'Next Hotel');
+  assert.equal(p.tonight.name, 'Third');
+  const app = appSource();
+  assert.match(app, /p\.checkOut \? stayBox\(t\('체크아웃'\), p\.checkOut\)/);
+  assert.match(app, /t\('오늘 밤 숙소를 아직 정하지 않았어요'\)/);
+});
+
+test('J-10·J-16: 구간 수단 — 자동 판별(1.5km 도보 · 30km 미만 기본 수단 · 30km 이상 수단 미정), 사용자 값 우선, 야간열차', async () => {
+  const S = await import('../public/lib/segments.js');
+  const M = await import('../public/lib/model.js');
+  const { checkDay } = await import('../public/lib/route-check.js');
+  const trip = M.createTrip({ startDate: '2026-12-26', endDate: '2026-12-27' });
+  const day = trip.days[0].id;
+  const jx = M.addItem(trip, day, { name: '嘉兴南站', lat: 30.70, lng: 120.75 });
+  const near = M.addItem(trip, day, { name: 'Café', lat: 30.705, lng: 120.755 }); // 약 0.7km
+  const hz = M.addItem(trip, day, { name: '杭州东站', lat: 30.29, lng: 120.21 }); // 약 70km
+  const lake = M.addItem(trip, day, { name: '西湖', lat: 30.25, lng: 120.15 }); // 약 7km
+  const km = (a, b) => M.distanceKm(a, b);
+  assert.equal(S.legPlan(trip, jx, near, km(jx, near)).mode, 'walking');
+  assert.equal(S.legPlan(trip, hz, lake, km(hz, lake)).mode, 'transit');
+  assert.equal(S.legPlan(trip, hz, lake, km(hz, lake), 'driving').mode, 'driving');
+  const long = S.legPlan(trip, near, hz, km(near, hz));
+  assert.ok(long.long && long.minutes == null);
+  assert.equal(S.legPlan(trip, jx, hz, km(jx, hz)).station, true); // 역 ↔ 역이면 고속철 제안
+  let day1 = checkDay(trip, 0);
+  assert.equal(day1.longLegs, 1);
+  // 고속철 25분 + 여유 15분 지정
+  S.setSegment(trip, near, hz, { mode: 'rail', dep: '09:30', arr: '09:55', trainNo: 'G7512', buffer: 15 });
+  assert.deepEqual(trip.segments[`${near.id}>${hz.id}`], { mode: 'rail', minutes: 25, trainNo: 'G7512', dep: '09:30', arr: '09:55', buffer: 15 });
+  day1 = checkDay(trip, 0);
+  assert.equal(day1.longLegs, 0);
+  assert.equal(day1.byMode.rail, 40);
+  assert.ok(!day1.warnings.some((w) => w.kind === 'movement'));
+  // 야간열차: 도착이 다음 날
+  assert.equal(S.spanMinutes('22:10', '06:40'), 510);
+  // 직접 입력은 분이 있어야, 모르는 수단은 버린다
+  assert.equal(S.cleanSegment({ mode: 'custom' }), null);
+  assert.equal(S.cleanSegment({ mode: 'boat', minutes: 10 }), null);
+  // 자동으로 되돌리기
+  S.setSegment(trip, near, hz, null);
+  assert.equal(trip.segments[`${near.id}>${hz.id}`], undefined);
+  // 순서가 바뀌어도 설정은 남고, 없는 장소를 가리키는 설정은 불러올 때 버린다
+  S.setSegment(trip, hz, lake, { mode: 'driving' });
+  M.moveItem(trip, lake.id, day, 0);
+  const saved = M.validateTrip(JSON.parse(JSON.stringify({ ...trip, segments: { ...trip.segments, 'gone>x': { mode: 'walking' } } })));
+  assert.deepEqual(Object.keys(saved.segments), [`${hz.id}>${lake.id}`]);
+  // 예전 백업(segments 없음)도 열린다
+  const { segments, ...old } = JSON.parse(JSON.stringify(trip));
+  assert.deepEqual(M.validateTrip(old).segments, {});
+});
+
+test('J-10: 공유 링크에도 구간 수단이 자리 기준으로 실려 새 id에 다시 붙는다', async () => {
+  const S = await import('../public/lib/segments.js');
+  const M = await import('../public/lib/model.js');
+  const { encodeShare, decodeShare } = await import('../public/lib/share.js');
+  const trip = M.createTrip({ title: 'share', startDate: '2026-12-26', endDate: '2026-12-26' });
+  const a = M.addItem(trip, trip.days[0].id, { name: 'A站', lat: 30.70, lng: 120.75 });
+  const b = M.addItem(trip, trip.days[0].id, { name: 'B站', lat: 30.29, lng: 120.21 });
+  S.setSegment(trip, a, b, { mode: 'rail', minutes: 25 });
+  const copy = await decodeShare(await encodeShare(trip));
+  const [ca, cb] = copy.days[0].items;
+  assert.notEqual(ca.id, a.id);
+  assert.deepEqual(copy.segments[`${ca.id}>${cb.id}`], { mode: 'rail', minutes: 25 });
+});

@@ -3,6 +3,7 @@
 // item = { id, name, address, lat, lng, time, memo, url, category }
 
 import { t, longDate, dayName, tripLength } from './i18n.js';
+import { cleanSegments, pointIds } from './segments.js';
 import { checkTripLimits } from './limits.js';
 
 export const INBOX = 'inbox';
@@ -879,15 +880,18 @@ export function directionsFromHereUrl(to, mode = 'transit') {
 /**
  * 여행 당일 화면에 쓸 오늘 계획. 여행 기간이 아니면 null.
  * now = 'HH:MM' (기기 시각). 다음 장소 = 일정 순서대로 아직 안 다녀온 곳 중 첫 번째 (시간이 이미 지난 곳은 건너뛴다).
- * { dayIndex, items, nextId, stay: 오늘 밤 숙소(없으면 출발 숙소) }
+ * { dayIndex, items, nextId, tonight: 오늘 밤 묵는 숙소(없으면 null), checkOut: 오늘 체크아웃하는 숙소(없으면 null), stay: tonight }
+ * J-4: 체크아웃하는 날의 숙소를 "오늘 밤 숙소"로 보여 주지 않는다 — 일차 카드 칩과 같은 nightStay() 판정.
  */
 export function todayPlan(trip, today, now) {
   const i = indexOfDate(trip, today);
   if (i == null || i < 0 || i >= trip.days.length) return null;
   const items = trip.days[i].items;
   const next = items.find((it) => !it.visited && (!it.time || it.time >= now));
-  const { start, end } = dayStays(trip, i);
-  return { dayIndex: i, items, nextId: next?.id ?? null, stay: end ?? start ?? null };
+  const tonight = nightStay(trip, i);
+  const prev = i > 0 ? nightStay(trip, i - 1) : null;
+  const checkOut = prev && prev !== tonight ? prev : null;
+  return { dayIndex: i, items, nextId: next?.id ?? null, tonight, checkOut, stay: tonight };
 }
 
 /**
@@ -1040,6 +1044,8 @@ export function validateTrip(obj) {
     stays: (obj.stays ?? []).map((st) => ({ ...st, ...stayFields(st), address: str(st.address), memo: str(st.memo), url: str(st.url) })),
     flights: (obj.flights ?? []).map((f) => ({ kind: 'out', flightNo: '', from: '', to: '', arriveAt: '', bookingRef: '', memo: '', ...f })),
   };
+  // J-10: 구간별 이동 수단 — 예전 백업에는 없다. 지금 여행에 없는 장소를 가리키는 설정은 버린다
+  out.segments = cleanSegments(obj.segments, pointIds(out));
   const dropped = { expenses: 0, checks: 0 };
   if (obj.expenses != null) {
     if (!Array.isArray(obj.expenses)) fail('가계부');
