@@ -1150,6 +1150,7 @@ export function init(ctx) {
       ui.openStay = null;
       renderDays();
       $(`.item[data-id="${CSS.escape(id)}"] .item-main`)?.focus({ preventScroll: true });
+      ctx.focusMapPlace?.(id); // J-13: 목록 카드 → 지도 핀 강조·이동 (지도가 보일 때만)
     } else if (action === 'locate') {
       const found = M.findItem(ctx.trip, id);
       if (!found) return;

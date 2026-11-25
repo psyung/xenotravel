@@ -25,6 +25,8 @@ export { boundShowCandidate as showCandidate };
 export { boundSyncTiles as syncTiles };
 export { boundTileGroup as tileGroup };
 export { boundShowAllRoutes as showAllRoutes };
+let boundFocusMapPlace;
+export { boundFocusMapPlace as focusMapPlace };
 
 export function init(ctx) {
   const {
@@ -33,15 +35,14 @@ export function init(ctx) {
     origAttr, origTag,
   } = ctx;
 
-  // 지도 타일: 라이트 모드는 Esri World Street Map 또는 Light Gray Canvas. 출처 표기 필수.
-  // 어두운 화면에서는 Dark Gray Canvas. (CARTO는 2025년부터 키가 필요하고, Stadia는 localhost 밖에서 키가 필요하다)
+  // 지도 타일: 라이트 모드는 Esri World Street Map(컬러). 출처 표기 필수.
+  // J-12: "기본/회색" 전환은 없앴다. 어두운 화면은 테마에 따라 자동으로 Dark Gray Canvas. (CARTO는 2025년부터 키가 필요하고, Stadia는 localhost 밖에서 키가 필요하다)
   // Canvas 타일은 16단계까지라 더 확대하면 16단계 그림을 키워서 보여준다.
   // 사용자가 늘면 ArcGIS 계정 키나 MapTiler·Stadia 키 기반으로 바꿔야 한다.
   const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services';
   const STREET_ATTRIBUTION = 'Tiles &copy; Esri — Source: Esri, HERE, Garmin, USGS, Intermap, INCREMENT P, NRCan, Esri Japan, METI, Esri China (Hong Kong), Esri Korea, Esri (Thailand), NGCC, (c) OpenStreetMap contributors, and the GIS User Community';
   const TILES = {
     street: [`${ESRI}/World_Street_Map/MapServer/tile/{z}/{y}/{x}`],
-    gray: [`${ESRI}/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}`, `${ESRI}/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}`],
     dark: [`${ESRI}/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`, `${ESRI}/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`],
   };
   const TILE_OPTS = {
@@ -54,42 +55,17 @@ export function init(ctx) {
     ...(kind === 'street' ? { maxNativeZoom: 19, attribution: STREET_ATTRIBUTION } : index ? { attribution: '' } : {}),
   })));
 
-  const mapTileKind = () => isDark() ? 'dark' : prefs.mapStyle === 'gray' ? 'gray' : 'street';
+  const mapTileKind = () => (isDark() ? 'dark' : 'street');
+  if ('mapStyle' in prefs) { // 예전 설정(기본/회색)이 남아 있어도 컬러 지도로 연다
+    delete prefs.mapStyle;
+    savePrefs();
+  }
 
   /* ───────── 지도 ───────── */
   const map = L.map('map', { worldCopyJump: true, tapHold: false }).setView([30, 20], 2);
 
   const mapDayContext = () => JSON.stringify([ctx.trip?.id, ui.day, ui.focusList, getLang(), ctx.trip?.days.map(({ id, date }) => [id, date])]);
   map.zoomControl.setPosition('topright');
-  const mapStyleControl = L.control({ position: 'topright' });
-  mapStyleControl.onAdd = () => {
-    const el = L.DomUtil.create('div', 'map-style-control');
-    el.setAttribute('role', 'group');
-    L.DomEvent.disableClickPropagation(el);
-    L.DomEvent.disableScrollPropagation(el);
-    for (const style of ['street', 'gray']) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.dataset.style = style;
-      btn.addEventListener('click', () => {
-        prefs.mapStyle = style;
-        savePrefs();
-        syncTiles();
-      });
-      el.append(btn);
-    }
-    return el;
-  };
-  mapStyleControl.addTo(map);
-  function syncMapStyleControl() {
-    const el = mapStyleControl.getContainer();
-    el.hidden = isDark();
-    el.setAttribute('aria-label', t('지도 스타일'));
-    for (const btn of el.children) {
-      btn.textContent = btn.dataset.style === 'gray' ? t('회색') : t('기본');
-      btn.setAttribute('aria-pressed', String(btn.dataset.style === mapTileKind()));
-    }
-  }
   $('#mapLocate').addEventListener('click', () => {
     if (!navigator.geolocation) return toast(t('이 브라우저에서는 현재 위치를 확인할 수 없어요'));
     map.locate({ setView: true, maxZoom: 16, timeout: 8000 });
@@ -103,7 +79,6 @@ export function init(ctx) {
 
   /** 지도 자체 조작(확대·축소·출처)의 글자도 지금 언어로 */
   function mapControlsText() {
-    syncMapStyleControl();
     const zc = map.zoomControl;
     for (const [btn, key] of [[zc._zoomInButton, k('확대')], [zc._zoomOutButton, k('축소')]]) {
       if (!btn) continue;
@@ -268,7 +243,6 @@ export function init(ctx) {
    * 새 타일을 위에 먼저 깔고, 다 그려지면 이전 타일을 치운다 (그사이 빈 바탕이 깜빡이지 않게).
    */
   function syncTiles() {
-    syncMapStyleControl();
     const kind = mapTileKind();
     if (kind === baseKind) return;
     const old = baseTiles;
@@ -290,12 +264,12 @@ export function init(ctx) {
   const layer = L.layerGroup().addTo(map);
   const markers = new Map();
 
-  function pinIcon(label, color, dim, filter = '') {
+  function pinIcon(label, color, dim, filter = '', nudge = 0) {
     return L.divIcon({
       className: '',
       html: `<div class="pin${dim ? ' dim' : ''}${filter ? ` ${filter}` : ''}${color === 'var(--accent)' ? ' brand-pin' : ''}" style="--c:${color}"><span aria-hidden="true">${esc(label)}</span></div>`,
       iconSize: [28, 28],
-      iconAnchor: [14, 14],
+      iconAnchor: [14 - nudge, 14],
       popupAnchor: [0, -28],
     });
   }
@@ -396,6 +370,14 @@ export function init(ctx) {
     if (!ctx.trip) return;
     const bounds = [];
     const plan = ctx.currentRoutePlan();
+    // J-13: 좌표가 거의 같은 장소(같은 건물 안)는 핀이 겹친다 — 두 번째부터 옆으로 살짝 벌려 둘 다 누를 수 있게
+    const spots = new Map();
+    const nudgeOf = (p) => {
+      const key = `${p.lat.toFixed(4)},${p.lng.toFixed(4)}`;
+      const n = spots.get(key) ?? 0;
+      spots.set(key, n + 1);
+      return n ? (n % 2 ? 1 : -1) * Math.ceil(n / 2) * 18 : 0;
+    };
     allLists().forEach((l, dayIndex) => {
       const dim = ui.focusList != null && ui.focusList !== l.id;
       const color = l.isDay && ui.focusList === l.id ? 'var(--accent)' : l.color;
@@ -424,7 +406,7 @@ export function init(ctx) {
         const n = preview ? preview.indexOf(it) + 1 : i + 1;
         const m = L.marker([it.lat, it.lng], {
           // 일차 흐림이 종류 강조보다 우선: 고른 일차 밖 핀은 강조·펄스 없이 흐림 그대로 (B1)
-          icon: pinIcon(l.isDay ? n : '•', pinColorOf(it, color), dim, dim ? '' : catFilterClass(M.CATEGORIES[it.category] ? it.category : 'etc').trim()),
+          icon: pinIcon(l.isDay ? n : '•', pinColorOf(it, color), dim, dim ? '' : catFilterClass(M.CATEGORIES[it.category] ? it.category : 'etc').trim(), nudgeOf(it)),
           zIndexOffset: dim ? 0 : 1000,
         }).addTo(layer);
         const detail = [l.label, l.isDay ? t('{n}번째', { n }) : '', it.time].filter(Boolean).join(' · ');
@@ -733,7 +715,66 @@ export function init(ctx) {
     <button type="button" data-map-dismiss aria-label="${esc(t('장소 요약 닫기'))}">×</button>`;
     card.hidden = false;
     if (document.activeElement === marker.getElement()) card.querySelector('a').focus({ preventScroll: true });
+    // J-13: 핀을 누르면 그 장소 주변으로 확대하고, 일정 목록(모바일은 지도 시트)에서 같은 장소를 강조한다
+    flyToPlace(item);
+    markListActive(item.id, { scroll: true });
   }
+
+  /* ───────── J-13: 지도 핀 ↔ 일정 목록 연동 ───────── */
+  function flyToPlace(p) {
+    const zoom = Math.max(map.getZoom(), 16);
+    ui.keepView = true;
+    if (reduceMotion.matches) map.setView([p.lat, p.lng], zoom);
+    else map.flyTo([p.lat, p.lng], zoom, { duration: 0.45 });
+  }
+  /** 목록에서 그 장소(숙소는 지금 고른 날의 줄)를 강조. 한 번에 하나만 */
+  function markListActive(id, { scroll = false } = {}) {
+    for (const el of $$('.map-active')) el.classList.remove('map-active');
+    if (!id) return;
+    const sel = `.item[data-id="${CSS.escape(id)}"], .stay-row[data-stay="${CSS.escape(id)}"], #msList [data-ms-item="${CSS.escape(id)}"]`;
+    const inDay = ui.day != null ? $$(sel, $(`#day-${ui.day}`) ?? document) : [];
+    const targets = [...new Set([...(inDay.length ? inDay : $$(sel).filter((el) => !el.closest('#msList')).slice(0, 1)), ...$$(`#msList [data-ms-item="${CSS.escape(id)}"]`)])];
+    for (const el of targets) el.classList.add('map-active');
+    if (!scroll) return;
+    const listEl = targets.find((el) => !el.closest('#msList'));
+    const planShown = !narrowMq.matches || $('.layout').dataset.tab !== 'map';
+    if (listEl && planShown) {
+      const r = listEl.getBoundingClientRect();
+      const top = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--head')) || 56) + 8;
+      const inner = listEl.closest('.layout[data-view="board"] .timeline');
+      const box = inner?.getBoundingClientRect();
+      const out = r.top < top || r.bottom > innerHeight - 60 || (box && (r.top < box.top || r.bottom > box.bottom));
+      if (out) listEl.scrollIntoView({ block: 'center', behavior: reduceMotion.matches ? 'auto' : 'smooth' });
+    }
+    const row = targets.find((el) => el.closest('#msList'));
+    row?.scrollIntoView({ block: 'nearest', behavior: reduceMotion.matches ? 'auto' : 'smooth' });
+  }
+  /** 목록 카드를 눌렀을 때: 지도가 보일 때만 핀을 강조하고 그 위치로 (숨긴 지도는 열지 않는다, J-21) */
+  function focusMapPlace(id) {
+    const mapShown = narrowMq.matches ? $('.layout').dataset.tab === 'map' : !$('.layout').classList.contains('map-hidden');
+    const p = M.findStay(ctx.trip, id) ?? M.findItem(ctx.trip, id)?.item;
+    markListActive(id);
+    if (!p) return;
+    if (!Number.isFinite(p.lat) || !Number.isFinite(p.lng)) return toast(t('위치 정보 없음'));
+    if (!mapShown) return;
+    for (const el of $$('.map-pin-selected')) el.classList.remove('map-pin-selected');
+    markers.get(id)?.getElement()?.classList.add('map-pin-selected');
+    flyToPlace(p);
+  }
+  /** 활성 해제: 빈 지도 누르기 · Esc · 전체 동선 */
+  function clearMapActive() {
+    for (const el of $$('.map-pin-selected')) el.classList.remove('map-pin-selected');
+    markListActive(null);
+    const card = $('#mapPlace');
+    if (!ui.candidate && card.dataset.item) card.hidden = true;
+  }
+  map.on('click', () => {
+    if (!ui.picking) clearMapActive();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || document.querySelector('dialog[open]') || !$('.map-pin-selected, .map-active')) return;
+    clearMapActive();
+  });
 
   /* 검색 후보 미리 보기: 같은 이름 후보를 지도 위치로 구분한다 */
   let candidateMarker = null;
@@ -889,6 +930,7 @@ export function init(ctx) {
     });
 
     function showAllRoutes() {
+      clearMapActive();
       ui.focusList = null;
       renderDays();
       renderMap({ fit: true });
@@ -909,6 +951,7 @@ export function init(ctx) {
   boundExpandMap = expandMap;
   mapLayer = layer;
   boundLocateMapPlace = locateMapPlace;
+  boundFocusMapPlace = focusMapPlace;
   mapInstance = map;
   boundMapControlsText = mapControlsText;
   boundMapDayContext = mapDayContext;

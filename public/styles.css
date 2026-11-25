@@ -211,19 +211,6 @@ body[data-view="board"] .board-only { display: inline-flex; }
 .mapwrap .leaflet-control-zoom { overflow: hidden; margin: 12px 10px 0 0; }
 .mapwrap .leaflet-control-zoom a { background: transparent; color: var(--ink); border-color: var(--line); }
 .map-locate { position: absolute; z-index: 900; right: 10px; top: 82px; width: 32px; height: 34px; font-size: 18px; }
-.mapwrap .leaflet-control.map-style-control {
-  position: absolute; top: 124px; right: 10px; margin: 0;
-  display: flex; width: max-content; max-width: 160px; border: 1px solid var(--line);
-  border-radius: 10px; background: var(--paper); box-shadow: var(--shadow);
-}
-.map-style-control button {
-  min-height: 32px; padding: 0 7px; border: 0; border-radius: 9px;
-  background: transparent; color: var(--ink); font-size: var(--fs-sm); font-weight: 700;
-}
-.map-style-control button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
-@media (max-width: 767px) {
-  .mapwrap .leaflet-control.map-style-control { top: 150px; right: 6px; }
-}
 .map-locate:hover, .mapwrap .leaflet-control-zoom a:hover { background: var(--hover); }
 #mapDayLabel { font-size: var(--fs-sm); }
 #showAll { font-size: var(--fs-sm); }
@@ -496,7 +483,7 @@ body[data-view="board"] .board-only { display: inline-flex; }
 .count { color: var(--mute); font-size: var(--fs-sm); font-weight: 500; }
 .trend-note { margin: 4px 0 8px; color: var(--mute); font-size: var(--fs-sm); }
 .tc-add { min-height: 40px; }
-/* 두 갈래 전환은 앱 전체에서 같은 세그먼트 모양 (일정/지도 · 일차별/종류별 · 기본/회색) */
+/* 두 갈래 전환은 앱 전체에서 같은 세그먼트 모양 (일정/지도 · 일차별/종류별) */
 .trend-tabs { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--soft); }
 .trend-tabs .btn { min-height: 36px; border: 0; background: none; color: var(--sub); box-shadow: none; }
 .trend-tabs .btn:hover { background: none; color: var(--ink); }
@@ -2150,8 +2137,6 @@ dialog.p3-dialog { width: min(520px, calc(100vw - 32px)); overflow-wrap: anywher
 #askActions { flex-wrap: wrap; }
 .ms-day-picker { padding: 0 12px 6px; flex: none; }
 .ms-day-picker .ui-select { width: 100%; min-height: 40px; }
-/* 오프라인 미니맵의 북쪽(N) 표시와 [기본/회색] 버튼이 겹치지 않게 */
-.mapwrap:has(#miniMap:not([hidden])) .leaflet-control.map-style-control { margin-top: 34px; }
 
 /* ───────── I-4: 360px 이하는 언어 버튼 네 개 → "KO ▾" 하나 (공용 Select) ───────── */
 @media (max-width: 360px) {
@@ -2215,20 +2200,18 @@ html, body { overflow-x: clip; }
 
 /* ═════════ 선택 표시 규칙 (앱 전체 하나로) ═════════
  * 1) 세그먼트: 2~3개 중 하나를 고르는 전환·보기 방식 → 회색 트랙 + 흰 선택 칸
- *    일정/지도 · 목록/보드 · 요즘 뜨는 곳/많이 가는 곳 · 일정/가계부/체크(데스크톱) · 일차별/종류별 · 기본/회색 · 체크리스트 탭 · 출국/이동/귀국
+ *    일정/지도 · 목록/보드 · 요즘 뜨는 곳/많이 가는 곳 · 일정/가계부/체크(데스크톱) · 일차별/종류별 · 체크리스트 탭 · 출국/이동/귀국
  * 2) 칩: 여러 개 중 하나 고르기, 켜고 끄는 토글 → 검은 칩
  *    일차 탭 · 가계부 분류 · 추천 도시 · 전체 동선 · 숙소 추천 위치 · 지도에서 찍기
  * 예외: 장소 종류(색이 뜻을 가짐), 언어 글자 버튼, 목록·메뉴의 강조 줄 */
 .seg, .mtabs, .trend-tabs, .pnav, .pin-seg, .check-tabs, .search.card.compact .mini-tabs { background: var(--line); }
 .seg button.active, .mtabs button.active, .trend-tabs [aria-selected="true"], .trend-tabs [aria-selected="true"]:hover,
-.pnav .pg.on, .pin-seg button.active[data-pin], .map-style-control button[aria-pressed="true"],
+.pnav .pg.on, .pin-seg button.active[data-pin],
 .check-tabs button[aria-pressed="true"], .search.card.compact .mini-tabs button[data-mini-tab="plan"] {
   background: var(--paper); color: var(--ink); border-color: transparent; box-shadow: 0 1px 2px rgba(15, 30, 46, .12);
 }
 /* 지도 위 컨트롤도 같은 세그먼트 (트랙만 지도 위에서 보이게 테두리·그림자) */
 .pin-seg { border: 1px solid var(--line); box-shadow: var(--shadow); }
-.mapwrap .leaflet-control.map-style-control { padding: 3px; gap: 2px; background: var(--line); }
-.map-style-control button { border-radius: 7px; color: var(--sub); }
 /* 숙소 추천 위치는 켜고 끄는 토글 → 검은 칩 (세그먼트 안에 있어도) */
 .pin-seg [data-stay-suggestions] { margin-left: 2px; }
 .pin-seg [data-stay-suggestions].active { background: var(--ink); color: var(--paper); box-shadow: none; }
@@ -2380,3 +2363,19 @@ button.leg-mode:hover { background: var(--soft); color: var(--ink); border-style
 .seg-buffer .seg-field { margin-top: 8px; }
 [data-seg-for][hidden] { display: none !important; }
 @media (max-width: 400px) { .seg-modes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* J-13: 지도 핀과 짝인 목록 카드 강조 (한 번에 하나) */
+.item.map-active > .tl-box { box-shadow: 0 0 0 2px var(--accent); border-radius: 12px; }
+.stay-row.map-active { box-shadow: 0 0 0 2px var(--stay); }
+#msList .ms-row.map-active { background: var(--accent-soft); }
+
+/* J-14: PDF 일정표 열 너비 — 번호 8mm · 시간 16mm · 장소 : 메모 = 4 : 6. 장소·메모는 자르지 않고 줄바꿈 */
+.print-day col.c-n { width: 8mm; }
+.print-day col.c-t { width: 16mm; }
+.print-day col.c-place { width: 40%; }
+.print-day td.n, .print-day td.t { width: auto; }
+.print-day td.t { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.print-day td, .print-day td strong { white-space: normal; overflow: visible; text-overflow: clip; }
+.print-day tr.stay td { padding-block: 5px; }
+.print-day .stay-label { font-weight: 700; color: #0A7C7C; margin-right: 4px; }
+.print-day tr.stay .memo { margin-top: 2px; }

@@ -73,11 +73,12 @@ test('P2-5: payment chart, expense controls, exports and settlement account for 
   assert.match(app, /Object.hasOwn\(st\.byPay, key\)/);
 });
 
-test('P2-9: preference selects Street or Gray, dark overrides it, and print uses the same tiles', () => {
+test('P2-9·J-12: light mode is always Street (no Street/Gray toggle), dark follows the theme, print uses the same tiles', () => {
   const app = appSource();
   assert.match(app, /street: \[\x60\$\{ESRI\}\/World_Street_Map\/MapServer\/tile\/\{z\}\/\{y\}\/\{x\}\x60\]/);
-  assert.match(app, /const mapTileKind = \(\) => isDark\(\) \? 'dark' : prefs\.mapStyle === 'gray' \? 'gray' : 'street'/);
-  assert.match(app, /prefs\.mapStyle = style;\s*savePrefs\(\);\s*syncTiles\(\);/);
+  assert.match(app, /const mapTileKind = \(\) => \(isDark\(\) \? 'dark' : 'street'\);/);
+  assert.match(app, /if \('mapStyle' in prefs\) \{[^\n]*\n\s+delete prefs\.mapStyle;/);
+  assert.doesNotMatch(app, /map-style-control|World_Light_Gray/);
   assert.match(app, /printMaps\.push\(m\);\s*const tiles = tileGroup\(mapTileKind\(\)\)/);
   assert.match(app, /STREET_ATTRIBUTION = 'Tiles &copy; Esri — Source: Esri, HERE, Garmin[\s\S]*and the GIS User Community'/);
   assert.doesNotMatch(read('sw.js'), /server\.arcgisonline\.com|World_Street_Map/);

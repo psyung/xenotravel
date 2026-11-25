@@ -163,3 +163,31 @@ test('J-10: 공유 링크에도 구간 수단이 자리 기준으로 실려 새 
   assert.notEqual(ca.id, a.id);
   assert.deepEqual(copy.segments[`${ca.id}>${cb.id}`], { mode: 'rail', minutes: 25 });
 });
+
+test('J-12: 지도 "기본/회색" 전환을 없애고 예전 설정이 남아 있어도 컬러 지도', () => {
+  const app = appSource();
+  assert.doesNotMatch(app, /map-style-control|World_Light_Gray|prefs\.mapStyle = /);
+  assert.match(app, /const mapTileKind = \(\) => \(isDark\(\) \? 'dark' : 'street'\);/);
+  assert.ok(!MESSAGES['회색'] && !MESSAGES['지도 스타일']);
+  assert.doesNotMatch(css, /map-style-control/);
+});
+
+test('J-13: 핀 ↔ 목록 연동 — 핀은 확대·목록 강조, 목록은 보이는 지도에서만 핀 강조, 빈 지도·Esc·전체 동선은 해제, 겹친 핀은 벌린다', () => {
+  const app = appSource();
+  assert.match(app, /flyToPlace\(item\);\n\s+markListActive\(item\.id, \{ scroll: true \}\);/);
+  assert.match(app, /const zoom = Math\.max\(map\.getZoom\(\), 16\);/);
+  assert.match(app, /if \(!mapShown\) return;/);
+  assert.match(app, /map\.on\('click', \(\) => \{\n\s+if \(!ui\.picking\) clearMapActive\(\);/);
+  assert.match(app, /function showAllRoutes\(\) \{\s*clearMapActive\(\);/);
+  assert.match(app, /ctx\.focusMapPlace\?\.\(id\);/);
+  assert.match(app, /iconAnchor: \[14 - nudge, 14\]/);
+  assert.match(css, /\.item\.map-active > \.tl-box \{ box-shadow: 0 0 0 2px var\(--accent\);/);
+});
+
+test('J-14: PDF 표는 열 너비 고정(번호 8mm · 시간 16mm · 장소 40%), 숙소는 번호 없는 한 줄', () => {
+  const app = appSource();
+  assert.match(app, /<colgroup><col class="c-n"><col class="c-t"><col class="c-place"><col class="c-memo"><\/colgroup>/);
+  assert.match(app, /<tr class="stay"><td colspan="4"><span class="stay-label">🏨/);
+  assert.doesNotMatch(app, /t\('숙'\)|t\('항'\)/);
+  assert.match(css, /\.print-day col\.c-n \{ width: 8mm; \}\n\.print-day col\.c-t \{ width: 16mm; \}\n\.print-day col\.c-place \{ width: 40%; \}/);
+});

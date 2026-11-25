@@ -28,7 +28,7 @@ import { init as initBoardPan, updateBoardNav } from './ui/board-pan.js';
 import { init as initSearchBar } from './ui/search-bar.js';
 import { init as initMap, initLegend, allLists, catIcon, clearCandidate, directionsHtml,
   expandMap, layer, locateMapPlace, map, mapControlsText, mapDayContext, mapDayOptions,
-  mapTileKind, pinIcon, renderMap, showAllRoutes, showCandidate, syncTiles, tileGroup } from './map/map.js';
+  mapTileKind, pinIcon, renderMap, showAllRoutes, focusMapPlace, showCandidate, syncTiles, tileGroup } from './map/map.js';
 import { init as initPicking, initPickButtons, cancelMapHold, locationChoice,
   pickViewport, revealMap, setPicking } from './map/picking.js';
 import { init as initPlan, initDialogs, initDock, initStays, bm, costTagHtml, currentRoutePlan,
@@ -935,6 +935,7 @@ initPlan({
   nearbyContext, currentCity, resetNearby, allLists, renderDayTabs, trendSectionHtml, $$, addTrend, curView,
   showTab, renderTarget, loadNearby, addPlace, trendCollection, trendsOpen, savePrefs, paintWeather, copyText,
   openFlights, debounce, markEdited, persistSoon, renderRetrospective,
+  get focusMapPlace() { return focusMapPlace; },
 });
 
 initLegend({ renderDays });
@@ -2293,12 +2294,13 @@ function handbookHtml({ maps = true } = {}) {
           const title = l.isDay ? M.dayTitle(trip.days[i], i) : t('장소 보관함 (날짜 미정)');
           const st = l.isDay ? M.dayStays(trip, i) : {};
           const stayRow = (stay, label) =>
-            stay ? `<tr class="stay"><td class="n">${esc(t('숙'))}</td><td class="t">${esc(label)}</td><td><strong>${esc(stay.name)}</strong>${stay.address ? `<div class="addr">${esc(stay.address)}</div>` : ''}</td><td class="memo">${esc(stay.memo)}</td></tr>` : '';
+            // J-14: 숙소는 번호를 붙이지 않고 표 폭 전체를 쓰는 한 줄 (장소 번호는 지도 핀과 같게 1부터)
+            stay ? `<tr class="stay"><td colspan="4"><span class="stay-label">🏨 ${esc(t('숙소'))} · ${esc(label)}</span> <strong>${esc(stay.name)}</strong>${stay.address ? `<div class="addr">${esc(stay.address)}</div>` : ''}${stay.memo ? `<div class="memo">${esc(stay.memo)}</div>` : ''}</td></tr>` : '';
           const has = l.items.length || st.start || (l.isDay && dayFlights(i, 'top').length + dayFlights(i, 'bottom').length);
           const flightRows = (where) =>
             dayFlights(i, where)
               .map((x) => ({ fl: x.flight, note: x.role === 'pinned' ? M.pinnedFlightNote(x) : '' }))
-              .map(({ fl, note }) => `<tr class="flight"><td class="n">${esc(t('항'))}</td><td class="t">${esc(M.flightKind(fl.kind))}</td><td><strong>${esc(M.flightSummary(fl))}</strong>${note ? ` <small>(${esc(note)})</small>` : ''}</td><td class="memo">${esc([fl.bookingRef && t('예약번호 {ref}', { ref: fl.bookingRef }), fl.memo].filter(Boolean).join(' / '))}</td></tr>`)
+              .map(({ fl, note }) => `<tr class="flight"><td class="n" aria-hidden="true">✈</td><td class="t">${esc(M.flightKind(fl.kind))}</td><td><strong>${esc(M.flightSummary(fl))}</strong>${note ? ` <small>(${esc(note)})</small>` : ''}</td><td class="memo">${esc([fl.bookingRef && t('예약번호 {ref}', { ref: fl.bookingRef }), fl.memo].filter(Boolean).join(' / '))}</td></tr>`)
               .join('');
           const rows = flightRows('top') + stayRow(st.start, t('출발')) + l.items
             .map(
@@ -2306,13 +2308,13 @@ function handbookHtml({ maps = true } = {}) {
                 <td><strong>${M.CATEGORIES[it.category]?.icon ?? ''} ${esc(it.name)}</strong>${it.address ? `<div class="addr">${esc(it.address)}</div>` : ''}</td>
                 <td class="memo">${esc(it.memo)}${it.url ? `<div class="addr">${esc(it.url)}</div>` : ''}</td></tr>`,
             )
-            .join('') + stayRow(st.end, t('귀가')) + flightRows('bottom');
+            .join('') + stayRow(st.end, t('도착')) + flightRows('bottom');
           return `<section class="print-day" style="--c:${l.color}">
             <h2>${esc(title)}</h2>
             ${has && maps ? `<div class="print-map" data-list="${l.id}" data-day="${i}"></div>` : ''}
             ${
               has
-                ? `<table><thead><tr><th></th><th>${esc(t('시간'))}</th><th>${esc(t('장소'))}</th><th>${esc(t('메모'))}</th></tr></thead><tbody>${rows}</tbody></table>`
+                ? `<table><colgroup><col class="c-n"><col class="c-t"><col class="c-place"><col class="c-memo"></colgroup><thead><tr><th></th><th>${esc(t('시간'))}</th><th>${esc(t('장소'))}</th><th>${esc(t('메모'))}</th></tr></thead><tbody>${rows}</tbody></table>`
                 : `<p class="addr">${esc(t('아직 일정이 없어요'))}</p>`
             }
           </section>`;

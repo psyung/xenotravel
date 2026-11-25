@@ -100,7 +100,7 @@ test('P3-2: list tabs, all routes, and bottom sheet share the map day and invali
   const tab = /function showTab\(tab\) \{[\s\S]+?\n\}/.exec(app)[0];
   assert.match(tab, /tab === 'map'[\s\S]*?renderMap\(/);
   assert.doesNotMatch(tab, /ui\.(?:day|focusList)\s*=/);
-  assert.match(map, /function showAllRoutes\(\) \{\s*ui\.focusList = null;[\s\S]*?renderMap\(/);
+  assert.match(map, /function showAllRoutes\(\) \{\s*clearMapActive\(\);\s*ui\.focusList = null;[\s\S]*?renderMap\(/);
   assert.match(map, /if \(ui\.focusList == null\) return selectDay\(ui\.day, \{ scroll: false \}\)/);
   assert.match(html, /id="msDay" data-ui-select/);
   assert.match(map, /\$\('#msDay'\)\.addEventListener\('change'[\s\S]*?selectDay\(index, \{ scroll: false \}\)/);
