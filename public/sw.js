@@ -84,6 +84,7 @@ const APP_FILES = [
   'lib/timefield.js',
   'lib/sync.js',
   'lib/trends.js',
+  'lib/trend-page.js',
   'lib/undo.js',
   'lib/weather.js',
 ];

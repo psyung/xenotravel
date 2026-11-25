@@ -9,6 +9,22 @@
   } catch (e) {}
 
   function ready() {
+    // J-8: [← 돌아가기] — 앱(같은 사이트)에서 왔으면 이전 화면으로, 아니면 홈으로
+    var back = document.querySelector('[data-trend-back]');
+    if (back) back.addEventListener('click', function (e) {
+      var ref = document.referrer;
+      if (ref && ref.indexOf(location.origin + '/') === 0 && history.length > 1) {
+        e.preventDefault();
+        history.back();
+      }
+    });
+    // J-9: 카드 전체 클릭 — 카드 안 제목 링크로 (새 탭·주소 복사는 링크 그대로)
+    document.addEventListener('click', function (e) {
+      var card = e.target.closest && e.target.closest('.card-link');
+      if (!card || e.target.closest('a, button')) return;
+      var link = card.querySelector('a[href]');
+      if (link) link.click();
+    });
     // 모바일 메뉴(☰): 펼치기/접기, Esc로 닫기
     var btn = document.querySelector('.site-menu-btn');
     var head = document.querySelector('.site-head');

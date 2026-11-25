@@ -1117,6 +1117,9 @@ export function init(ctx) {
   /* ───────── 일정 목록 이벤트 ───────── */
   $('#days').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action]');
+    // J-8: 트렌드 카드를 끌지 않고 짧게 누르면 장소 설명 페이지로 ([+ 담기]·출처 링크는 각자 원래 동작)
+    const trendCard = !btn && !e.target.closest('a, button, input, select, textarea') && e.target.closest('.trend-card[data-href]');
+    if (trendCard?.dataset.href) return void (location.href = trendCard.dataset.href);
     if (!btn) return;
     const id = btn.closest('.item')?.dataset.id;
     const action = btn.dataset.action;

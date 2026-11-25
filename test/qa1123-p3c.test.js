@@ -22,13 +22,13 @@ test('P2-6: summary buttons reuse itinerary, date picker, groups and all-routes 
   assert.match(source, /showTab\('map'\);\s*showAllRoutes\(\)/);
   assert.match(source, /const index = M\.todayIndex\(trip, TODAY\);\s*showTab\('plan'\)/);
   assert.match(source, /data-open-place-groups\]'\)\) return;\s*renderPlaceGroups\(\);\s*showDialog\(placeGroupsDialog\)/);
-  for (const action of ['plan', 'budget', 'check', 'share', 'flights', 'backup']) {
-    assert.ok(source.includes(`featureCard('${action}'`));
-  }
-  assert.match(source, /if \(!current\) return openNewTrip\(\)/);
+  // J-7: "할 수 있는 것" 카드는 hover만 있는 읽기 전용 카드 (클릭 이동 없음)
+  assert.doesNotMatch(source, /data-feature|openHomeFeature|homeFeature/);
+  assert.match(source, /<li class="card-hover"><b>\$\{esc\(title\)\}<\/b>/);
   const css = read('styles.css');
-  assert.match(css, /:is\(\.bento \.tile, \.feats li button\):enabled:is\(:focus-visible, :active\)/);
+  assert.match(css, /\.bento \.tile:enabled:is\(:focus-visible, :active\)/);
   assert.match(css, /prefers-reduced-motion: reduce[\s\S]*--action-lift: 0px/);
+  assert.match(css, /\.feats li \{[^}]*cursor: default;/);
 });
 
 test('P2-7: cover crop centers landscape and portrait images at 16:9', () => {

@@ -130,9 +130,9 @@ test('I-0 (H-2): production omits draft guides from pages, lists and sitemap', (
     const { output } = build({ directory, stage: 'production' });
     assert.ok(output.has('/ko/guides/tokyo/index.html'));
     assert.doesNotMatch(output.get('/ko/guides/tokyo/index.html'), /noindex/);
-    assert.ok(![...output.keys()].some((path) => path.includes('osaka')));
+    assert.ok(![...output.keys()].some((path) => path.includes('/guides/osaka')));
     assert.doesNotMatch(output.get('/ko/guides/index.html'), /osaka/);
-    assert.doesNotMatch(output.get('/sitemap.xml'), /osaka/);
+    assert.doesNotMatch(output.get('/sitemap.xml'), /\/guides\/osaka/); // J-8 트렌드 페이지(/trends/osaka/)는 별개
     assert.match(output.get('/sitemap.xml'), /\/ko\/guides\/tokyo\//);
   });
 });

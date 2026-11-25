@@ -90,3 +90,28 @@
 .site-foot a { color: var(--sub); }
 .site-foot a[aria-current="page"] { color: var(--ink); font-weight: 700; }
 @media (max-width: 767px) { .site-foot nav { margin-left: 0; } }
+
+/* J-7~J-9: 카드 hover 공통 — 테두리 강조 · 2px 위로 · 그림자 · 150ms. 터치 기기에서는 남지 않게 (hover: hover) */
+@media (hover: hover) {
+  .card-hover { transition: border-color .15s, transform .15s, box-shadow .15s; }
+  .card-hover:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 8px 20px rgba(15, 30, 46, .1); }
+}
+@media (prefers-reduced-motion: reduce) { .card-hover:hover { transform: none; } }
+.card-link { cursor: pointer; }
+.guide-list .badge { display: inline-block; margin-bottom: 6px; padding: 0 8px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; line-height: 22px; }
+/* J-8: 요즘 뜨는 곳 설명 페이지 */
+.trend-crumb { color: var(--mute); font-size: 13px; }
+.trend-local { margin-top: -6px; color: var(--sub); }
+.trend-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; color: var(--sub); font-size: 14px; }
+.trend-badge { padding: 0 8px; border-radius: 6px; line-height: 22px; font-size: 12px; font-weight: 700; background: var(--accent-soft); color: var(--accent); }
+.trend-badge.s-new { background: var(--hot-soft); color: var(--hot); }
+.trend-badge.s-event { background: var(--warn-soft); color: var(--warn); }
+.trend-badge.ended { background: var(--soft); color: var(--mute); }
+.trend-summary { font-size: 17px; line-height: 1.7; }
+.trend-dirs { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 16px; }
+.trend-more { list-style: none; padding: 0; display: grid; gap: 8px; }
+.trend-more a { display: flex; flex-direction: column; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; text-decoration: none; color: inherit; }
+.trend-more small { color: var(--mute); }
+.trend-note { color: var(--mute); font-size: 13px; }
+.static-site .cta.ghost { background: var(--paper); color: var(--ink); border: 1px solid var(--line); }
+.static-site .cta.ghost:hover { background: var(--soft); }

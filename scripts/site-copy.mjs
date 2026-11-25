@@ -2,7 +2,7 @@ import { SITE_NAME } from '../public/lib/site-config.js';
 
 export const chrome = {
   ko: {
-    home: '홈', guides: '여행 가이드', privacy: '개인정보처리방침', about: '소개', contact: '문의', terms: '이용약관',
+    home: '홈', guides: '여행 가이드', experience: '직접 다녀온 후기', privacy: '개인정보처리방침', about: '소개', contact: '문의', terms: '이용약관',
     nav: '사이트 메뉴', index: '도시별 여행 동선과 준비 팁을 찾아보세요.',
     operator: `${SITE_NAME}은 여행 일정을 쉽게 짜고 함께 나눌 수 있도록 만든 여행 플래너입니다. 지도에서 일정을 짜고 가계부와 체크리스트를 관리할 수 있습니다. 여행은 브라우저에 저장됩니다.`,
     contactIntro: '오류 신고, 기능 제안, 개인정보 관련 문의를 받습니다. 예약번호나 여권 정보는 보내지 마세요.',
@@ -13,7 +13,7 @@ export const chrome = {
     visit: (y, m) => `직접 다녀온 후기 · ${y}년 ${m}월 방문`,
   },
   en: {
-    home: 'Home', guides: 'Travel guides', privacy: 'Privacy policy', about: 'About', contact: 'Contact', terms: 'Terms of use',
+    home: 'Home', guides: 'Travel guides', experience: 'From our own trip', privacy: 'Privacy policy', about: 'About', contact: 'Contact', terms: 'Terms of use',
     nav: 'Site navigation', index: 'Find itineraries and practical tips by destination.',
     operator: `${SITE_NAME} is a trip planner made to help you plan trips easily and share them with others. Plan on a map and manage budgets and checklists. Trips are stored in your browser.`,
     contactIntro: 'We accept bug reports, feature suggestions, and privacy inquiries. Please do not send booking numbers or passport details.',
@@ -24,7 +24,7 @@ export const chrome = {
     visit: (y, m) => `Firsthand experience · Visited ${y}-${String(m).padStart(2, '0')}`,
   },
   zh: {
-    home: '首页', guides: '旅行指南', privacy: '隐私政策', about: '关于', contact: '联系', terms: '使用条款',
+    home: '首页', guides: '旅行指南', experience: '亲身游记', privacy: '隐私政策', about: '关于', contact: '联系', terms: '使用条款',
     nav: '网站导航', index: '查找各城市的行程和实用旅行建议。',
     operator: `${SITE_NAME} 是一款让你轻松规划行程并与他人分享的旅行规划工具。你可以在地图上规划行程，管理预算和清单。行程保存在浏览器中。`,
     contactIntro: '我们受理问题报告、功能建议和个人信息相关咨询。请勿发送预订编号或护照信息。',
@@ -35,7 +35,7 @@ export const chrome = {
     visit: (y, m) => `实地体验 · ${y}年${m}月到访`,
   },
   ja: {
-    home: 'ホーム', guides: '旅行ガイド', privacy: 'プライバシーポリシー', about: 'サービス紹介', contact: 'お問い合わせ', terms: '利用規約',
+    home: 'ホーム', guides: '旅行ガイド', experience: '実体験レビュー', privacy: 'プライバシーポリシー', about: 'サービス紹介', contact: 'お問い合わせ', terms: '利用規約',
     nav: 'サイト内メニュー', index: '都市別のモデルコースと旅行のヒントを探せます。',
     operator: `${SITE_NAME} は旅の日程を手軽に組み、みんなで共有できるように作った旅行プランナーです。地図で旅程を組み、予算やチェックリストを管理できます。旅行データはブラウザに保存されます。`,
     contactIntro: '不具合の報告、機能の提案、個人情報に関するお問い合わせを受け付けています。予約番号やパスポート情報は送らないでください。',

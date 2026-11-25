@@ -219,3 +219,38 @@ test('J-1: 여행 카드 커버는 D-day 하나, 도시는 제목에 없을 때�
   assert.match(css, /\.tc-body b \{[^}]*-webkit-line-clamp: 2;/);
   assert.match(css, /\.tc-body small \{[^}]*-webkit-line-clamp: 2;/);
 });
+
+test('J-7~J-9: 소개 카드는 hover만, 트렌드·가이드 카드는 카드 전체가 링크, 공용 hover는 (hover: hover)에서만', () => {
+  const app = appSource();
+  assert.doesNotMatch(app, /data-feature|openHomeFeature/);
+  assert.match(app, /<li class="card-hover card-link"><span class="tc-badge s-\$\{esc\(p\.status\)\}">/);
+  assert.match(app, /<b><a href="\$\{esc\(trendHref\(p\.id\)\)\}">/);
+  assert.match(app, /guide\.experience \? `<span class="tc-badge">\$\{esc\(t\('직접 다녀온 후기'\)\)\}<\/span>`/);
+  assert.match(app, /const trendCard = !btn && !e\.target\.closest\('a, button, input, select, textarea'\) && e\.target\.closest\('\.trend-card\[data-href\]'\);/);
+  assert.match(css, /@media \(hover: hover\) \{\n  \.card-hover:hover \{ border-color: var\(--accent\); transform: translateY\(-2px\);/);
+  assert.match(css, /\.feats li \{[^}]*cursor: default;/);
+});
+
+test('J-8: 트렌드 설명 페이지 — 주소 규칙, 번역 없는 언어는 만들지 않음, 300자 미만은 noindex·사이트맵 제외, 담기는 앱으로', async () => {
+  const P = await import('../public/lib/trend-page.js');
+  const { buildFiles } = await import('../scripts/build-site.mjs');
+  const city = { id: 'tokyo' };
+  assert.equal(P.trendPath('ko', city, { id: 'tokyo-pokepark-kanto' }), '/ko/trends/tokyo/pokepark-kanto/');
+  assert.equal(P.hasTrendLanguage({ id: 'x' }, 'en', { places: {} }), false);
+  assert.equal(P.hasTrendLanguage({ id: 'x' }, 'ko', null), true);
+  const { mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  // 가이드 없이 production으로 빌드 (공개 가이드의 TODO 때문에 멈추지 않게) — 트렌드 페이지 규칙만 본다
+  const { output } = buildFiles({ directory: mkdtempSync(join(tmpdir(), 'xt-guides-')), stage: 'production', warn: () => {}, log: () => {} });
+  const html = output.get('/ko/trends/tokyo/pokepark-kanto/index.html');
+  assert.ok(html, 'page exists');
+  assert.match(html, /<meta name="robots" content="noindex">/); // 설명이 300자 미만
+  assert.match(html, /href="\/#\/\?trend=tokyo-pokepark-kanto"/);
+  assert.match(html, /data-trend-back/);
+  assert.doesNotMatch(output.get('/sitemap.xml'), /\/trends\//);
+  assert.ok(!output.has('/en/trends/tokyo/landmark-sensoji/index.html'), '번역 없는 언어는 한국어로 대신 만들지 않는다');
+  const app = appSource();
+  assert.match(app, /const trendId = params\.get\('trend'\);\n\s+if \(trendId\) void importTrend\(trendId, location\.hash\);/);
+  assert.match(app, /await trendsReady;/);
+});

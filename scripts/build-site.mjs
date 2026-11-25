@@ -1,7 +1,8 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { LANGS } from '../public/lib/i18n.js';
+import { LANGS, setLang, getLang, t } from '../public/lib/i18n.js';
+import { cityPlaces, hasTrendLanguage, trendPageBody, trendPath, trendTextLength } from '../public/lib/trend-page.js';
 import { destinationById } from '../public/lib/destinations.js';
 import { escapeHtml as esc, privacySections, renderPrivacySections } from '../public/lib/privacy.js';
 import { SITE_ORIGIN, ADSENSE_PUBLISHER, CONTACT_EMAIL, validPublisher } from '../public/lib/site-config.js';
@@ -218,7 +219,7 @@ export function buildFiles({ directory = guideDir, preview = false, stage = 'pre
       indexVariants[lang] = guidePath(lang);
     }
     catalog[lang] = published.filter((g) => g.lang === lang).slice(0, 3)
-      .map((g) => ({ title: g.title, description: g.description, href: guidePath(lang, g.slug) }));
+      .map((g) => ({ title: g.title, description: g.description, href: guidePath(lang, g.slug), experience: Boolean(g.experience) }));
   }
   for (const g of guides) {
     const group = groups.get(g.slug) ?? new Map();
@@ -265,7 +266,7 @@ export function buildFiles({ directory = guideDir, preview = false, stage = 'pre
     const howTo = lang === 'ko' ? `<h2>XenoTravel 사용법</h2><ul>${usage.map((item) =>
       `<li><a href="/ko/guides/how-to/${item.slug}/">${item.title}</a></li>`).join('')}</ul>` : '';
     const body = `<h1>${c.guides}</h1><p>${c.index}</p><ul class="guide-list">${cards.map((g) =>
-      `<li><h2><a href="${guidePath(lang, g.slug)}">${esc(g.title)}</a></h2><p>${esc(g.description)}</p><time datetime="${esc(g.updated)}">${esc(g.updated)}</time></li>`).join('')}</ul>${howTo}`;
+      `<li class="card-hover card-link">${g.experience ? `<span class="badge">${c.experience}</span>` : ''}<h2><a href="${guidePath(lang, g.slug)}">${esc(g.title)}</a></h2><p>${esc(g.description)}</p><time datetime="${esc(g.updated)}">${esc(g.updated)}</time></li>`).join('')}</ul>${howTo}`;
     setPage(output, path, page({ lang, path, title: c.guides + ' | XenoTravel', description: c.index, variants: indexVariants, body, current: 'guides', wide: true, noindex }, indexVariants));
   }
   if (indexVariants.ko) for (const item of usage) {
@@ -286,6 +287,31 @@ export function buildFiles({ directory = guideDir, preview = false, stage = 'pre
       setPage(output, visible[g.lang], renderGuide(g, paths, directory, output, warn, indexVariants, noindex));
     }
   }
+  // J-8: 요즘 뜨는 곳 장소 설명 페이지. 번역이 없는 언어는 만들지 않고, 본문이 300자 미만이면 noindex + 사이트맵 제외
+  const trends = JSON.parse(readFileSync(join(publicDir, 'data/trends.json'), 'utf8'));
+  const trendsI18n = JSON.parse(readFileSync(join(publicDir, 'data/trends-i18n.json'), 'utf8'));
+  const today = new Date().toISOString().slice(0, 10);
+  const before = getLang();
+  for (const city of trends.cities ?? []) {
+    const places = cityPlaces(city);
+    for (const place of places) {
+      const variants = Object.fromEntries(languages.filter((lang) => hasTrendLanguage(place, lang, trendsI18n)).map((lang) => [lang, trendPath(lang, city, place)]));
+      let thin = false;
+      for (const [lang, path] of Object.entries(variants)) {
+        setLang(lang);
+        const others = places.filter((p) => p !== place && !(p.until && p.until < today));
+        const body = trendPageBody({ city, place, lang, i18n: trendsI18n, researchedAt: city.researchedAt ?? trends.researchedAt, today, others });
+        const short = trendTextLength(place, lang, trendsI18n) < 300;
+        thin ||= short;
+        const loc = place.name;
+        const title = `${trendsI18n.places?.[place.id]?.[lang]?.name ?? loc} · ${t(city.name)} | XenoTravel`;
+        const description = (lang === 'ko' ? place.summary : trendsI18n.places?.[place.id]?.[lang]?.summary) ?? '';
+        setPage(output, path, page({ lang, path, title, description, variants, body, article: true, current: 'guides', noindex: noindex || short }, indexVariants));
+      }
+      if (!thin && Object.keys(variants).length) sitemaps.push(variants);
+    }
+  }
+  setLang(before);
   const xml = sitemaps.flatMap((variants) => Object.values(variants).map((path) =>
     `  <url><loc>${esc(absolute(path))}</loc>${alternates(variants).map(([lang, href]) =>
       `<xhtml:link rel="alternate" hreflang="${lang}" href="${esc(absolute(href))}"/>`).join('')}</url>`));
