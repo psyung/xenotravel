@@ -18,7 +18,6 @@ export const MESSAGES = {
   "백업 파일을 저장하지 못했어요": ["Could not save the backup file", "无法保存备份文件", "バックアップファイルを保存できませんでした"],
   "여행 커버 바꾸기": ["Change trip cover", "更换旅行封面", "旅行のカバーを変更"],
   "커버 바꾸기": ["Change cover", "更换封面", "カバーを変更"],
-  "{name} 커버 바꾸기": ["Change cover for {name}", "更换「{name}」的封面", "「{name}」のカバーを変更"],
   "사진 선택": ["Choose a photo", "选择照片", "写真を選択"],
   "기본으로 되돌리기": ["Restore default", "恢复默认", "デフォルトに戻す"],
   "커버 사진을 읽지 못했어요": ["Could not read the cover photo", "无法读取封面照片", "カバー写真を読み込めませんでした"],
@@ -1197,4 +1196,6 @@ export const MESSAGES = {
   "출발 시각": ["Departure", "出发时间", "出発時刻"],
   "도착 시각": ["Arrival", "到达时间", "到着時刻"],
   "위치 정보 없음": ["No location", "无位置信息", "位置情報なし"],
+  "여행 삭제": ["Delete trip", "删除行程", "旅行を削除"],
+  "{name} 메뉴": ["{name} menu", "{name} 菜单", "{name} のメニュー"],
 };

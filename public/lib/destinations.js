@@ -45,7 +45,13 @@ export function resolveDestination(text, extra = []) {
   return null;
 }
 
-/** 담긴 장소(일정·보관함·숙소)의 평균 좌표 (없으면 null) */
+/** J-1: 여행지 이름의 4개 국어 표기 (목록에 없는 도시는 적은 그대로) — 제목에 도시가 이미 있는지 볼 때 */
+export function destinationNames(destination) {
+  const known = resolveDestination(destination);
+  const raw = String(destination ?? '').trim();
+  return [...new Set([...(known ? allVersions(known.value) : []), raw].filter(Boolean))];
+}
+
 export function destinationLabel(destination) {
   const known = resolveDestination(destination);
   return known ? t(known.value) : String(destination ?? '').trim();

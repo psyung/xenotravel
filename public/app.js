@@ -18,7 +18,7 @@ import { adSlot, loadAds } from './lib/ads.js';
 import { createUndoStack } from './lib/undo.js';
 import { stayRangeWithin } from './lib/stays.js';
 import { summaryModel, drawSummary, summaryFileName } from './lib/summary.js';
-import { DESTINATIONS, destinationById, destinationLabel, resolveDestination, repairTripCenter } from './lib/destinations.js';
+import { DESTINATIONS, destinationById, destinationLabel, destinationNames, resolveDestination, repairTripCenter } from './lib/destinations.js';
 import { backupReason, backupReasonText, lastBackupLabel } from './lib/backup.js';
 import * as Covers from './lib/covers.js';
 import { init as initBudget, renderBudget, fetchRate } from './pages/budget.js';
@@ -1760,16 +1760,25 @@ function tripCardHtml(tr) {
   const s = M.tripStats(tr, TODAY);
   const ended = M.tripEnded(tr, TODAY);
   const color = dayColor([...(tr.destination || tr.title)].reduce((h, c) => h + c.charCodeAt(0), 0));
+  // J-1: 커버에는 D-day 배지 하나만. 도시는 정보 줄에 작게 (제목에 이미 있으면 생략, 4개 국어로 비교)
+  const title = String(tr.title ?? '');
+  const city = tr.destination && !destinationNames(tr.destination).some((name) => title.includes(name)) ? destinationLabel(tr.destination) : '';
+  const info = [city, tr.startDate ? formatRange(shortDate(tr.startDate), shortDate(tr.endDate)) : '', s.length, t('{n}곳', { n: s.places })].filter(Boolean).join(' · ');
   return `<li class="tcard${ended ? ' ended' : ''}" style="--c:${color}">
       <button class="tc-open" data-open="${tr.id}">
-        <span class="tc-cover" data-cover-image="${esc(tr.id)}"><span class="tc-dday">${esc(s.dday.label)}</span><span class="tc-dest">${esc(destinationLabel(tr.destination) || t('여행'))}</span></span>
+        <span class="tc-cover" data-cover-image="${esc(tr.id)}"><span class="tc-dday">${esc(s.dday.label)}</span></span>
         <span class="tc-body">
-          <b>${esc(tr.title)}</b>
-          <small>${tr.startDate ? `${formatRange(shortDate(tr.startDate), shortDate(tr.endDate))} · ` : ''}${esc(s.length)} · ${esc(t('{n}곳', { n: s.places }))}</small>
+          <b title="${esc(title)}">${esc(title)}</b>
+          <small>${esc(info)}</small>
         </span>
       </button>
-      <button type="button" class="btn tc-edit-cover" data-edit-cover="${esc(tr.id)}" aria-haspopup="dialog" aria-label="${esc(t('{name} 커버 바꾸기', { name: tr.title }))}">${esc(t('커버 바꾸기'))}</button>
-      <button class="icon tc-del" data-del="${tr.id}" title="${esc(t('삭제'))}" aria-label="${esc(t('{name} 삭제', { name: tr.title }))}">✕</button>
+      <details class="tc-more">
+        <summary aria-label="${esc(t('{name} 메뉴', { name: title }))}" title="${esc(t('더 보기'))}">⋯</summary>
+        <div class="menu-pop tc-more-pop">
+          <button type="button" data-edit-cover="${esc(tr.id)}" aria-haspopup="dialog">${esc(t('커버 바꾸기'))}</button>
+          <button type="button" class="danger" data-del="${tr.id}">${esc(t('여행 삭제'))}</button>
+        </div>
+      </details>
     </li>`;
 }
 
@@ -2153,6 +2162,8 @@ $('#page-home').addEventListener('click', (e) => {
   const home = e.target.closest('[data-home]')?.dataset.home;
   const feature = e.target.closest('[data-feature]')?.dataset.feature;
   const cover = e.target.closest('[data-edit-cover]')?.dataset.editCover;
+  // J-1: 카드 ⋯ 메뉴 — 항목을 누르거나 바깥을 누르면 닫는다
+  for (const d of $$('.tc-more[open]')) if (!d.contains(e.target) || cover || del) d.open = false;
   if (feature) openHomeFeature(feature);
   else if (cover) openCover(cover);
   else if (open && store.trips[open]) go('plan', open);

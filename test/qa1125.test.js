@@ -207,3 +207,15 @@ test('J-2: 기간 표기는 formatRange 하나로 — 한국어 " ~ ", 일본어
   const app = appSource();
   assert.doesNotMatch(app, /\$\{[^}]*\}\s?[–~]\s?\$\{/, '범위 기호를 직접 붙이는 코드가 남아 있으면 안 된다');
 });
+
+test('J-1: 여행 카드 커버는 D-day 하나, 도시는 제목에 없을 때만 정보 줄에, 커버 바꾸기·삭제는 ⋯ 메뉴', async () => {
+  const { destinationNames } = await import('../public/lib/destinations.js');
+  const names = destinationNames('도쿄');
+  for (const n of ['도쿄', 'Tokyo', '东京', '東京']) assert.ok(names.includes(n), n);
+  const app = appSource();
+  assert.doesNotMatch(app, /class="tc-dest"|class="btn tc-edit-cover"|class="icon tc-del"/);
+  assert.match(app, /const city = tr\.destination && !destinationNames\(tr\.destination\)\.some\(\(name\) => title\.includes\(name\)\)/);
+  assert.match(app, /<details class="tc-more">/);
+  assert.match(css, /\.tc-body b \{[^}]*-webkit-line-clamp: 2;/);
+  assert.match(css, /\.tc-body small \{[^}]*-webkit-line-clamp: 2;/);
+});

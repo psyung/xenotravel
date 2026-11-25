@@ -907,15 +907,11 @@ body[data-has-trip="no"] .trip-only { display: none !important; }
   color: var(--ink);
 }
 .tc-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.tc-dest, .tc-dday { z-index: 1; background: var(--paper); padding: 2px 8px; }
-.tc-dest { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 8px; font-size: var(--fs-lg); font-weight: 800; letter-spacing: -0.03em; }
+.tc-dday { z-index: 1; background: var(--paper); padding: 2px 8px; }
 .tc-dday { position: absolute; top: 10px; left: 12px; line-height: 22px; border-radius: 999px; font-size: var(--fs-sm); font-weight: 700; }
 .tc-body { display: flex; flex-direction: column; gap: 2px; max-width: 100%; padding: 12px 14px 14px; }
-.tcard:not(.add) .tc-body { padding-bottom: 62px; }
-.tc-body b { font-size: var(--fs-md); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tc-body small { color: var(--mute); font-size: var(--fs-sm); }
-.tc-edit-cover { position: absolute; bottom: 10px; left: 12px; min-height: 40px; max-width: calc(100% - 64px); }
-.tc-del { position: absolute; bottom: 10px; right: 8px; min-width: 40px; min-height: 40px; }
+.tc-body b { font-size: var(--fs-md); font-weight: 700; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.tc-body small { color: var(--mute); font-size: var(--fs-sm); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 /* 커버 사진 고르기: 점선 상자 (기본 파일 버튼은 숨김) */
 .cover-drop { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 132px; padding: 18px 16px;
   border: 1.5px dashed var(--accent-soft-border); border-radius: var(--r); background: var(--accent-soft); color: var(--ink); text-align: center; cursor: pointer; transition: background .15s, border-color .15s; }
@@ -972,7 +968,6 @@ body[data-has-trip="no"] .trip-only { display: none !important; }
   .home-sec { margin-top: 28px; }
   .sec-head h2 { font-size: var(--fs-lg); }
   .tcards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .tc-dest { font-size: var(--fs-lg); }
   .tc-body { padding: 10px 12px 12px; }
   .tc-body b { font-size: var(--fs-md); }
   .tcard.add .tc-open { min-height: 136px; }
@@ -2173,11 +2168,6 @@ dialog.p3-dialog { width: min(520px, calc(100vw - 32px)); overflow-wrap: anywher
   .search.card.compact .mini-tabs button[data-mini-tab="plan"] { background: var(--paper); color: var(--ink); box-shadow: 0 1px 2px rgba(15, 30, 46, .1); }
 }
 
-/* 커버 바꾸기: 커버 사진 위 오른쪽의 작은 반투명 버튼 (카드 아래 큰 버튼이 따로 놀던 것) */
-.tcard:not(.add) .tc-body { padding-bottom: 14px; padding-right: 48px; }
-.tc-edit-cover.btn { top: 10px; right: 10px; bottom: auto; left: auto; min-height: 32px; height: 32px; max-width: calc(100% - 96px); padding: 0 10px; gap: 4px;
-  border: 0; border-radius: 999px; background: rgba(15, 30, 46, .55); color: #fff; font-size: var(--fs-sm); font-weight: 600; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-.tc-edit-cover.btn:hover { background: rgba(15, 30, 46, .75); color: #fff; }
 
 /* 토스트 닫기(✕) */
 .toast-close { flex: none; width: 32px; height: 32px; margin: -6px -8px -6px -2px; border: 0; border-radius: 8px; background: none; color: inherit; font-size: 20px; line-height: 1; opacity: .75; cursor: pointer; }
@@ -2369,3 +2359,14 @@ button.leg-mode:hover { background: var(--soft); color: var(--ink); border-style
 .print-day tr.stay td { padding-block: 5px; }
 .print-day .stay-label { font-weight: 700; color: #0A7C7C; margin-right: 4px; }
 .print-day tr.stay .memo { margin-top: 2px; }
+
+/* J-1: 여행 카드 ⋯ 메뉴 (커버 바꾸기 · 여행 삭제). 데스크톱은 카드에 올리거나 포커스가 갈 때만, 터치 기기는 늘 보인다 */
+.tc-more { position: absolute; top: 6px; right: 6px; z-index: 2; }
+.tc-more > summary { list-style: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px; background: color-mix(in srgb, var(--paper) 92%, transparent); color: var(--ink); font-weight: 800; cursor: pointer; box-shadow: var(--shadow); }
+.tc-more > summary::-webkit-details-marker { display: none; }
+.tc-more-pop { right: 0; top: calc(100% + 4px); min-width: 150px; }
+.tc-more-pop .danger { color: var(--hot); }
+@media (hover: hover) and (pointer: fine) {
+  .tc-more:not([open]) > summary { opacity: 0; transition: opacity .15s; }
+  .tcard:hover .tc-more > summary, .tc-more > summary:focus-visible { opacity: 1; }
+}
