@@ -272,3 +272,11 @@ test('J-6: 코스 불러오기 날짜는 공용 달력(날짜 하나, 지난 날
   assert.match(dp, /root\.querySelectorAll\('input\[type="date"\]\[data-dp-single\]'\)\.forEach\(enhanceSingle\);/);
   assert.doesNotMatch(dp.match(/function enhanceSingle[\s\S]*?\n\}/)[0], /min/);
 });
+
+test('K-1: 버튼은 네 종류 × 크기 토큰 (md 40 · sm 32 · 모서리 10 · 칩 999)', () => {
+  const tokens = read('tokens.css');
+  for (const t of ['--r-btn: 10px', '--r-chip: 999px', '--r-card: 16px', '--r-modal: 20px', '--h-sm: 32px', '--h-md: 40px', '--h-lg: 48px', '--tap: 44px']) assert.ok(tokens.includes(t), t);
+  assert.match(css, /:is\(\.btn, \.pill,[^{]*\) \{\n  height: var\(--h-md\); min-height: var\(--h-md\); border-radius: var\(--r-btn\);/);
+  assert.match(css, /\.icon \{ width: var\(--h-sm\); height: var\(--h-sm\);/);
+  assert.match(css, /:is\(\.daytab, \.city-tabs button, \.dest-chips button, \.leg-rail\) \{ height: var\(--h-sm\); min-height: var\(--h-sm\); border-radius: var\(--r-chip\);/);
+});

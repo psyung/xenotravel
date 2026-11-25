@@ -58,8 +58,6 @@ test('app font sizes use tokens outside the fixed glyph, mobile input, hero, and
   const exceptions = {
     // Fixed glyph sizes.
     '.icon': '14px',
-    '.map-day-switcher button': '22px',
-    '.map-locate': '18px',
     '.stay-pin': '11px',
     '.trend-pin': '11px',
     '.rp-drag': '12px',

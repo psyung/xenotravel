@@ -201,7 +201,7 @@ body[data-view="board"] .board-only { display: inline-flex; }
   background: color-mix(in srgb, var(--paper) 93%, transparent); backdrop-filter: blur(12px); box-shadow: var(--shadow);
 }
 .map-day-switcher button, #showAll { min-height: 40px; padding: 0 10px; color: var(--ink); font-weight: 700; }
-.map-day-switcher button { min-width: 36px; border: 0; border-radius: 50%; background: none; font-size: 22px; }
+.map-day-switcher button { min-width: 36px; border: 0; border-radius: var(--r-btn); background: none; font-size: var(--fs-lg); }
 .map-day-switcher button:hover:not(:disabled), #showAll:hover { background: var(--hover); }
 .map-day-switcher button:disabled { opacity: .35; cursor: default; }
 .map-locate, .mapwrap .leaflet-control-zoom {
@@ -210,7 +210,7 @@ body[data-view="board"] .board-only { display: inline-flex; }
 }
 .mapwrap .leaflet-control-zoom { overflow: hidden; margin: 12px 10px 0 0; }
 .mapwrap .leaflet-control-zoom a { background: transparent; color: var(--ink); border-color: var(--line); }
-.map-locate { position: absolute; z-index: 900; right: 10px; top: 82px; width: 32px; height: 34px; font-size: 18px; }
+.map-locate { position: absolute; z-index: 900; right: 10px; top: 82px; width: var(--h-md); height: var(--h-md); font-size: var(--fs-lg); }
 .map-locate:hover, .mapwrap .leaflet-control-zoom a:hover { background: var(--hover); }
 #mapDayLabel { font-size: var(--fs-sm); }
 #showAll { font-size: var(--fs-sm); }
@@ -2396,3 +2396,38 @@ button.leg-mode:hover { background: var(--soft); color: var(--ink); border-style
 }
 :root[data-theme="dark"] .dc-meta { color: color-mix(in srgb, var(--c) 55%, #fff); }
 :root[data-theme="dark"] .cat-tag { color: color-mix(in srgb, var(--cc) 50%, #fff); }
+
+/* ───────── K-1: 버튼 네 종류 × 크기 두 단계 ─────────
+ * 보조(.btn)·주(.btn.primary)  md 40px · 모서리 10 · base · 600   — 헤더 버튼(.pill)·고르기 칸(.ui-select)도 같은 크기
+ * 텍스트(ghost)                 sm 32px · 모서리 10 · base · 600   — 카드 안 "길찾기"·"동선 정리"·⋯, 링크 버튼, 언어, 날짜 칸
+ * 아이콘(.icon)                 sm 32px / md 40px 정사각형 · 모서리 10
+ * 전환(세그먼트) 안의 칸         sm 32px · 모서리 8 (바깥 트랙 10)
+ * 칩 버튼                       sm 32px · 모서리 999 · sm(12) · 600 — 일차 탭·도시 탭·추천 여행지
+ * 작은 칩                       24px · 모서리 999 · sm(12) · 600 — 카드 요약 줄 안 (수단 고르기·ⓘ)
+ * 색·테두리는 각 자리의 규칙 그대로 두고 크기·모서리·글자만 맞춘다. 버튼 높이·모서리를 새로 쓸 때는 이 토큰만 쓴다. */
+:is(.btn, .pill, .search .ui-select, .target .ui-select, .budget-page .ui-select, .bform .ui-select, .dialog-body .ui-select) {
+  height: var(--h-md); min-height: var(--h-md); border-radius: var(--r-btn); font-size: var(--fs-base); font-weight: 600;
+}
+.btn.lg { height: var(--h-lg); min-height: var(--h-lg); }
+.btn.sm, .shared-actions .btn, .trend-tabs .btn { height: var(--h-sm); min-height: var(--h-sm); }
+:is(.day-tools button, .route-link, .day-more > summary, .linkbtn, .lang-switch button, .dp-field, .sum-loc, .leg-mode, .leg-go, .menu > summary, .tc-add, .insp-go) {
+  min-height: var(--h-sm); border-radius: var(--r-btn); font-size: var(--fs-base); font-weight: 600;
+}
+:is(.day-tools button, .route-link, .day-more > summary, .lang-switch button, .dp-field, .linkbtn, .sum-loc) { height: var(--h-sm); display: inline-flex; align-items: center; }
+.linkbtn, .sum-loc { padding-inline: 6px; }
+.icon { width: var(--h-sm); height: var(--h-sm); min-width: var(--h-sm); min-height: var(--h-sm); border-radius: var(--r-btn); }
+:is(.theme-btn, #themeBtn, .actions > .icon, .board-nav, .map-locate) { width: var(--h-md); height: var(--h-md); min-width: var(--h-md); border-radius: var(--r-btn); }
+.layout[data-view="board"] .board-nav:not([hidden]) { border-radius: var(--r-btn); }
+:is(.seg button, .mtabs button, .pnav .pg, .pin-seg button, .trend-tabs .btn, .mini-tabs button) { height: var(--h-sm); min-height: var(--h-sm); border-radius: 8px; font-size: var(--fs-base); font-weight: 600; padding-block: 0; }
+:is(.daytab, .city-tabs button, .dest-chips button, .leg-rail) { height: var(--h-sm); min-height: var(--h-sm); border-radius: var(--r-chip); font-size: var(--fs-sm); font-weight: 600; }
+:is(.chips .ui-select.day-travel-select, .day-chips .info-toggle) { height: 24px; min-height: 24px; border-radius: var(--r-chip); font-size: var(--fs-sm); font-weight: 600; }
+.lang-switch button { padding-inline: 6px; font-size: var(--fs-sm); }
+.lang-switch button[aria-pressed="true"] { font-weight: 800; }
+.pill.round { width: var(--h-md); min-width: var(--h-md); padding: 0; justify-content: center; }
+/* K-1 남은 것: 눌린 상태는 굵기 대신 색으로, 아이콘도 같은 굵기, 작은 칩 버튼·지도 위 조작도 같은 규칙 */
+.lang-switch button[aria-pressed="true"] { font-weight: 600; }
+.icon { font-weight: 600; }
+button.chip { height: 24px; min-height: 24px; border-radius: var(--r-chip); font-size: var(--fs-sm); font-weight: 600; }
+.map-day-switcher button, .map-locate, .layout[data-view="board"] .board-nav:not([hidden]) { width: var(--h-md); height: var(--h-md); min-width: var(--h-md); min-height: var(--h-md); padding: 0; border-radius: var(--r-btn); font-size: var(--fs-lg); font-weight: 600; }
+#showAll { height: var(--h-md); min-height: var(--h-md); border-radius: var(--r-btn); font-size: var(--fs-base); font-weight: 600; }
+.leg .leg-go { display: inline-flex; align-items: center; }
