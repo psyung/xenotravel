@@ -1,24 +1,42 @@
-/* XenoTravel design tokens: shared by the app (styles.css) and static pages (site.css). */
+/* XenoTravel design tokens: shared by the app (styles.css) and static pages (site.css).
+ *
+ * K-1 글자 크기: 12 / 13 / 14 / 16 / 20 / 26px 여섯 단계만 쓴다 (11px·17px 없음).
+ *   모바일  xs 12 · sm 12 · base 13 · md 14 · lg 16 · xl 20 · display 26
+ *   데스크톱          base 14 · md 16 · lg 16 · xl 20 · display 26
+ * K-1 모서리: 버튼 10 · 칩 999 · 카드 16 · 모달 20.  높이: sm 32 · md 40 · lg 48.  터치 영역 최소 44 (K-2).
+ *
+ * K-3 의미 색 글자 대비 (WCAG AA 4.5:1, 가장 불리한 연한 바탕 기준 · 2026-11-26 측정)
+ *   이름      라이트       대비    다크        대비
+ *   --mute    #5B6779     5.1     #8E9CAC     5.0
+ *   --warn    #A85600     4.7     #FFAA3B     7.4
+ *   --stay    #077A7A     4.6     #33C7C7     6.8
+ *   --hot     #C8202F     5.0     #FF6B75     5.1
+ *   --ok      #037A49     4.8     #2FD08A     7.1
+ *   --accent  #0A6FC2     4.6     #4AA8F5     5.5
+ *   연한 바탕(*-soft)은 그대로 두고 글자색만 진하게 했다. 채운 배지는 *-solid + --on-solid.
+ */
 :root {
-  --fs-xs: 11px;
+  --fs-xs: 12px;
   --fs-sm: 12px;
   --fs-base: 13px;
   --fs-md: 14px;
-  --fs-lg: 17px;
+  --fs-lg: 16px;
   --fs-xl: 20px;
-  --fs-display: 24px;
+  --fs-display: 26px;
+  --r-btn: 10px; --r-chip: 999px; --r-card: 16px; --r-modal: 20px;
+  --h-sm: 32px; --h-md: 40px; --h-lg: 48px; --tap: 44px;
   --bg-app: #F5F8FC; --bg-surface: #FFFFFF; --border-subtle: #DFE7F0; --text-primary: #0F1E2E; --text-secondary: #475569;
   --btn-primary-bg: #0A6FC2; --btn-primary-text: #FFFFFF; --accent-primary: #0A6FC2; --accent-hover: #095CA1; --accent-soft-bg: #E8F3FD; --accent-soft-border: #BBDCF8;
   --lang-off: #64748B;
-  --bg: #F5F8FC; --paper: #FFFFFF; --ink: #0F1E2E; --sub: #475569; --mute: #64748B;
+  --bg: #F5F8FC; --paper: #FFFFFF; --ink: #0F1E2E; --sub: #475569; --mute: #5B6779;
   --line: #DFE7F0; --soft: #EEF3F9; --hover: #EEF3F9;
   --accent: #0A6FC2; --accent-ink: #095CA1; --accent-soft: #E8F3FD;
   --brand-text: #0A65B3; --cta: var(--btn-primary-bg); --cta-text: var(--btn-primary-text); --cta-hover: #095CA1;
   --control: #0F1E2E; --control-text: #FFFFFF; --pin-text: #0F1E2E;
-  --hot: #E5303F; --hot-soft: #FFEEEE;
-  --ok: #03A462; --ok-soft: #E5F8EE;
-  --warn: #D97000; --warn-soft: #FFF4E5;
-  --stay: #0B9494; --stay-soft: #E3F6F6;
+  --hot: #C8202F; --hot-soft: #FFEEEE;
+  --ok: #037A49; --ok-soft: #E5F8EE;
+  --warn: #A85600; --warn-soft: #FFF4E5;
+  --stay: #077A7A; --stay-soft: #E3F6F6;
   --fly: #C2410C; --fly-soft: #FFF1E8;
   --on-solid: #FFFFFF; --stay-solid: #0A7C7C; --ok-solid: #037A49; --hot-solid: #D12A38; --fly-solid: #C2410C; /* 상태색 바탕 + 글자 (4.5:1+) */
   --shadow: 0 8px 24px rgba(15, 30, 46, .08);
@@ -72,8 +90,8 @@
   :root {
     --fs-base: 14px;
     --fs-md: 16px;
-    --fs-lg: 18px;
-    --fs-xl: 22px;
-    --fs-display: 30px;
+    --fs-lg: 16px;
+    --fs-xl: 20px;
+    --fs-display: 26px;
   }
 }

@@ -49,8 +49,9 @@ test('type scale defines the mobile and desktop sizes in tokens.css', () => {
   const root = css.match(/^:root\s*\{([^}]+)\}/m)?.[1];
   const desktop = css.match(/@media \(min-width: 768px\)\s*\{\s*:root\s*\{([^}]+)\}/)?.[1];
   assert.ok(root && desktop);
-  assert.deepEqual(definitions(root), { xs: '11px', sm: '12px', base: '13px', md: '14px', lg: '17px', xl: '20px', display: '24px' });
-  assert.deepEqual(definitions(desktop), { base: '14px', md: '16px', lg: '18px', xl: '22px', display: '30px' });
+  // K-1: 12 / 13 / 14 / 16 / 20 / 26px 여섯 단계 (11px·17px 없음)
+  assert.deepEqual(definitions(root), { xs: '12px', sm: '12px', base: '13px', md: '14px', lg: '16px', xl: '20px', display: '26px' });
+  assert.deepEqual(definitions(desktop), { base: '14px', md: '16px', lg: '16px', xl: '20px', display: '26px' });
 });
 
 test('app font sizes use tokens outside the fixed glyph, mobile input, hero, and print rules', () => {

@@ -2385,3 +2385,14 @@ button.leg-mode:hover { background: var(--soft); color: var(--ink); border-style
 .insp li .tc-badge + b { margin-top: 2px; }
 /* 일정 화면 트렌드 카드: 짧게 누르면 설명 페이지 */
 .trend-card[data-trend] { cursor: pointer; }
+
+/* ───────── K-3: 색 글자 대비 4.5:1 ─────────
+ * 일차 색·종류 색은 바탕이 밝든 어둡든 같은 색이라, 글자로 쓸 때만 라이트는 잉크 쪽, 다크는 흰색 쪽으로 섞는다. */
+.dc-meta { color: color-mix(in srgb, var(--c) 72%, var(--ink)); }
+.cat-tag { color: color-mix(in srgb, var(--cc) 55%, var(--ink)); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .dc-meta { color: color-mix(in srgb, var(--c) 55%, #fff); }
+  :root:not([data-theme="light"]) .cat-tag { color: color-mix(in srgb, var(--cc) 50%, #fff); }
+}
+:root[data-theme="dark"] .dc-meta { color: color-mix(in srgb, var(--c) 55%, #fff); }
+:root[data-theme="dark"] .cat-tag { color: color-mix(in srgb, var(--cc) 50%, #fff); }
