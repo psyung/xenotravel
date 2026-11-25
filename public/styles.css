@@ -2239,3 +2239,103 @@ html, body { overflow-x: clip; }
 }
 /* 켜고 끄는 모드 버튼(지도에서 찍기 등)도 칩 규칙 */
 .pill.active { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+
+/* ───────── I-6 · J-18 · J-19 · J-21: 보드 보기와 하루 머리 정리 (2026-11-25) ─────────
+ * 하루 머리 3단: ① 제목(최대 2줄) ② 핵심 칩 한 줄(장소 수 · 예상 이동 · 시간 범위) ③ 보조 정보(예보·총 거리·숙소에서 첫 장소까지)는 ⓘ로 접는다(보드).
+ * 목록 보기는 폭이 넉넉해 보조 정보를 그대로 펼쳐 둔다. */
+.day-chips .info-toggle { display: none; }
+.day-chips .chips-more { display: contents; }
+.day-chips .chip.stay { max-width: 100%; min-width: 0; }
+.day-chips .chip.stay .chip-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip.long { background: var(--warn-soft); color: color-mix(in srgb, var(--warn) 70%, var(--ink)); }
+.day-warnings .day-warning.caution { color: color-mix(in srgb, var(--warn) 72%, var(--ink)); font-weight: 700; }
+.day-warnings .day-warning.error { color: var(--hot); }
+.leg-how { word-break: keep-all; }
+.timeline .leg.long .leg-how { color: color-mix(in srgb, var(--warn) 72%, var(--ink)); }
+
+/* 하루 도구: [길찾기] [동선 정리] [⋯] — 나머지는 메뉴 하나로 */
+.day-tools [aria-disabled="true"] { opacity: .45; cursor: default; }
+.day-tools [aria-disabled="true"]:hover { background: none; color: var(--sub); }
+.day-more { position: relative; display: inline-flex; }
+.day-more > summary { list-style: none; height: 26px; min-width: 30px; padding: 0 8px; display: inline-grid; place-items: center; border-radius: 6px; color: var(--sub); font-weight: 700; cursor: pointer; }
+.day-more > summary::-webkit-details-marker { display: none; }
+.day-more > summary:hover, .day-more[open] > summary { background: var(--soft); color: var(--ink); }
+.day-more-pop { position: fixed; top: auto; right: auto; min-width: 190px; z-index: 1300; }
+.day-more-pop button, .day-more-pop .swap-wrap { width: 100%; height: auto; min-height: 36px; justify-content: flex-start; padding: 8px 10px; font-size: var(--fs-base); font-weight: 500; color: var(--ink); white-space: normal; text-align: left; }
+.day-more-pop .swap-wrap { box-sizing: border-box; border-radius: 8px; }
+@media (max-width: 640px) { .day-more > summary { height: 30px; min-width: 36px; } }
+
+/* 보드: 문서는 가로로 넓어지지 않고 .days 안에서만 가로 스크롤 */
+.board-wrap { position: relative; min-width: 0; }
+.layout[data-view="board"] .plan { min-width: 0; }
+.layout[data-view="board"] .days { max-width: 100%; overscroll-behavior-x: contain; }
+.layout[data-view="board"] .days.panning { cursor: grabbing; user-select: none; }
+.layout[data-view="board"] .days.panning * { cursor: grabbing !important; }
+@media (hover: hover) and (pointer: fine) {
+  .layout[data-view="board"] .days { cursor: grab; }
+  .layout[data-view="board"] .days :is(.item, .stay-row, .trend-card, button, a, input, textarea, select, summary, .ui-select) { cursor: auto; }
+  .layout[data-view="board"] .days :is(button, a, summary, .ui-select) { cursor: pointer; }
+}
+.layout[data-view="board"] .days:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r); }
+/* 칸: 화면 높이에 맞추고 칸 안에서 세로 스크롤 (보관함 높이만큼 줄여 겹치지 않게) */
+.layout[data-view="board"] .daycard,
+.layout[data-view="board"] .trend-col {
+  display: flex; flex-direction: column; max-height: max(360px, calc(100dvh - var(--head) - var(--dock-h, 56px) - 32px)); overflow: hidden;
+}
+.layout[data-view="board"] .daycard > .timeline,
+.layout[data-view="board"] .trend-col > #trend-panel,
+.layout[data-view="board"] .trend-col > .trend-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; }
+.layout[data-view="board"] .daycard > :not(.timeline) { flex: none; }
+/* 머리: 고정 높이 없이 — 제목·도구·칩이 차례로 (I-6 #3) */
+.layout[data-view="board"] .dc-head { flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: 2px; }
+.layout[data-view="board"] .dc-head .dc-title-btn { flex: none; min-width: 0; width: 100%; }
+.layout[data-view="board"] .dc-head .day-tools { flex: none; margin-left: -8px; justify-content: flex-start; flex-wrap: nowrap; }
+/* 핵심 칩 한 줄 + ⓘ, 보조 정보는 펼쳤을 때만 */
+.layout[data-view="board"] .day-chips { flex-wrap: wrap; }
+.layout[data-view="board"] .day-chips .info-toggle { display: inline-flex; padding: 0 7px; border: 0; cursor: pointer; }
+.layout[data-view="board"] .day-chips .info-toggle[aria-expanded="true"] { background: var(--accent-soft); color: var(--accent); }
+.layout[data-view="board"] .day-chips .chips-more { display: none; }
+.layout[data-view="board"] .day-chips.info-open .chips-more { display: flex; flex-wrap: wrap; gap: 4px; flex-basis: 100%; }
+/* 타임라인: 시간 칸을 접고 한 칸으로 — "시간 없는 날"(.no-times) 규칙보다 우선 (I-6 #1: 이동 구간이 폭 0으로 줄던 원인) */
+.layout[data-view="board"] .timeline .tl-row,
+.layout[data-view="board"] .timeline .item:not(.dock-card) { grid-template-columns: minmax(0, 1fr); column-gap: 0; }
+.layout[data-view="board"] .timeline :is(.tl-box, .leg) { grid-column: 1; }
+.layout[data-view="board"] .timeline .leg { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; width: 100%; box-sizing: border-box; }
+.layout[data-view="board"] .timeline .leg-how { flex: 1 1 140px; min-width: 120px; }
+.layout[data-view="board"] .stay-row { min-width: 0; }
+.layout[data-view="board"] .stay-main { min-width: 0; }
+.layout[data-view="board"] .stay-pos { white-space: nowrap; }
+.layout[data-view="board"] .day-chips .chip { max-width: 100%; }
+/* ‹ › 한 칸씩 */
+.board-nav { display: none; }
+.layout[data-view="board"] .board-nav:not([hidden]) {
+  display: inline-grid; place-items: center; position: absolute; top: 160px; z-index: 5; width: 36px; height: 36px; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--paper); color: var(--ink); font-size: var(--fs-xl); line-height: 1; box-shadow: var(--shadow-pop);
+}
+.layout[data-view="board"] .board-nav.prev { left: -10px; }
+.layout[data-view="board"] .board-nav.next { right: -10px; }
+.layout[data-view="board"] .board-nav:hover { background: var(--soft); }
+@media (max-width: 767px) { .layout[data-view="board"] .board-nav:not([hidden]) { display: none; } }
+
+/* J-21: 지도 패널 토글 — 아이콘 버튼 하나 */
+.map-toggle, .mini-map-toggle { width: 36px; height: 36px; min-width: 36px; padding: 0; border: 1px solid var(--line); background: var(--paper); color: var(--sub); border-radius: 10px; }
+.map-toggle[aria-pressed="true"], .mini-map-toggle[aria-pressed="true"] { color: var(--accent); }
+.map-toggle:hover, .mini-map-toggle:hover { color: var(--ink); background: var(--soft); }
+.plan-toolbar .map-toggle { margin-left: auto; }
+@media (min-width: 768px) {
+  .layout { transition: grid-template-columns .18s ease; }
+}
+@media (prefers-reduced-motion: reduce) { .layout { transition: none; } }
+
+/* J-20: 추천 준비 중 — 칸들의 맨 끝, 흐린 모양 */
+.nearby-trends.pending .trend-empty > span:not(.dot) { color: var(--mute); }
+.nearby-trends.pending .soon-badge { flex: none; font-size: var(--fs-xs); font-weight: 600; padding: 0 6px; line-height: 18px; border-radius: 5px; background: var(--soft); color: var(--mute); }
+/* 칸 폭 320px — 장소 이름이 아이콘 사이에서 너무 일찍 잘리지 않게 */
+@media (min-width: 768px) {
+  .layout[data-view="board"] .trend-col, .layout[data-view="board"] .daycard { flex: 0 0 320px; width: 320px; }
+}
+/* 칸 안 스크롤 상자(.timeline)의 줄들은 줄어들지 않는다 (줄면 장소와 이동 구간이 겹쳐 보인다) */
+.layout[data-view="board"] .daycard > .timeline > *,
+.layout[data-view="board"] .trend-col > #trend-panel > * { flex-shrink: 0; }
+/* 긴 칩(장거리 안내·숙소)은 두 줄이 돼도 바탕이 글자를 감싼다 */
+.day-chips .chip { height: auto; min-height: 22px; padding-block: 2px; line-height: 1.35; }

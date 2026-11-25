@@ -1,8 +1,10 @@
+import { SITE_NAME } from '../public/lib/site-config.js';
+
 export const chrome = {
   ko: {
     home: '홈', guides: '여행 가이드', privacy: '개인정보처리방침', about: '소개', contact: '문의', terms: '이용약관',
     nav: '사이트 메뉴', index: '도시별 여행 동선과 준비 팁을 찾아보세요.',
-    operator: 'XenoTravel은 저장소 관리자(psyung)가 운영하는 여행 플래너입니다. 지도에서 일정을 짜고 가계부와 체크리스트를 관리할 수 있습니다. 여행은 브라우저에 저장됩니다.',
+    operator: `${SITE_NAME}은 여행 일정을 쉽게 짜고 함께 나눌 수 있도록 만든 여행 플래너입니다. 지도에서 일정을 짜고 가계부와 체크리스트를 관리할 수 있습니다. 여행은 브라우저에 저장됩니다.`,
     contactIntro: '오류 신고, 기능 제안, 개인정보 관련 문의를 받습니다. 예약번호나 여권 정보는 보내지 마세요.',
     contactHelp: '오류를 알려 주실 때는 쓰신 기기, 브라우저, 화면 캡처를 함께 보내 주시면 빨리 확인할 수 있어요.', copy: '주소 복사', copied: '복사했어요', openApp: '앱 열기', menu: '메뉴', lang: '언어',
     termsIntro: '여행 가이드와 도구는 일정 계획에 참고할 수 있습니다. 요금, 운영 시간, 입국 조건은 출발 전에 공식 출처에서 확인하세요. 공유 링크를 보내기 전에 포함된 정보를 확인하고, 여행을 보관하려면 백업 파일을 저장하세요.',
@@ -13,7 +15,7 @@ export const chrome = {
   en: {
     home: 'Home', guides: 'Travel guides', privacy: 'Privacy policy', about: 'About', contact: 'Contact', terms: 'Terms of use',
     nav: 'Site navigation', index: 'Find itineraries and practical tips by destination.',
-    operator: 'XenoTravel is a trip planner operated by the repository maintainer (psyung). Plan on a map and manage budgets and checklists. Trips are stored in your browser.',
+    operator: `${SITE_NAME} is a trip planner made to help you plan trips easily and share them with others. Plan on a map and manage budgets and checklists. Trips are stored in your browser.`,
     contactIntro: 'We accept bug reports, feature suggestions, and privacy inquiries. Please do not send booking numbers or passport details.',
     contactHelp: 'When reporting a bug, include your device, browser, and a screenshot so we can check it quickly.', copy: 'Copy address', copied: 'Copied', openApp: 'Open app', menu: 'Menu', lang: 'Language',
     termsIntro: 'Use the guides and tools to help plan your trip. Check official sources for prices, hours, and entry requirements before traveling. Review the contents of share links before sending them and save a backup file to keep your trips.',
@@ -24,7 +26,7 @@ export const chrome = {
   zh: {
     home: '首页', guides: '旅行指南', privacy: '隐私政策', about: '关于', contact: '联系', terms: '使用条款',
     nav: '网站导航', index: '查找各城市的行程和实用旅行建议。',
-    operator: 'XenoTravel 是由代码仓库维护者（psyung）运营的旅行规划工具。你可以在地图上规划行程，管理预算和清单。行程保存在浏览器中。',
+    operator: `${SITE_NAME} 是一款让你轻松规划行程并与他人分享的旅行规划工具。你可以在地图上规划行程，管理预算和清单。行程保存在浏览器中。`,
     contactIntro: '我们受理问题报告、功能建议和个人信息相关咨询。请勿发送预订编号或护照信息。',
     contactHelp: '报告问题时，请附上所用设备、浏览器和屏幕截图，便于我们尽快确认。', copy: '复制地址', copied: '已复制', openApp: '打开应用', menu: '菜单', lang: '语言',
     termsIntro: '旅行指南和工具可供行程规划参考。出发前请通过官方来源确认价格、开放时间和入境条件。发送分享链接前请检查其中的信息，并保存备份文件以保留行程。',
@@ -35,7 +37,7 @@ export const chrome = {
   ja: {
     home: 'ホーム', guides: '旅行ガイド', privacy: 'プライバシーポリシー', about: 'サービス紹介', contact: 'お問い合わせ', terms: '利用規約',
     nav: 'サイト内メニュー', index: '都市別のモデルコースと旅行のヒントを探せます。',
-    operator: 'XenoTravel はリポジトリの管理者（psyung）が運営する旅行プランナーです。地図で旅程を組み、予算やチェックリストを管理できます。旅行データはブラウザに保存されます。',
+    operator: `${SITE_NAME} は旅の日程を手軽に組み、みんなで共有できるように作った旅行プランナーです。地図で旅程を組み、予算やチェックリストを管理できます。旅行データはブラウザに保存されます。`,
     contactIntro: '不具合の報告、機能の提案、個人情報に関するお問い合わせを受け付けています。予約番号やパスポート情報は送らないでください。',
     contactHelp: '不具合のご報告の際は、お使いの端末・ブラウザ・画面のスクリーンショットを添えていただくと早く確認できます。', copy: 'アドレスをコピー', copied: 'コピーしました', openApp: 'アプリを開く', menu: 'メニュー', lang: '言語',
     termsIntro: '旅行ガイドとツールは計画の参考にできます。料金、営業時間、入国条件は出発前に公式情報をご確認ください。共有リンクは内容を確認してから送り、旅行データはバックアップファイルで保管してください。',

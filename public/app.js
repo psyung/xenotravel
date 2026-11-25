@@ -24,6 +24,7 @@ import * as Covers from './lib/covers.js';
 import { init as initBudget, renderBudget, fetchRate } from './pages/budget.js';
 import { init as initChecks, renderChecks, initPresets } from './pages/check.js';
 import { init as initScrollFab } from './ui/scroll-fab.js';
+import { init as initBoardPan, updateBoardNav } from './ui/board-pan.js';
 import { init as initSearchBar } from './ui/search-bar.js';
 import { init as initMap, initLegend, allLists, catIcon, clearCandidate, directionsHtml,
   expandMap, layer, locateMapPlace, map, mapControlsText, mapDayContext, mapDayOptions,
@@ -154,7 +155,7 @@ initMap({
   get trendCollection() { return trendCollection; },
   get trendLabel() { return trendLabel; },
   isDark, prefs, ui, savePrefs, $, toast, esc, dayColor, withoutTransitions, syncBrowserTheme, INBOX_COLOR,
-  selectDay, showTab, href, runSearch, addPlace, $$, narrowMq, applyView, currentCity, curView, TODAY, tp, origAttr,
+  selectDay, showTab, href, runSearch, addPlace, $$, narrowMq, applyView, showMapPanel, currentCity, curView, TODAY, tp, origAttr,
   origTag,
 });
 
@@ -207,9 +208,10 @@ function nearbyHtml() {
     : nearby?.error === 'busy' ? t('장소 검색 서버 오류 ({status})', { status: 429 })
     : nearby?.error ? t('검색 서버에 연결하지 못했어요')
     : places?.length === 0 ? t('주변 명소를 찾지 못했어요') : '';
-  return `<section class="trend-col card nearby-trends" style="--c:${TREND_COLOR}">
+  // J-20: 실제 기능처럼 보이지 않게 흐린 모양 + "준비 중" 배지, 칸들의 맨 끝(보드는 맨 오른쪽)에 둔다
+  return `<section class="trend-col card nearby-trends pending" style="--c:${TREND_COLOR}">
     <div class="trend-empty">
-      <span class="dot" aria-hidden="true"></span><span>${esc(t('이 도시 추천은 준비 중이에요'))}</span>
+      <span class="dot" aria-hidden="true"></span><span>${esc(t('이 도시 추천은 준비 중이에요'))}</span><span class="soon-badge">${esc(t('준비 중'))}</span>
       <button type="button" class="link" data-action="trend-search">${esc(t('장소 검색하기'))}</button>
       ${nearbyContext() && !places && !nearby?.controller ? `<button type="button" class="btn" data-action="nearby-load">${esc(t('지도 데이터 기반 주변 명소'))}</button>` : ''}
     </div>
@@ -692,7 +694,7 @@ initStays({
   get trip() { return trip; },
   get stayMapDraft() { return stayMapDraft; },
   set stayMapDraft(value) { stayMapDraft = value; },
-  $, esc, ui, showDialog, map, showTab, closeOnBackdrop, prefs, narrowMq, savePrefs, applyView, setPicking, ask,
+  $, esc, ui, showDialog, map, showTab, closeOnBackdrop, prefs, narrowMq, savePrefs, applyView, showMapPanel, setPicking, ask,
   commit, pushUndo, saved, askDialog, extendTripFor, TODAY,
 });
 
@@ -938,6 +940,7 @@ initPlan({
 initLegend({ renderDays });
 
 initScrollFab({ $, $$ });
+initBoardPan({ $, curView, t });
 
 initSearchBar({ $, prefs, curView, get ui() { return ui; } });
 
@@ -952,18 +955,46 @@ narrowMq.addEventListener('change', () => {
     renderMap();
   }
 });
+/* J-21: 지도 패널 숨기기·보이기 — 목록과 보드는 따로 기억한다 (보드는 처음엔 목록 값을 따른다) */
+const mapHiddenKey = () => (curView() === 'board' ? 'mapHiddenBoard' : 'mapHidden');
+const isMapHidden = () => Boolean(prefs[mapHiddenKey()] ?? prefs.mapHidden);
+function setMapHidden(hidden) {
+  prefs[mapHiddenKey()] = hidden;
+  savePrefs();
+  applyView();
+}
+/** 지도에서 찍기·위치 보기처럼 지도가 꼭 필요할 때 숨긴 지도를 다시 연다 (데스크톱) */
+function showMapPanel() {
+  if (narrowMq.matches || !isMapHidden()) return false;
+  setMapHidden(false);
+  return true;
+}
+const PANEL_ICON = (filled) => `<svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><rect x="2.5" y="3.5" width="15" height="13" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="11.5" y="4.3" width="5.2" height="11.4" rx="1.6" fill="${filled ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="${filled ? 0 : 1.2}" opacity="${filled ? 1 : .55}"/><line x1="11.5" y1="4" x2="11.5" y2="16" stroke="currentColor" stroke-width="1.6"/></svg>`;
+function paintMapToggle(btn, hidden) {
+  const label = hidden ? t('지도 보기') : t('지도 숨기기');
+  btn.innerHTML = PANEL_ICON(!hidden);
+  btn.setAttribute('aria-pressed', String(!hidden));
+  btn.setAttribute('aria-label', label);
+  btn.title = `${label} (M)`;
+}
 function applyView() {
   const layout = $('.layout');
   layout.dataset.view = curView();
-  layout.classList.toggle('map-hidden', !narrowMq.matches && prefs.mapHidden); // P1-7: 목록 보기에서도 데스크톱은 지도를 접을 수 있다
+  layout.classList.toggle('map-hidden', !narrowMq.matches && isMapHidden()); // P1-7·J-21: 데스크톱은 목록·보드 모두 지도를 접을 수 있다
   document.body.dataset.view = curView();
   $$('.seg button').forEach((b) => {
     b.classList.toggle('active', b.dataset.view === curView());
     b.setAttribute('aria-pressed', String(b.dataset.view === curView()));
   });
-  $('#mapToggle').textContent = prefs.mapHidden ? t('지도 보기') : t('지도 숨기기');
-  $('#miniMapToggle').textContent = prefs.mapHidden ? t('지도 보기') : t('지도 숨기기');
+  paintMapToggle($('#mapToggle'), isMapHidden());
+  paintMapToggle($('#miniMapToggle'), isMapHidden());
+  const daysEl = $('#days');
+  daysEl.tabIndex = curView() === 'board' ? 0 : -1; // J-19: 보드에 포커스를 두고 ← → 로 한 칸씩
+  if (curView() === 'board') daysEl.setAttribute('aria-label', t('일정 보드 (← → 로 한 칸씩 이동)'));
+  else daysEl.removeAttribute('aria-label');
+  updateBoardNav?.();
   setTimeout(() => map.invalidateSize(), 0);
+  setTimeout(() => map.invalidateSize(), 260); // 접기·펼치기 전환이 끝난 뒤 타일이 회색으로 비지 않게
 }
 $$('.seg button').forEach((b) =>
   b.addEventListener('click', () => {
@@ -979,10 +1010,13 @@ $$('.seg button').forEach((b) =>
     }
   }),
 );
-$('#mapToggle').addEventListener('click', () => {
-  prefs.mapHidden = !prefs.mapHidden;
-  savePrefs();
-  applyView();
+$('#mapToggle').addEventListener('click', () => setMapHidden(!isMapHidden()));
+// J-21: M 키로 지도 숨기기·보이기 (입력 중이거나 창이 열려 있으면 동작하지 않음)
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'm' && e.key !== 'M') return;
+  if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || narrowMq.matches || !trip || prefs.page !== 'plan') return;
+  if (e.target.closest?.('input, textarea, select, [contenteditable="true"], dialog[open]') || $('dialog[open]')) return;
+  $('#mapToggle').click();
 });
 
 /* ───────── 장소 검색 / 추가 ─────────

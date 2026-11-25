@@ -28,7 +28,7 @@ export { boundShowAllRoutes as showAllRoutes };
 export function init(ctx) {
   const {
     isDark, prefs, ui, savePrefs, $, toast, esc, dayColor, withoutTransitions, syncBrowserTheme, INBOX_COLOR,
-    selectDay, showTab, href, runSearch, addPlace, $$, narrowMq, applyView, currentCity, curView, TODAY, tp,
+    selectDay, showTab, href, runSearch, addPlace, $$, narrowMq, applyView, showMapPanel, currentCity, curView, TODAY, tp,
     origAttr, origTag,
   } = ctx;
 
@@ -797,11 +797,7 @@ export function init(ctx) {
   });
 
   function expandMap() {
-    if (!prefs.mapHidden || narrowMq.matches) return;
-    prefs.mapHidden = false;
-    savePrefs();
-    applyView();
-    map.invalidateSize();
+    if (showMapPanel()) map.invalidateSize();
   }
 
   function locateMapPlace(item) {

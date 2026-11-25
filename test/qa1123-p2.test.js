@@ -45,7 +45,7 @@ test('P1-4: 터치에서는 길게 눌러야 끌기 — 좌우 스와이프는 �
 
 test('P1-5: 보관함은 이름만 있는 칩 — 모바일 기본 접힘, 2줄까지, 누르면 액션 시트', () => {
   const app = appSource();
-  assert.match(app, /const open = prefs\.dockOpen \?\? !narrowMq\.matches;/);
+  assert.match(app, /const open = prefs\.dockOpen \?\? !\(narrowMq\.matches \|\| curView\(\) === 'board'\);/);
   assert.match(app, /class="chip-btn" data-action="chip-menu"/);
   assert.doesNotMatch(app, /dock-hint/, '설명 문구 없음');
   assert.match(app, /async function openChipMenu\(id\)/);
@@ -64,7 +64,7 @@ test('P1-7: 스크롤하면 검색창이 머리 바 아래 얇은 고정 바로,
   const app = appSource();
   assert.match(app, /function setSearchCompact\(on\)/);
   assert.match(app, /document\.documentElement\.style\.setProperty\('--search', on \? '52px' : '0px'\);/);
-  assert.match(app, /layout\.classList\.toggle\('map-hidden', !narrowMq\.matches && prefs\.mapHidden\);/);
+  assert.match(app, /layout\.classList\.toggle\('map-hidden', !narrowMq\.matches && isMapHidden\(\)\);/);
   const css = read('styles.css');
   assert.match(css, /\.search\.card\.compact \{ position: fixed;/);
   assert.match(css, /\.daytabs \{ top: calc\(var\(--head\) \+ var\(--offbar, 0px\) \+ var\(--savebar, 0px\) \+ var\(--search, 0px\)\); \}/);
@@ -110,7 +110,8 @@ test('Phase 2 교차 리뷰: 시간 초안 미저장 · Tab 이동 · 공유 칩
   assert.ok(app.includes(String.raw`if (field === 'time' && e.target.classList.contains('time-field') && !/^(\d{2}:\d{2})?$/.test(e.target.value)) return;`));
   assert.match(read('lib/select.js'), /\} else if \(e\.key === 'Tab'\) \{\n\s+close\(\);[^\n]*\n\s+return;/);
   assert.match(app, /if \(ui\.readonly\) return locateMapPlace\(found\.item\);/);
-  assert.match(app, /if \(prefs\.mapHidden && !narrowMq\.matches\) \{/);
+  assert.match(app, /function showMapPanel\(\) \{\n\s+if \(narrowMq\.matches \|\| !isMapHidden\(\)\) return false;/);
+  assert.match(app, /showMapPanel\(\);/);
   assert.match(read('styles.css'), /\.search\.card\.compact:not\(:focus-within\):not\(:has\(\.results li\)\) \.target-row/);
   assert.match(app, /focusSelect\(\$\('#bConfirmCur'\)\);/);
   assert.match(app, /destroyTimes\(daysEl\);/);

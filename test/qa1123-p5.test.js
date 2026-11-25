@@ -19,10 +19,11 @@ test('F-2 estimates each travel mode and identifies the stops that trigger day w
   const trip = tripFor();
   M.addFlight(trip, { kind: 'out', from: 'ICN', to: 'PVG', departAt: '2026-11-23T10:30', arriveAt: '2026-11-23T11:30' });
   M.addFlight(trip, { kind: 'in', from: 'PVG', to: 'ICN', departAt: '2026-11-25T16:30' });
-  const stops = Array.from({ length: 8 }, (_, i) => add(trip, 0, `Stop ${i}`, i, '10:00'));
+  const stops = Array.from({ length: 8 }, (_, i) => add(trip, 0, `Stop ${i}`, i * 0.2, '10:00')); // 약 22km 간격 (장거리 30km 미만)
   const late = add(trip, 2, 'Late stop', 0, '17:00');
-  const result = checkDay(trip, 0, 'driving');
+  const result = checkDay(trip, 0, 'walking');
   assert.ok(result.minutes > 180);
+  assert.equal(result.longLegs, 0);
   for (const warning of [
     { kind: 'flight', id: stops[0].id }, { kind: 'order', id: stops[1].id },
     { kind: 'movement', id: stops[1].id }, { kind: 'count', id: stops[7].id },
@@ -32,7 +33,7 @@ test('F-2 estimates each travel mode and identifies the stops that trigger day w
 
 test('F-3 stay legs contribute to distance and travel time and suggestions group missing nights', () => {
   const trip = tripFor('2026-11-28');
-  add(trip, 0, 'First stop', 1);
+  add(trip, 0, 'First stop', 0.1);
   add(trip, 1, 'Stop A', 179);
   add(trip, 2, 'Stop B', -179);
   add(trip, 3, 'Stop C', 60);
@@ -40,7 +41,7 @@ test('F-3 stay legs contribute to distance and travel time and suggestions group
   M.addStay(trip, point('Hotel A', 0), 0, 1);
   M.addStay(trip, point('Hotel B', 60), 3, 1);
   const result = checkDay(trip, 0, 'transit');
-  assert.ok(result.firstKm > 111 && result.firstKm < 112);
+  assert.ok(result.firstKm > 11 && result.firstKm < 11.2);
   assert.equal(M.dayKm(trip, 0), result.firstKm * 2);
   assert.equal(result.minutes, estimateMinutes(result.firstKm, 'transit') * 2);
   assert.deepEqual(staySuggestions(trip), [
@@ -156,4 +157,17 @@ test('Part F UI uses explicit actions, safe links, and resets current toasts on 
   assert.match(source, /id="directionsPreference" data-ui-select/);
   assert.match(source, /href="\$\{href\(link\.url\)\}"/);
   assert.match(source, /function applyLanguage\(\) \{\s*clearToast\(\)/);
+});
+
+test('J-10: 직선 30km 이상 구간은 도심 계수로 계산하지 않고 장거리(수단 미정)로 따로 센다', () => {
+  const trip = tripFor();
+  add(trip, 0, '嘉兴南站', 0);
+  add(trip, 0, 'Near the station', 0.02); // 약 2.2km
+  add(trip, 0, '杭州东站', 0.67); // 약 72km
+  add(trip, 0, 'Hangzhou café', 0.69);
+  const result = checkDay(trip, 0, 'walking');
+  assert.equal(result.longLegs, 1);
+  assert.equal(result.minutes, estimateMinutes(M.distanceKm(trip.days[0].items[0], trip.days[0].items[1]), 'walking')
+    + estimateMinutes(M.distanceKm(trip.days[0].items[2], trip.days[0].items[3]), 'walking'));
+  assert.ok(!result.warnings.some((w) => w.kind === 'movement'), '장거리 구간 때문에 "3시간 초과" 경고가 나오면 안 된다');
 });

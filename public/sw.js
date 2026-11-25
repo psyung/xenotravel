@@ -29,6 +29,7 @@ const APP_FILES = [
   'ui/dialog.js',
   'ui/toast.js',
   'ui/scroll-fab.js',
+  'ui/board-pan.js',
   'ui/search-bar.js',
   'manifest.webmanifest',
   'icons/logo-xeno-route.svg',

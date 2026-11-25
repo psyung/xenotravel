@@ -5,7 +5,7 @@ import { enhanceTimes, normalizeTime, destroyTimes } from '../lib/timefield.js';
 import { refreshDates, enhanceDates } from '../lib/datepicker.js';
 import { HANGUL, searchPlacesKo, searchPlaces, reversePlace } from '../lib/geo.js';
 import { stayRangeWithin, overlappingStays, splitStayAround } from '../lib/stays.js';
-import { estimateMinutes, checkDay } from '../lib/route-check.js';
+import { estimateMinutes, checkDay, isLongLeg } from '../lib/route-check.js';
 import { enhanceSelect, focusSelect } from '../lib/select.js';
 import { groupPlaces, removePlaceGroup } from '../lib/place-groups.js';
 import * as D from '../lib/dayops.js';
@@ -24,7 +24,7 @@ export { boundTargetLabel as targetLabel };
 
 export function initStays(ctx) {
   const {
-    $, esc, ui, showDialog, map, showTab, closeOnBackdrop, prefs, narrowMq, savePrefs, applyView, setPicking, ask,
+    $, esc, ui, showDialog, map, showTab, closeOnBackdrop, prefs, narrowMq, savePrefs, applyView, showMapPanel, setPicking, ask,
     commit, pushUndo, saved, askDialog, extendTripFor, TODAY,
   } = ctx;
 
@@ -174,11 +174,7 @@ export function initStays(ctx) {
       values: { ...Object.fromEntries(new FormData(stayForm)), paid: stayFields.paid.checked },
     };
     stayDialog.close();
-    if (prefs.mapHidden && !narrowMq.matches) {
-      prefs.mapHidden = false;
-      savePrefs();
-      applyView();
-    }
+    showMapPanel();
     if (stayLocation) {
       ui.keepView = true;
       map.setView([stayLocation.lat, stayLocation.lng], Math.max(map.getZoom(), 14));
@@ -340,8 +336,9 @@ export function init(ctx) {
     const link = M.tripDirectionsLinks(ctx.trip, leg.to, leg.from, prefs.directionsApp, leg.mode)[0];
     const mode = leg.mode === 'walking' ? t('도보') : leg.mode === 'driving' ? t('택시') : t('대중교통');
     const distance = t('직선 {km}', { km: M.formatKm(leg.km) });
-    return `<a class="leg" href="${href(link.url)}" target="_blank" rel="noopener" title="${esc(link.label)}">
-      <span class="leg-how">${esc(distance)} · ${esc(mode)} · ${esc(travelEstimate(estimateMinutes(leg.km, leg.mode)))}</span><span class="leg-go">${esc(t('길찾기'))}</span></a>`;
+    const how = isLongLeg(leg.km) ? `${distance} · ${t('장거리 · 수단 미정')}` : `${distance} · ${mode} · ${travelEstimate(estimateMinutes(leg.km, leg.mode))}`;
+    return `<a class="leg${isLongLeg(leg.km) ? ' long' : ''}" href="${href(link.url)}" target="_blank" rel="noopener" title="${esc(link.label)}">
+      <span class="leg-how">${esc(how)}</span><span class="leg-go">${esc(t('길찾기'))}</span></a>`;
   }
 
   function hoursEditorHtml(it) {
@@ -539,7 +536,8 @@ export function init(ctx) {
     dock.hidden = ui.readonly && !items.length; // 공유받은 일정: 빈 보관함은 보여줄 게 없다
     dock.classList.toggle('is-empty', !items.length);
     // P1-5: 모바일은 접힌 한 줄("장소 보관함 5")이 기본. 직접 펼치거나 접었으면 그대로
-    const open = prefs.dockOpen ?? !narrowMq.matches;
+    // I-6: 보드는 접힌 한 줄로 시작 (칸 높이는 보관함 높이만큼 줄어 겹치지 않는다)
+    const open = prefs.dockOpen ?? !(narrowMq.matches || curView() === 'board');
     // 이름만 있는 칩: 누르면 액션 시트(보낼 날·지도에서 보기·삭제), 길게 눌러(터치) 끌면 일차로 옮긴다
     const chips = items
       .map(
@@ -629,12 +627,14 @@ export function init(ctx) {
     const title = fullRoute ? t('이 날 동선 전체를 경유지로 넣어 구글맵에서 열어요') : primary?.label ?? '';
     const link = url ? `<a class="route-link" href="${href(url)}" target="_blank" rel="noopener" title="${esc(title)}">${esc(label)}</a>` : '';
     const copy = `<button data-action="day-copy" data-day="${l.dayIndex}" title="${esc(t('이 날 일정을 카톡에 붙일 글로 복사해요'))}">${esc(t('카톡용 복사'))}</button>`;
-    const route = link + copy;
-    if (ui.readonly) return route;
+    if (ui.readonly) return link + copy;
+    // I-6/J-17: 자주 쓰는 [길찾기] [동선 정리]만 밖에 두고 나머지는 ⋯ 메뉴 하나로 (목록·보드 같은 구성).
+    // 동선 정리는 늘 같은 자리에 있고, 쓸 수 없을 때는 흐리게 두고 이유를 알려 준다.
     const movable = l.items.filter((it) => !it.time && !it.pinned).length;
-    return `${route}${M.nightStay(ctx.trip, l.dayIndex) ? '' : `<button data-action="stay-here" data-day="${l.dayIndex}" title="${esc(t('이 날부터 묵을 숙소 추가'))}">${esc(t('+ 숙소'))}</button>`}${
-      movable > 1 ? `<button data-action="route-opt" data-list="${l.id}" title="${esc(t('숙소 기준으로 덜 돌아가는 순서를 찾아요. 시간을 정한 장소는 그대로 둬요'))}">${esc(t('동선 정리'))}</button>` : ''
-    }${l.items.length > 1 ? `<button data-action="sort-time" data-list="${l.id}">${esc(t('시간순'))}</button>` : ''}${
+    const routeOff = movable < 2 ? t('시간을 정하지 않은 장소가 2곳 이상이면 쓸 수 있어요') : '';
+    const routeBtn = `<button data-action="route-opt" data-list="${l.id}"${routeOff ? ` aria-disabled="true" aria-label="${esc(`${t('동선 정리')} · ${routeOff}`)}"` : ''} title="${esc(routeOff || t('숙소 기준으로 덜 돌아가는 순서를 찾아요. 시간을 정한 장소는 그대로 둬요'))}">${esc(t('동선 정리'))}</button>`;
+    const more = `${copy}${M.nightStay(ctx.trip, l.dayIndex) ? '' : `<button data-action="stay-here" data-day="${l.dayIndex}" title="${esc(t('이 날부터 묵을 숙소 추가'))}">${esc(t('+ 숙소'))}</button>`}${
+      l.items.length > 1 ? `<button data-action="sort-time" data-list="${l.id}">${esc(t('시간순'))}</button>` : ''}${
       ctx.trip.days.length > 1 ? `<button data-action="day-order" aria-haspopup="dialog" title="${esc(t('여러 날의 장소 묶음 순서를 한 번에 바꿔요 (날짜·숙소·항공편은 그대로)'))}">${esc(t('일자 순서'))}</button>` : ''
     }${
       ctx.trip.days.length > 1
@@ -643,6 +643,7 @@ export function init(ctx) {
             .join('')}</select></span>`
         : ''
     }`;
+    return `${link}${routeBtn}<details class="day-more"><summary title="${esc(t('더 보기'))}" aria-label="${esc(t('{day} 메뉴 더 보기', { day: dayName(l.dayIndex) }))}">⋯</summary><div class="menu-pop day-more-pop">${more}</div></details>`;
   }
 
   /* ───────── 동선 자동 정리 ─────────
@@ -806,7 +807,8 @@ export function init(ctx) {
     };
     return warnings.map(({ id, kind }) => {
       const name = items.find((item) => item.id === id)?.name;
-      return `<button type="button" class="chip day-warning" data-action="day-warning" data-place="${esc(id)}" aria-label="${esc([labels[kind], name].join(' · '))}">${esc(labels[kind])}</button>`;
+      const level = kind === 'order' || kind === 'flight' ? 'error' : 'caution';
+      return `<button type="button" class="chip day-warning ${level}" data-action="day-warning" data-place="${esc(id)}" aria-label="${esc([labels[kind], name].join(' · '))}">${esc(labels[kind])}</button>`;
     }).join('');
   }
 
@@ -823,25 +825,31 @@ export function init(ctx) {
     const night = M.nightStay(ctx.trip, l.dayIndex);
     const date = M.formatDate(ctx.trip.days[l.dayIndex].date);
     const dayId = ctx.trip.days[l.dayIndex].id;
+    const longChip = check.longLegs ? t('장거리 {n}구간(수단 미정)', { n: check.longLegs }) : '';
+    const moveChip = check.minutes && longChip ? `${travelEstimate(check.minutes)} + ${longChip}` : check.minutes ? travelEstimate(check.minutes) : longChip;
     const chips = [
-      `<span class="wx-slot" data-wx="${dayId}">${wxChipHtml(ui.weather.data[dayId], dayId)}</span>`,
       sum.places ? `<span class="chip">${esc(t('{n}곳', { n: sum.places }))}</span>` : '',
-      sum.km >= 0.05 ? `<span class="chip">${esc(t('이동 {km}', { km: M.formatKm(sum.km) }))}</span>` : '',
-      check.minutes ? `<span class="chip">${esc(travelEstimate(check.minutes))}</span>` : '',
+      moveChip ? `<span class="chip${check.longLegs ? ' long' : ''}">${esc(moveChip)}</span>` : '',
       sum.km >= 0.05 && !ui.readonly ? dayTravelSelect(l.dayIndex) : '',
-      check.firstKm != null ? `<span class="chip">${esc(t('숙소에서 첫 장소까지 {km}', { km: M.formatKm(check.firstKm) }))}</span>` : '',
       sum.from ? `<span class="chip">${esc(sum.from)}${sum.to !== sum.from ? ` – ${esc(sum.to)}` : ''}</span>` : '',
-      night ? `<span class="chip stay">${esc(t('오늘 밤 숙소'))} · ${esc(night.name)}</span>` : '',
     ].join('');
+    const infoOpen = ui.dayInfoOpen?.has(dayId);
+    const info = [
+      `<span class="wx-slot" data-wx="${dayId}">${wxChipHtml(ui.weather.data[dayId], dayId)}</span>`,
+      sum.km >= 0.05 ? `<span class="chip">${esc(t('이동 {km}', { km: M.formatKm(sum.km) }))}</span>` : '',
+      check.firstKm != null ? `<span class="chip">${esc(t('숙소에서 첫 장소까지 {km}', { km: M.formatKm(check.firstKm) }))}</span>` : '',
+    ].join('');
+    const infoBtn = `<button type="button" class="chip info-toggle" data-action="day-info" data-day-id="${dayId}" aria-expanded="${Boolean(infoOpen)}" aria-controls="dinfo-${dayId}" title="${esc(t('예보·총 거리·숙소에서 첫 장소까지'))}" aria-label="${esc(t('{day} 자세한 정보', { day: dayName(l.dayIndex) }))}">ⓘ</button>`;
+    const stayChip = night ? `<span class="chip stay" title="${esc(`${t('오늘 밤 숙소')} · ${night.name}`)}"><span class="chip-text">${esc(t('오늘 밤 숙소'))} · ${esc(night.name)}</span></span>` : '';
     return `<section id="day-${l.dayIndex}" class="day daycard card${ui.focusList === l.id ? ' is-focus' : ''}" style="--c:${l.color}" aria-label="${esc(M.dayTitle(ctx.trip.days[l.dayIndex], l.dayIndex))}">
       <div class="dc-head">
         <button class="dc-title-btn" data-action="focus" data-list="${l.id}" title="${esc(t('지도에서 이 날만 보기'))}">
           <span class="dc-meta"><span class="dot"></span>${esc(dayName(l.dayIndex))}${date ? `<small>${esc(date)}</small>` : ''}</span>
-          <span class="dc-title${sum.title ? '' : ' empty'}">${sum.title ? esc(sum.title) : esc(t('아직 비어 있는 날'))}</span>
+          <span class="dc-title${sum.title ? '' : ' empty'}"${sum.title ? ` title="${esc(sum.title)}"` : ''}>${sum.title ? esc(sum.title) : esc(t('아직 비어 있는 날'))}</span>
         </button>
         <div class="day-tools">${dayToolsHtml(l)}</div>
       </div>
-      <div class="chips">${chips}</div>
+      <div class="chips day-chips${infoOpen ? ' info-open' : ''}">${chips}${infoBtn}<span class="chips-more" id="dinfo-${dayId}">${info}</span>${stayChip}</div>
       ${check.warnings.length ? `<div class="chips day-warnings">${dayWarningHtml(check.warnings, l.items)}</div>` : ''}
       <div class="wx-hint-slot" data-wx-hint="${dayId}">${wxHintHtml(ui.weather.data[dayId], dayId)}</div>
       ${ui.readonly ? '' : routePlanHtml(l)}
@@ -862,8 +870,10 @@ export function init(ctx) {
     renderDock();
     renderDayTabs();
     destroyTimes(daysEl); // P1-1: 다시 그리기 전에 시간 선택기(flatpickr)를 정리한다
-    daysEl.innerHTML =
-      (ui.readonly ? '' : trendSectionHtml()) + lists.map(dayCardHtml).join('');
+    // J-20: 추천 데이터가 있는 도시는 맨 앞, "준비 중" 안내는 맨 끝(보드에서는 맨 오른쪽)
+    const trendsHtml = ui.readonly ? '' : trendSectionHtml();
+    const pending = Boolean(trendsHtml) && !currentCity();
+    daysEl.innerHTML = (pending ? '' : trendsHtml) + lists.map(dayCardHtml).join('') + (pending ? trendsHtml : '');
     enhanceDates(daysEl);
     enhanceTimes(daysEl); // P1-1: 장소 시간도 같은 TimeField
 
@@ -1008,6 +1018,20 @@ export function init(ctx) {
     if (!btn) return;
     const id = btn.closest('.item')?.dataset.id;
     const action = btn.dataset.action;
+    btn.closest('.day-more')?.removeAttribute('open'); // ⋯ 메뉴 안의 항목을 누르면 메뉴를 닫는다
+    if (action === 'route-opt' && btn.getAttribute('aria-disabled') === 'true') {
+      toast(btn.title);
+      return;
+    }
+    if (action === 'day-info') {
+      ui.dayInfoOpen ??= new Set();
+      const dayId = btn.dataset.dayId;
+      const open = !ui.dayInfoOpen.has(dayId);
+      open ? ui.dayInfoOpen.add(dayId) : ui.dayInfoOpen.delete(dayId);
+      btn.setAttribute('aria-expanded', String(open));
+      btn.closest('.day-chips')?.classList.toggle('info-open', open);
+      return;
+    }
     if (action === 'day-warning') {
       ui.openItem = btn.dataset.place;
       ui.openStay = null;
@@ -1313,6 +1337,47 @@ export function init(ctx) {
   boundCurrentRoutePlan = currentRoutePlan;
   boundDayOptionAttrs = dayOptionAttrs;
   boundListName = listName;
+  /* I-6: 하루 ⋯ 메뉴 — 칸 안 스크롤에 잘리지 않게 화면 기준(fixed)으로 띄우고, 바깥 누르기·Esc·스크롤에 닫는다 */
+  const daysRoot = $('#days');
+  function closeDayMenus(except) {
+    for (const d of $$('.day-more[open]', daysRoot)) if (d !== except) d.removeAttribute('open');
+  }
+  daysRoot.addEventListener('toggle', (e) => {
+    const d = e.target;
+    if (!d.classList?.contains('day-more') || !d.open) return;
+    closeDayMenus(d);
+    const pop = d.querySelector('.day-more-pop');
+    const r = d.querySelector('summary').getBoundingClientRect();
+    pop.style.visibility = 'hidden';
+    pop.style.left = '0px';
+    pop.style.top = '0px';
+    requestAnimationFrame(() => {
+      const w = pop.offsetWidth;
+      const h = pop.offsetHeight;
+      const left = Math.max(8, Math.min(r.right - w, innerWidth - w - 8));
+      const below = r.bottom + 4;
+      const top = below + h > innerHeight - 8 && r.top - h - 4 > 8 ? r.top - h - 4 : below;
+      pop.style.left = `${Math.round(left)}px`;
+      pop.style.top = `${Math.round(top)}px`;
+      pop.style.visibility = '';
+    });
+  }, true);
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest?.('.day-more')) closeDayMenus();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const open = $('.day-more[open]', daysRoot);
+    if (!open) return;
+    open.removeAttribute('open');
+    open.querySelector('summary')?.focus();
+  });
+  addEventListener('scroll', () => closeDayMenus(), { passive: true, capture: true });
+
+  // 보관함 높이 → --dock-h (보드 칸 높이를 그만큼 줄인다)
+  const dockEl = $('#inboxDock');
+  new ResizeObserver(() => document.documentElement.style.setProperty('--dock-h', `${Math.round(dockEl.offsetHeight || 0)}px`)).observe(dockEl);
+
   boundMoveToList = moveToList;
   boundOpenChipMenu = openChipMenu;
   boundOpenItem = openItem;
@@ -1333,7 +1398,7 @@ export function initDock(ctx) {
     if (btn.dataset.action === 'chip-menu') {
       boundOpenChipMenu(id);
     } else if (btn.dataset.action === 'dock-toggle') {
-      prefs.dockOpen = !(prefs.dockOpen ?? !narrowMq.matches);
+      prefs.dockOpen = btn.getAttribute('aria-expanded') !== 'true'; // 지금 보이는 상태의 반대로 (기본값은 화면·보기 방식마다 다르다)
       savePrefs();
       boundRenderDays();
       $('#inboxDock .dock-toggle')?.focus();
