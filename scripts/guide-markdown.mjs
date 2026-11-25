@@ -77,7 +77,7 @@ export function renderMarkdown(text, { imageInfo = () => ({}), warn = () => {} }
       blocks.push('<figure><img src="' + href + '" alt="' + esc(alt) + '" loading="lazy"' +
         dimensions + responsive + '>' + (legend ? '<figcaption>' + inline(legend) + '</figcaption>' : '') + '</figure>');
     } else if (head) {
-      const level = Math.min(6, head[1].length + 1);
+      const level = Math.min(6, Math.max(2, head[1].length)); // J-5: 본문 ## → h2, ### → h3 (h1은 글 제목 하나뿐)
       blocks.push('<h' + level + '>' + inline(head[2]) + '</h' + level + '>');
       i++;
     } else if (rule.test(line)) {

@@ -6,6 +6,7 @@
 //    data-dp-pair="여행 날짜"처럼 값에 제목을, data-dp-min-nights="1"로 최소 박 수를 줄 수 있다.
 //    고른 뒤 "적용"을 누르면 end input에 change(버블링)를 한 번만 보낸다.
 //  - 날짜+시간: input[type="datetime-local"] → 날짜 버튼 + 시간 칸.
+//  - 날짜 하나: input[type="date"][data-dp-single] → 날짜 버튼 (J-6).
 import { enhanceTime } from './timefield.js';
 import { parseDate, selectRangeDate } from './model.js';
 import { t, getLang, locale, longDateYear, shortDate, weekday, tripLength, formatRange } from './i18n.js';
@@ -422,6 +423,31 @@ function enhanceDateTime(input) {
   });
 }
 
+/** J-6: 날짜 하나 — input[type="date"][data-dp-single] → 공용 달력 버튼 ("11월 28일 (토)"). 지난 날짜도 고를 수 있다 */
+function enhanceSingle(input) {
+  if (input.dataset.dpReady) return;
+  input.dataset.dpReady = '1';
+  const btn = fieldButton(input, '날짜');
+  const sync = () => paint(btn, VALUE.get.call(input), input.disabled);
+  watch(input, sync);
+  const repaint = () => sync();
+  repaint.el = btn;
+  repaints.add(repaint);
+  sync();
+  btn.addEventListener('click', () => open({
+    kind: 'date',
+    anchor: btn,
+    title: fieldLabel(input, '날짜'),
+    value: VALUE.get.call(input),
+    onApply: ({ value }) => {
+      VALUE.set.call(input, value);
+      sync();
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    },
+  }));
+}
+
 /** root 안의 날짜 칸을 모두 감싼다. 다시 그린 뒤 불러도 된다 (이미 감싼 칸은 건너뛴다). */
 export function enhanceDates(root = document) {
   if (!customElements.get('calendar-range')) {
@@ -431,6 +457,7 @@ export function enhanceDates(root = document) {
   }
   root.querySelectorAll('[data-dp-pair]').forEach(enhancePair);
   root.querySelectorAll('input[type="datetime-local"]').forEach(enhanceDateTime);
+  root.querySelectorAll('input[type="date"][data-dp-single]').forEach(enhanceSingle);
 }
 
 export function closeDatePicker() {

@@ -1986,7 +1986,7 @@ async function importCourse(id, hash) {
         <label><input type="radio" name="courseTarget" value="new" checked> ${esc(t('새 여행으로 만들기'))}</label>
         <label><input type="radio" name="courseTarget" value="existing"${choices.length ? '' : ' disabled'}> ${esc(t('기존 여행에 넣기'))}</label>
       </fieldset>
-      <label class="course-new"><span>${esc(t('여행 날짜'))}</span><input type="date" class="inp" id="courseDate" value="${Courses.nextSaturday(TODAY)}"></label>
+      <label class="course-new"><span>${esc(t('여행 날짜'))}</span><input type="date" class="inp" id="courseDate" data-dp-single value="${Courses.nextSaturday(TODAY)}"></label>
       <div class="course-existing" hidden>
         <label><span>${esc(t('여행'))}</span><select id="courseTrip" class="inp" data-ui-select>${choices.map((tr) => `<option value="${esc(tr.id)}">${esc(tr.title)}</option>`).join('')}</select></label>
         <label><span>${esc(t('일차'))}</span><select id="courseDay" class="inp" data-ui-select>${choices[0] ? dayOptions(choices[0]) : ''}</select></label>
@@ -1995,6 +1995,7 @@ async function importCourse(id, hash) {
     </div>`;
   const answer = ask({ title, html, actions: [{ value: 'create', label: t('만들기'), primary: true }] });
   const body = $('#askBody');
+  enhanceDates(body); // J-6: 여행 날짜도 앱 공용 달력으로
   const sync = () => {
     const existing = $('input[name="courseTarget"]:checked', body)?.value === 'existing';
     $('.course-new', body).hidden = existing;

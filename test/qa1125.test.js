@@ -254,3 +254,21 @@ test('J-8: 트렌드 설명 페이지 — 주소 규칙, 번역 없는 언어는
   assert.match(app, /const trendId = params\.get\('trend'\);\n\s+if \(trendId\) void importTrend\(trendId, location\.hash\);/);
   assert.match(app, /await trendsReady;/);
 });
+
+test('J-5: 가이드 본문 ## → h2, ### → h3 (h2를 건너뛰지 않는다)', async () => {
+  const { renderMarkdown } = await import('../scripts/guide-markdown.mjs');
+  const html = renderMarkdown('## 언제 가면 좋을까\n\n본문\n\n### 봄\n\n# 실수로 쓴 큰 제목', { imageInfo: () => null, warn: () => {} }).join('\n');
+  assert.match(html, /<h2>언제 가면 좋을까<\/h2>/);
+  assert.match(html, /<h3>봄<\/h3>/);
+  assert.match(html, /<h2>실수로 쓴 큰 제목<\/h2>/);
+  assert.doesNotMatch(html, /<h1>/);
+});
+
+test('J-6: 코스 불러오기 날짜는 공용 달력(날짜 하나, 지난 날짜 가능)', () => {
+  const app = appSource();
+  assert.match(app, /id="courseDate" data-dp-single/);
+  assert.match(app, /enhanceDates\(body\); \/\/ J-6/);
+  const dp = read('lib/datepicker.js');
+  assert.match(dp, /root\.querySelectorAll\('input\[type="date"\]\[data-dp-single\]'\)\.forEach\(enhanceSingle\);/);
+  assert.doesNotMatch(dp.match(/function enhanceSingle[\s\S]*?\n\}/)[0], /min/);
+});
